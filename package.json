@@ -1,0 +1,24 @@
+{
+  "name": "nexus-quant-trading-agent",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "install:backend": "npm --prefix backend install",
+    "install:frontend": "npm --prefix frontend install",
+    "install:all": "npm run install:backend && npm run install:frontend",
+    "build:frontend": "npm --prefix frontend run build",
+    "build": "npm run install:all && npm run build:frontend",
+    "start": "node backend/src/server.js",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev": "node backend/src/server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "technicalindicators": "^3.1.0",
+    "yahoo-finance2": "^2.13.3"
+  }
+}
