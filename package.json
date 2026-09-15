@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "install:backend": "npm --prefix backend install",
-    "install:frontend": "npm --prefix frontend install",
+    "install:frontend": "npm --prefix frontend install --include=dev",
     "install:all": "npm run install:backend && npm run install:frontend",
     "build:frontend": "npm --prefix frontend run build",
     "build": "npm run install:all && npm run build:frontend",
