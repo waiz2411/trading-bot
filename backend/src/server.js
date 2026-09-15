@@ -76,13 +76,13 @@ app.post('/api/agent/style', (req, res) => {
   }
 });
 
-// API: Set Leverage (1x to 50x)
+// API: Set Leverage (1x to 500x)
 app.post('/api/agent/leverage', (req, res) => {
   try {
     const { leverage } = req.body;
     const levNum = parseInt(leverage, 10);
-    if (isNaN(levNum) || levNum < 1 || levNum > 50) {
-      return res.status(400).json({ error: 'Leverage must be between 1x and 50x' });
+    if (isNaN(levNum) || levNum < 1 || levNum > 500) {
+      return res.status(400).json({ error: 'Leverage must be between 1x and 500x' });
     }
     agentLoop.riskManager.updateSettings({ defaultLeverage: levNum });
     agentLoop.log(`⚙️ Account leverage updated to ${levNum}x`, 'INFO');

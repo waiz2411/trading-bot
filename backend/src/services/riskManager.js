@@ -37,7 +37,7 @@ export class RiskManager {
       this.targetRiskRewardRatio = Math.max(0.5, Math.min(5.0, Number(newSettings.targetRiskRewardRatio)));
     }
     if (newSettings.defaultLeverage !== undefined) {
-      this.defaultLeverage = Math.max(1, Math.min(50, parseInt(newSettings.defaultLeverage, 10)));
+      this.defaultLeverage = Math.max(1, Math.min(500, parseInt(newSettings.defaultLeverage, 10)));
     }
   }
 
@@ -159,15 +159,16 @@ export class RiskManager {
       };
     }
 
-    // Calculate Liquidation Price (MMR = 0.5% maintenance margin)
-    const mmr = 0.005;
+    // Calculate Liquidation Price (Scales safely up to 500x leverage)
+    const imr = 1 / leverage; // Initial margin rate (e.g., 0.002 for 500x, 0.01 for 100x, 0.1 for 10x)
+    const mmr = Math.min(0.005, imr * 0.2); // MMR buffer (20% of margin before liquidation)
     let liquidationPrice = 0;
     if (signal.side === 'LONG') {
-      liquidationPrice = signal.entryPrice * (1 - (1 / leverage) + mmr);
+      liquidationPrice = signal.entryPrice * (1 - imr + mmr);
     } else {
-      liquidationPrice = signal.entryPrice * (1 + (1 / leverage) - mmr);
+      liquidationPrice = signal.entryPrice * (1 + imr - mmr);
     }
-    liquidationPrice = Math.max(0.0001, Number(liquidationPrice.toFixed(asset.decimals || 2)));
+    liquidationPrice = Math.max(0.0001, Number(liquidationPrice.toFixed(asset.decimals || 4)));
 
     return {
       allowed: true,

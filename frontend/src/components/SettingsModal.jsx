@@ -18,11 +18,12 @@ export default function SettingsModal({ settings, onSaveSettings, onResetPortfol
   ];
 
   const leveragePresets = [
-    { label: '1x', value: 1, tag: 'Spot / No Leverage' },
-    { label: '5x', value: 5, tag: 'Conservative' },
-    { label: '10x', value: 10, tag: 'Standard Scalp' },
-    { label: '20x', value: 20, tag: 'Aggressive' },
-    { label: '50x', value: 50, tag: 'Max Power' }
+    { label: '1x', value: 1, tag: 'Spot' },
+    { label: '10x', value: 10, tag: 'Standard' },
+    { label: '50x', value: 50, tag: 'High' },
+    { label: '100x', value: 100, tag: 'Ultra' },
+    { label: '200x', value: 200, tag: 'Extreme' },
+    { label: '500x', value: 500, tag: 'Max 500x 🔥' }
   ];
 
   const handleSave = (e) => {
@@ -103,25 +104,36 @@ export default function SettingsModal({ settings, onSaveSettings, onResetPortfol
             </p>
           </div>
 
-          {/* Account Leverage & Margin Multiplier (1x - 50x) */}
+          {/* Account Leverage & Margin Multiplier (1x - 500x) */}
           <div className="p-3.5 rounded-xl bg-amber-950/25 border border-amber-500/40">
             <div className="flex justify-between items-center mb-1.5">
               <label className="text-amber-300 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                 <Zap className="w-3.5 h-3.5 text-amber-400" />
-                <span>Account Leverage & Margin Multiplier</span>
+                <span>Account Leverage (1x – 500x)</span>
               </label>
-              <span className="text-amber-400 font-bold text-sm bg-terminal-950 px-2.5 py-0.5 rounded border border-amber-500/40 font-mono">
-                {defaultLeverage}x
-              </span>
+              <div className="flex items-center gap-1 bg-terminal-950 px-2 py-0.5 rounded border border-amber-500/40">
+                <input
+                  type="number"
+                  min="1"
+                  max="500"
+                  value={defaultLeverage}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v)) setDefaultLeverage(Math.max(1, Math.min(500, v)));
+                  }}
+                  className="w-12 bg-transparent text-amber-400 font-bold text-sm text-right font-mono focus:outline-none"
+                />
+                <span className="text-amber-400 font-bold text-sm font-mono">x</span>
+              </div>
             </div>
 
             <input
               type="range"
               min="1"
-              max="50"
+              max="500"
               step="1"
               value={defaultLeverage}
-              onChange={(e) => setDefaultLeverage(e.target.value)}
+              onChange={(e) => setDefaultLeverage(parseInt(e.target.value, 10))}
               className="w-full accent-amber-500 cursor-pointer my-2"
             />
 
@@ -134,7 +146,7 @@ export default function SettingsModal({ settings, onSaveSettings, onResetPortfol
                   onClick={() => setDefaultLeverage(preset.value)}
                   className={`px-2 py-1 rounded text-[10px] font-mono transition-all border ${
                     parseInt(defaultLeverage, 10) === preset.value
-                      ? 'bg-amber-600 text-white border-amber-400 font-bold'
+                      ? 'bg-amber-600 text-white border-amber-400 font-bold shadow-md shadow-amber-600/30'
                       : 'bg-terminal-950 text-slate-400 border-terminal-border hover:text-white'
                   }`}
                 >
@@ -144,7 +156,7 @@ export default function SettingsModal({ settings, onSaveSettings, onResetPortfol
             </div>
 
             <p className="text-[11px] text-slate-400 font-sans mt-2 leading-relaxed">
-              At <strong>{defaultLeverage}x leverage</strong>, required margin is <strong>${(1000 / defaultLeverage).toFixed(0)}</strong> per $1,000 position. Stop-loss triggers safeguard your equity before liquidation thresholds.
+              At <strong>{defaultLeverage}x leverage</strong>, required margin is <strong>${(1000 / defaultLeverage).toFixed(2)}</strong> per $1,000 position {defaultLeverage >= 100 ? `(Just $${(1000 / defaultLeverage).toFixed(2)} controls $1,000!)` : ''}. Stop-loss triggers safeguard your equity before liquidation thresholds.
             </p>
           </div>
 

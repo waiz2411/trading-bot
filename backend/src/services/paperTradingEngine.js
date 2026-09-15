@@ -115,13 +115,14 @@ export class PaperTradingEngine {
     const calcTargetDist = targetDistance || Math.abs(takeProfit - entryPrice);
     const posMargin = margin || Number((notional / leverage).toFixed(2));
 
-    // Fallback liquidation calculation if not supplied
+    // Fallback liquidation calculation if not supplied (scales up to 500x leverage)
     let liqPrice = liquidationPrice;
     if (!liqPrice) {
-      const mmr = 0.005;
+      const imr = 1 / leverage;
+      const mmr = Math.min(0.005, imr * 0.2);
       liqPrice = side === 'LONG'
-        ? entryPrice * (1 - (1 / leverage) + mmr)
-        : entryPrice * (1 + (1 / leverage) - mmr);
+        ? entryPrice * (1 - imr + mmr)
+        : entryPrice * (1 + imr - mmr);
       liqPrice = Number(liqPrice.toFixed(4));
     }
 
