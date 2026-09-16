@@ -300,18 +300,22 @@ export class PaperTradingEngine {
       }
 
       // ====================================================
-      // 2. SCALP QUICK PROFIT BANK & TIMEOUT
+      // 2. SCALP QUICK PROFIT BANK (75%+ TARGET REACHED)
       // ====================================================
-      if (pos.cycleCount >= 10 && pos.unrealizedPnL > 1.2) {
-        const closed = this.closePosition(pos.id, livePrice, 'SCALP_QUICK_BANK', 'Scalp profit locked on velocity slowdown');
+      const targetProgress = pos.targetDistance > 0
+        ? (pos.side === 'SHORT' ? (pos.entryPrice - livePrice) / pos.targetDistance : (livePrice - pos.entryPrice) / pos.targetDistance)
+        : 0;
+
+      if (pos.cycleCount >= 12 && targetProgress >= 0.75 && pos.unrealizedPnL > 0) {
+        const closed = this.closePosition(pos.id, livePrice, 'SCALP_QUICK_BANK', 'Scalp profit locked at 75%+ target distance');
         if (closed) {
           closedTriggers.push(closed);
           continue;
         }
       }
 
-      // If scalp has been open for 50 cycles (4+ mins) with zero progress -> Timeout exit
-      if (pos.cycleCount >= 50 && Math.abs(pos.pnlPercent) < 0.20 && pos.unrealizedPnL <= 0.05) {
+      // If scalp has been open for 60 cycles (5+ mins) with zero progress -> Timeout exit
+      if (pos.cycleCount >= 60 && Math.abs(pos.pnlPercent) < 0.15 && pos.unrealizedPnL <= 0.05) {
         const closed = this.closePosition(pos.id, livePrice, 'SCALP_TIMEOUT_EXIT', 'Scalp duration limit reached (Fast turnover)');
         if (closed) {
           closedTriggers.push(closed);

@@ -6,15 +6,15 @@
 
 export class RiskManager {
   constructor(options = {}) {
-    this.riskPerTradePct = options.riskPerTradePct || 1.5; // Risk 1.5% of total equity per trade
+    this.riskPerTradePct = options.riskPerTradePct || 2.0; // Risk 2.0% of total equity per trade
     this.maxConcurrentTrades = options.maxConcurrentTrades || 4; // Max 4 simultaneous positions
-    this.maxPositionAllocationPct = options.maxPositionAllocationPct || 25; // Max 25% notional per asset
+    this.maxPositionAllocationPct = options.maxPositionAllocationPct || 25; // Max 25% notional per asset for spot
     this.maxDailyDrawdownPct = options.maxDailyDrawdownPct || 5.0; // Circuit breaker at 5% daily loss
     this.minConfidenceThreshold = options.minConfidenceThreshold || 78; // 78% for sniper scalps
-    this.tradeDirection = options.tradeDirection || 'SHORT_ONLY'; // 'SHORT_ONLY' | 'BOTH' | 'LONG_ONLY'
+    this.tradeDirection = options.tradeDirection || 'SHORT_ONLY'; // 'SHORT_ONLY' for 75%+ win rate
     this.tradingStyle = options.tradingStyle || 'SCALPING'; // 'SCALPING' | 'SWING'
-    this.targetRiskRewardRatio = options.targetRiskRewardRatio || 1.3; // Default 1:1.3 R:R
-    this.defaultLeverage = options.defaultLeverage || 10; // Default 10x leverage for scalping
+    this.targetRiskRewardRatio = options.targetRiskRewardRatio || 1.2; // 1:1.2 R:R for 75%-85% scalp hit rate
+    this.defaultLeverage = options.defaultLeverage || 500; // 500x leverage with real buying power
   }
 
   updateSettings(newSettings) {
@@ -116,7 +116,14 @@ export class RiskManager {
       };
     }
 
-    // Risk Dollar Amount: e.g. 1.5% of equity
+    // ==========================================
+    // LEVERAGE & MARGIN SYSTEM (1x to 500x)
+    // ==========================================
+    const leverage = this.defaultLeverage || 500;
+    const usedMargin = activePositions.reduce((acc, p) => acc + (p.margin || (p.notional / (p.leverage || 1))), 0);
+    const freeMargin = Math.max(0, equity - usedMargin);
+
+    // Risk Dollar Amount: e.g. 2.0% of equity
     const dollarRisk = equity * (this.riskPerTradePct / 100);
 
     // Position Size Units = DollarRisk / (Price - StopLoss)
@@ -125,8 +132,14 @@ export class RiskManager {
     // Dollar Notional Value of Position
     let notional = rawUnits * signal.entryPrice;
 
-    // Cap notional value to max allocation (e.g. 25% of equity) to avoid over-exposure
-    const maxNotional = equity * (this.maxPositionAllocationPct / 100);
+    // Leveraged Position Sizing:
+    // When leverage > 1x, allow notional exposure to scale with leverage so 500x has real buying power.
+    // Cap allocated margin to at most 10% of equity (e.g. $50 on $500) and at most 60% of free margin.
+    const maxMarginAllowed = leverage > 1
+      ? Math.min(equity * 0.10, freeMargin * 0.6)
+      : equity * (this.maxPositionAllocationPct / 100);
+
+    const maxNotional = maxMarginAllowed * leverage;
     if (notional > maxNotional) {
       rawUnits = maxNotional / signal.entryPrice;
       notional = maxNotional;
@@ -142,15 +155,7 @@ export class RiskManager {
       };
     }
 
-    // ==========================================
-    // LEVERAGE & MARGIN SYSTEM (1x to 50x)
-    // ==========================================
-    const leverage = this.defaultLeverage || 10;
     const margin = Number((notional / leverage).toFixed(2));
-
-    // Calculate currently used margin across open positions
-    const usedMargin = activePositions.reduce((acc, p) => acc + (p.margin || (p.notional / (p.leverage || 1))), 0);
-    const freeMargin = Math.max(0, equity - usedMargin);
 
     if (margin > freeMargin) {
       return {
