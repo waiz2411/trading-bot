@@ -28,14 +28,41 @@ export class PaperTradingEngine {
   getPortfolioState() {
     const unrealizedPnL = this.activePositions.reduce((acc, pos) => acc + (pos.unrealizedPnL || 0), 0);
     const equity = Number((this.balance + unrealizedPnL).toFixed(2));
-    const totalTrades = this.winCount + this.lossCount;
-    const winRate = totalTrades > 0 ? Number(((this.winCount / totalTrades) * 100).toFixed(1)) : 0;
-    const profitFactor = this.totalGrossLoss > 0
-      ? Number((this.totalGrossProfit / this.totalGrossLoss).toFixed(2))
-      : (this.totalGrossProfit > 0 ? 99.9 : 0);
+
+    // Calculate trade performance metrics dynamically from closed trades ledger
+    const totalTrades = this.closedTrades.length;
+    let winCount = 0;
+    let lossCount = 0;
+    let breakEvenCount = 0;
+    let grossProfit = 0;
+    let grossLoss = 0;
+
+    for (const trade of this.closedTrades) {
+      const pnl = Number(trade.finalPnL || 0);
+      if (pnl > 0) {
+        winCount++;
+        grossProfit += pnl;
+      } else if (pnl < 0) {
+        lossCount++;
+        grossLoss += Math.abs(pnl);
+      } else {
+        breakEvenCount++;
+      }
+    }
+
+    this.winCount = winCount;
+    this.lossCount = lossCount;
+    this.totalGrossProfit = Number(grossProfit.toFixed(2));
+    this.totalGrossLoss = Number(grossLoss.toFixed(2));
+
+    const decisiveTrades = winCount + lossCount;
+    const winRate = decisiveTrades > 0 ? Number(((winCount / decisiveTrades) * 100).toFixed(1)) : 0;
+    const profitFactor = grossLoss > 0
+      ? Number((grossProfit / grossLoss).toFixed(2))
+      : (grossProfit > 0 ? 99.9 : 0);
 
     const totalPnL = Number((equity - this.initialBalance).toFixed(2));
-    const totalPnLPct = Number(((totalPnL / this.initialBalance) * 100).toFixed(2));
+    const totalPnLPct = this.initialBalance > 0 ? Number(((totalPnL / this.initialBalance) * 100).toFixed(2)) : 0;
 
     // Margin & Leverage Portfolio Analytics
     const usedMargin = Number(this.activePositions.reduce((acc, pos) => acc + (pos.margin || (pos.notional / (pos.leverage || 1))), 0).toFixed(2));
@@ -53,8 +80,9 @@ export class PaperTradingEngine {
       realizedPnL: Number((this.balance - this.initialBalance).toFixed(2)),
       totalPnL,
       totalPnLPct,
-      winCount: this.winCount,
-      lossCount: this.lossCount,
+      winCount,
+      lossCount,
+      breakEvenCount,
       totalTrades,
       winRate,
       profitFactor,
@@ -182,17 +210,19 @@ export class PaperTradingEngine {
       pnl = -pos.margin;
     }
 
-    const pnlRounded = Number(pnl.toFixed(2));
+    // Preserve micro-cents for tiny balances ($5 - $10 accounts)
+    const pnlRounded = Math.abs(pnl) < 0.01 && pnl !== 0
+      ? Number(pnl.toFixed(4))
+      : Number(pnl.toFixed(2));
     const pnlPercent = Number(((pnl / pos.notional) * 100).toFixed(2));
     const roePercent = Number(((pnl / pos.margin) * 100).toFixed(2));
 
     this.balance += pnlRounded;
 
-    // Distinguish decisive wins/losses from flat scratch / break-even exits ($0.00 to $0.25)
-    if (pnlRounded > 0.25) {
+    if (pnlRounded > 0) {
       this.winCount++;
       this.totalGrossProfit += pnlRounded;
-    } else if (pnlRounded < -0.25) {
+    } else if (pnlRounded < 0) {
       this.lossCount++;
       this.totalGrossLoss += Math.abs(pnlRounded);
     }

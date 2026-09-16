@@ -11,16 +11,34 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
     unrealizedPnL = 0,
     totalPnL = 0,
     totalPnLPct = 0,
-    winRate = 0,
-    winCount = 0,
-    lossCount = 0,
-    totalTrades = 0,
     profitFactor = 0,
     activePositions = [],
     usedMargin = 0,
     freeMargin = equity,
     marginLevelPercent = 100
   } = portfolio;
+
+  const tradesList = portfolio.closedTrades || [];
+  const totalTrades = (portfolio.totalTrades !== undefined && portfolio.totalTrades > 0)
+    ? portfolio.totalTrades
+    : tradesList.length;
+
+  const winCount = (portfolio.totalTrades !== undefined && portfolio.totalTrades > 0)
+    ? (portfolio.winCount || 0)
+    : tradesList.filter(t => (t.finalPnL || 0) > 0).length;
+
+  const lossCount = (portfolio.totalTrades !== undefined && portfolio.totalTrades > 0)
+    ? (portfolio.lossCount || 0)
+    : tradesList.filter(t => (t.finalPnL || 0) < 0).length;
+
+  const breakEvenCount = portfolio.breakEvenCount !== undefined
+    ? portfolio.breakEvenCount
+    : tradesList.filter(t => (t.finalPnL || 0) === 0).length;
+
+  const decisive = winCount + lossCount;
+  const winRate = (portfolio.totalTrades !== undefined && portfolio.totalTrades > 0)
+    ? portfolio.winRate
+    : (decisive > 0 ? Number(((winCount / decisive) * 100).toFixed(1)) : 0);
 
   const isNetProfit = totalPnL >= 0;
   const isUnrealizedProfit = unrealizedPnL >= 0;
@@ -98,6 +116,12 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
           <span className="text-emerald-400 font-semibold">{winCount}W</span>
           <span className="text-slate-600">/</span>
           <span className="text-rose-400 font-semibold">{lossCount}L</span>
+          {breakEvenCount > 0 && (
+            <>
+              <span className="text-slate-600">/</span>
+              <span className="text-indigo-400 font-semibold">{breakEvenCount}BE</span>
+            </>
+          )}
         </div>
         <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-500 opacity-60" />
       </div>
