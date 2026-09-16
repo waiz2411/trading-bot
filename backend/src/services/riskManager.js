@@ -145,10 +145,11 @@ export class RiskManager {
       notional = maxNotional;
     }
 
-    // Round units according to asset decimals
-    const units = Number(rawUnits.toFixed(asset.category === 'Crypto' ? 4 : 2));
+    // Round units according to asset decimals (supports micro-lots for $5 - $10 accounts)
+    const unitDecimals = asset.category === 'Crypto' ? 4 : (rawUnits < 1 ? 4 : 2);
+    const units = Number(rawUnits.toFixed(unitDecimals));
 
-    if (units <= 0 || notional < 5) {
+    if (units <= 0 || notional < 0.5) {
       return {
         allowed: false,
         reason: 'Calculated position size is too small'

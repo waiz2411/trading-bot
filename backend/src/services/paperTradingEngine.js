@@ -68,7 +68,7 @@ export class PaperTradingEngine {
    * Set Custom Demo Account Balance
    */
   setBalance(newBalance, closeOpenPositions = false) {
-    const validBalance = Math.max(10, Number(newBalance) || 10000);
+    const validBalance = Math.max(1, Number(newBalance) || 5);
 
     if (closeOpenPositions) {
       this.activePositions = [];
@@ -83,7 +83,7 @@ export class PaperTradingEngine {
    * Quick balance increase / decrease
    */
   adjustBalance(delta) {
-    const newBal = Math.max(10, this.balance + Number(delta));
+    const newBal = Math.max(1, this.balance + Number(delta));
     this.balance = newBal;
     this.initialBalance = newBal;
     return this.getPortfolioState();
