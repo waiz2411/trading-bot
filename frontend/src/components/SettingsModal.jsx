@@ -11,7 +11,7 @@ export default function SettingsModal({ settings, onSaveSettings, onResetPortfol
 
   const rrPresets = [
     { label: '1:1.0', value: 1.0, tag: 'Ultra Fast' },
-    { label: '1:1.2', value: 1.2, tag: '75-85% Win Rate ⭐' },
+    { label: '1:1.3', value: 1.3, tag: '75-85% Win Rate ⭐' },
     { label: '1:1.5', value: 1.5, tag: 'Balanced' },
     { label: '1:2.0', value: 2.0, tag: 'Swing Scalp' },
     { label: '1:3.0', value: 3.0, tag: 'Trend Runner' }

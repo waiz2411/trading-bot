@@ -1,5 +1,7 @@
 export const WATCHLIST = [
-  // Cryptocurrencies (24/7 markets)
+  // ==========================================
+  // 1. CRYPTOCURRENCIES (24/7 Global Markets)
+  // ==========================================
   {
     symbol: 'BTC-USD',
     name: 'Bitcoin',
@@ -50,8 +52,80 @@ export const WATCHLIST = [
     icon: '✕',
     minVolatility: 1.0
   },
+  {
+    symbol: 'DOGE-USD',
+    name: 'Dogecoin',
+    category: 'Crypto',
+    baseAsset: 'DOGE',
+    quoteAsset: 'USD',
+    decimals: 4,
+    icon: 'Ð',
+    minVolatility: 1.2
+  },
+  {
+    symbol: 'ADA-USD',
+    name: 'Cardano',
+    category: 'Crypto',
+    baseAsset: 'ADA',
+    quoteAsset: 'USD',
+    decimals: 4,
+    icon: '₳',
+    minVolatility: 1.0
+  },
+  {
+    symbol: 'AVAX-USD',
+    name: 'Avalanche',
+    category: 'Crypto',
+    baseAsset: 'AVAX',
+    quoteAsset: 'USD',
+    decimals: 2,
+    icon: '🔺',
+    minVolatility: 1.1
+  },
+  {
+    symbol: 'LINK-USD',
+    name: 'Chainlink',
+    category: 'Crypto',
+    baseAsset: 'LINK',
+    quoteAsset: 'USD',
+    decimals: 3,
+    icon: '🔗',
+    minVolatility: 1.0
+  },
+  {
+    symbol: 'SUI-USD',
+    name: 'Sui Network',
+    category: 'Crypto',
+    baseAsset: 'SUI',
+    quoteAsset: 'USD',
+    decimals: 4,
+    icon: '💧',
+    minVolatility: 1.3
+  },
+  {
+    symbol: 'NEAR-USD',
+    name: 'Near Protocol',
+    category: 'Crypto',
+    baseAsset: 'NEAR',
+    quoteAsset: 'USD',
+    decimals: 3,
+    icon: 'Ⓝ',
+    minVolatility: 1.2
+  },
+  {
+    symbol: 'PEPE-USD',
+    name: 'Pepe',
+    category: 'Crypto',
+    baseAsset: 'PEPE',
+    quoteAsset: 'USD',
+    decimals: 6,
+    icon: '🐸',
+    minVolatility: 1.8
+  },
 
-  // Forex Major & Minor Pairs
+  // ==========================================
+  // 2. FOREX MAJOR & MINOR PAIRS (24/5 Liquid)
+  // ==========================================
   {
     symbol: 'EURUSD=X',
     name: 'Euro / US Dollar',
@@ -102,8 +176,60 @@ export const WATCHLIST = [
     icon: '$/C$',
     minVolatility: 0.15
   },
+  {
+    symbol: 'USDCHF=X',
+    name: 'US Dollar / Swiss Franc',
+    category: 'Forex',
+    baseAsset: 'USD',
+    quoteAsset: 'CHF',
+    decimals: 4,
+    icon: '$/Fr',
+    minVolatility: 0.15
+  },
+  {
+    symbol: 'NZDUSD=X',
+    name: 'New Zealand Dollar / US Dollar',
+    category: 'Forex',
+    baseAsset: 'NZD',
+    quoteAsset: 'USD',
+    decimals: 4,
+    icon: 'NZ$/$',
+    minVolatility: 0.15
+  },
+  {
+    symbol: 'EURGBP=X',
+    name: 'Euro / British Pound',
+    category: 'Forex',
+    baseAsset: 'EUR',
+    quoteAsset: 'GBP',
+    decimals: 4,
+    icon: '€/£',
+    minVolatility: 0.12
+  },
+  {
+    symbol: 'EURJPY=X',
+    name: 'Euro / Japanese Yen',
+    category: 'Forex',
+    baseAsset: 'EUR',
+    quoteAsset: 'JPY',
+    decimals: 2,
+    icon: '€/¥',
+    minVolatility: 0.18
+  },
+  {
+    symbol: 'GBPJPY=X',
+    name: 'British Pound / Japanese Yen',
+    category: 'Forex',
+    baseAsset: 'GBP',
+    quoteAsset: 'JPY',
+    decimals: 2,
+    icon: '£/¥',
+    minVolatility: 0.22
+  },
 
-  // Commodities
+  // ==========================================
+  // 3. COMMODITIES
+  // ==========================================
   {
     symbol: 'GC=F',
     name: 'Gold Futures (XAU)',
@@ -135,7 +261,9 @@ export const WATCHLIST = [
     minVolatility: 0.6
   },
 
-  // Major Global Indices & Tech
+  // ==========================================
+  // 4. MAJOR GLOBAL INDICES
+  // ==========================================
   {
     symbol: '^GSPC',
     name: 'S&P 500 Index',

@@ -242,6 +242,6 @@ agentLoop.start();
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`=======================================================`);
   console.log(`🚀 Scalping Agent Backend running on port ${PORT}`);
-  console.log(`📡 Autonomous Scalp Loop active: SHORT TRADES ONLY`);
+  console.log(`📡 Autonomous Scalp Loop active: 27 Global Markets | 500x Lev | 1:1.3 R:R`);
   console.log(`=======================================================`);
 });

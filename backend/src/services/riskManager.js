@@ -10,10 +10,10 @@ export class RiskManager {
     this.maxConcurrentTrades = options.maxConcurrentTrades || 4; // Max 4 simultaneous positions
     this.maxPositionAllocationPct = options.maxPositionAllocationPct || 25; // Max 25% notional per asset for spot
     this.maxDailyDrawdownPct = options.maxDailyDrawdownPct || 5.0; // Circuit breaker at 5% daily loss
-    this.minConfidenceThreshold = options.minConfidenceThreshold || 78; // 78% for sniper scalps
-    this.tradeDirection = options.tradeDirection || 'SHORT_ONLY'; // 'SHORT_ONLY' for 75%+ win rate
+    this.minConfidenceThreshold = options.minConfidenceThreshold || 82; // 82% for sniper scalps
+    this.tradeDirection = options.tradeDirection || 'BOTH'; // 'BOTH' | 'SHORT_ONLY' | 'LONG_ONLY'
     this.tradingStyle = options.tradingStyle || 'SCALPING'; // 'SCALPING' | 'SWING'
-    this.targetRiskRewardRatio = options.targetRiskRewardRatio || 1.2; // 1:1.2 R:R for 75%-85% scalp hit rate
+    this.targetRiskRewardRatio = options.targetRiskRewardRatio || 1.3; // 1:1.3 R:R for 75%-85% scalp hit rate
     this.defaultLeverage = options.defaultLeverage || 500; // 500x leverage with real buying power
   }
 
@@ -175,6 +175,13 @@ export class RiskManager {
       liquidationPrice = signal.entryPrice * (1 + imr - mmr);
     }
     liquidationPrice = Math.max(0.0001, Number(liquidationPrice.toFixed(asset.decimals || 4)));
+
+    // ZERO-LIQUIDATION GUARANTEE: Ensure Stop Loss triggers strictly ahead of liquidation boundary
+    if (signal.side === 'LONG' && signal.stopLoss <= liquidationPrice) {
+      signal.stopLoss = Number((signal.entryPrice - (signal.entryPrice - liquidationPrice) * 0.65).toFixed(asset.decimals || 4));
+    } else if (signal.side === 'SHORT' && signal.stopLoss >= liquidationPrice) {
+      signal.stopLoss = Number((signal.entryPrice + (liquidationPrice - signal.entryPrice) * 0.65).toFixed(asset.decimals || 4));
+    }
 
     return {
       allowed: true,

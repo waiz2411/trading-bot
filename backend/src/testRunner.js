@@ -27,28 +27,54 @@ function createRealisticCandles(basePrice, count = 70) {
   return candles;
 }
 
-function tickCandle(candles, basePrice) {
+function tickCandle(asset) {
+  const candles = asset.candles;
   const last = candles[candles.length - 1];
-  const open = last.close;
-  const meanReversion = (basePrice - open) * 0.04;
-  const noise = ((Math.random() - 0.5) * 0.0025 * open) + meanReversion;
-  const close = Math.max(0.001, open + noise);
-  const high = Math.max(open, close) + Math.random() * 0.0012 * open;
-  const low = Math.min(open, close) - Math.random() * 0.0012 * open;
-  const time = new Date().toISOString();
+  const vol = asset.category === 'Crypto' ? 0.0003 : 0.00015;
 
-  candles.push({ time, open, high, low, close, volume: 15000 });
-  if (candles.length > 70) candles.shift();
-  return close;
+  if (!asset.momentumTicks || asset.momentumTicks <= 0) {
+    asset.momentumTicks = Math.floor(6 + Math.random() * 8);
+    asset.trendDirection = Math.random() > 0.48 ? 1 : -1;
+  }
+  asset.momentumTicks--;
+
+  const swing = asset.trendDirection * vol * last.close * (0.4 + Math.random() * 0.3);
+  const noise = (Math.random() - 0.5) * vol * last.close * 0.3;
+  const newPrice = Math.max(0.001, last.close + swing + noise);
+
+  if (!last.tickCount) last.tickCount = 0;
+  last.tickCount++;
+
+  if (last.tickCount > 10) {
+    const newCandle = {
+      time: new Date().toISOString(),
+      open: newPrice,
+      high: newPrice,
+      low: newPrice,
+      close: newPrice,
+      volume: 15000,
+      tickCount: 1
+    };
+    candles.push(newCandle);
+    if (candles.length > 70) candles.shift();
+  } else {
+    last.close = newPrice;
+    last.high = Math.max(last.high, newPrice);
+    last.low = Math.min(last.low, newPrice);
+  }
+
+  return newPrice;
 }
 
-const engine = new PaperTradingEngine(500);
+const engine = new PaperTradingEngine(10);
 const riskManager = new RiskManager({
   riskPerTradePct: 1.5,
   maxConcurrentTrades: 3,
-  minConfidenceThreshold: 78,
-  tradeDirection: 'BOTH', // Test both or short only
-  tradingStyle: 'SCALPING'
+  minConfidenceThreshold: 82,
+  tradeDirection: 'BOTH',
+  tradingStyle: 'SCALPING',
+  defaultLeverage: 500,
+  targetRiskRewardRatio: 1.3
 });
 
 const testAssets = [
@@ -76,7 +102,7 @@ for (let step = 0; step < 400; step++) {
   const technicalsMap = {};
 
   for (const asset of testAssets) {
-    const livePrice = tickCandle(asset.candles, asset.basePrice);
+    const livePrice = tickCandle(asset);
     pricesMap[asset.symbol] = livePrice;
 
     const technicals = calculateTechnicalMetrics(asset.candles);
@@ -109,7 +135,10 @@ for (let step = 0; step < 400; step++) {
           confidence: signal.confidence,
           reason: signal.reason,
           riskRewardRatio: signal.riskRewardRatio,
-          tradingStyle: 'SCALPING'
+          tradingStyle: 'SCALPING',
+          leverage: risk.leverage,
+          margin: risk.margin,
+          liquidationPrice: risk.liquidationPrice
         });
         cooldowns[asset.symbol] = 8;
       }
@@ -137,6 +166,7 @@ console.log(`• Total Trades:     ${stats.totalTrades}`);
 console.log(`• Wins:             ${stats.winCount} (${stats.winRate}%)`);
 console.log(`• Losses:           ${stats.lossCount}`);
 console.log(`• Profit Factor:    ${stats.profitFactor}`);
+console.log(`• Exits Breakdown:  TP: ${takeProfits} | Trail: ${trailingStops} | BE: ${breakEvens} | Rev: ${reversalExits} | SL: ${stopLosses}`);
 console.log(`• Final Equity:     $${stats.equity.toFixed(2)}`);
 console.log(`• Net Profit:       +$${stats.totalPnL.toFixed(2)} (${stats.totalPnLPct}%)`);
 console.log('================================================================');

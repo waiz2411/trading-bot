@@ -297,15 +297,15 @@ export class PaperTradingEngine {
         if (pos.side === 'SHORT') {
           const runDown = pos.entryPrice - pos.lowestPrice;
 
-          // Scalp Break-Even: Price dropped 60% of target distance -> Lock Break-Even!
-          if (!pos.breakEvenLocked && runDown >= pos.targetDistance * 0.60) {
+          // Scalp Break-Even: Price dropped 40% of target distance -> Lock in Break-Even ($0 loss)!
+          if (!pos.breakEvenLocked && runDown >= pos.targetDistance * 0.40) {
             pos.stopLoss = Number((pos.entryPrice - pos.stopDistance * 0.05).toFixed(4));
             pos.breakEvenLocked = true;
           }
 
-          // Scalp Trailing Stop: Price dropped 80% of target distance -> Trail closely!
+          // Scalp Trailing Stop: Price reached 80% of target distance -> Trail closely behind lowest price!
           if (runDown >= pos.targetDistance * 0.80) {
-            const newTrailStop = Number((pos.lowestPrice + pos.stopDistance * 0.25).toFixed(4));
+            const newTrailStop = Number((pos.lowestPrice + pos.stopDistance * 0.15).toFixed(4));
             if (newTrailStop < pos.stopLoss) {
               pos.stopLoss = newTrailStop;
               pos.trailingStopActive = true;
@@ -314,42 +314,20 @@ export class PaperTradingEngine {
         } else if (pos.side === 'LONG') {
           const runUp = pos.highestPrice - pos.entryPrice;
 
-          if (!pos.breakEvenLocked && runUp >= pos.targetDistance * 0.60) {
+          // Scalp Break-Even: Price gained 40% of target distance -> Lock in Break-Even ($0 loss)!
+          if (!pos.breakEvenLocked && runUp >= pos.targetDistance * 0.40) {
             pos.stopLoss = Number((pos.entryPrice + pos.stopDistance * 0.05).toFixed(4));
             pos.breakEvenLocked = true;
           }
 
+          // Scalp Trailing Stop: Price reached 80% of target distance -> Trail closely behind highest price!
           if (runUp >= pos.targetDistance * 0.80) {
-            const newTrailStop = Number((pos.highestPrice - pos.stopDistance * 0.25).toFixed(4));
+            const newTrailStop = Number((pos.highestPrice - pos.stopDistance * 0.15).toFixed(4));
             if (newTrailStop > pos.stopLoss) {
               pos.stopLoss = newTrailStop;
               pos.trailingStopActive = true;
             }
           }
-        }
-      }
-
-      // ====================================================
-      // 2. SCALP QUICK PROFIT BANK (75%+ TARGET REACHED)
-      // ====================================================
-      const targetProgress = pos.targetDistance > 0
-        ? (pos.side === 'SHORT' ? (pos.entryPrice - livePrice) / pos.targetDistance : (livePrice - pos.entryPrice) / pos.targetDistance)
-        : 0;
-
-      if (pos.cycleCount >= 12 && targetProgress >= 0.75 && pos.unrealizedPnL > 0) {
-        const closed = this.closePosition(pos.id, livePrice, 'SCALP_QUICK_BANK', 'Scalp profit locked at 75%+ target distance');
-        if (closed) {
-          closedTriggers.push(closed);
-          continue;
-        }
-      }
-
-      // If scalp has been open for 60 cycles (5+ mins) with zero progress -> Timeout exit
-      if (pos.cycleCount >= 60 && Math.abs(pos.pnlPercent) < 0.15 && pos.unrealizedPnL <= 0.05) {
-        const closed = this.closePosition(pos.id, livePrice, 'SCALP_TIMEOUT_EXIT', 'Scalp duration limit reached (Fast turnover)');
-        if (closed) {
-          closedTriggers.push(closed);
-          continue;
         }
       }
 

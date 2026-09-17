@@ -48,16 +48,31 @@ export class MarketDataService {
       let defaultPrice = 1.0;
       let volatility = 0.0025;
 
+      // Crypto defaults
       if (item.symbol === 'BTC-USD') { defaultPrice = 77000; volatility = 0.003; }
       else if (item.symbol === 'ETH-USD') { defaultPrice = 2460; volatility = 0.004; }
       else if (item.symbol === 'SOL-USD') { defaultPrice = 100.8; volatility = 0.005; }
       else if (item.symbol === 'BNB-USD') { defaultPrice = 718; volatility = 0.003; }
       else if (item.symbol === 'XRP-USD') { defaultPrice = 1.40; volatility = 0.005; }
+      else if (item.symbol === 'DOGE-USD') { defaultPrice = 0.1650; volatility = 0.005; }
+      else if (item.symbol === 'ADA-USD') { defaultPrice = 0.5850; volatility = 0.004; }
+      else if (item.symbol === 'AVAX-USD') { defaultPrice = 24.50; volatility = 0.005; }
+      else if (item.symbol === 'LINK-USD') { defaultPrice = 14.80; volatility = 0.004; }
+      else if (item.symbol === 'SUI-USD') { defaultPrice = 2.1500; volatility = 0.006; }
+      else if (item.symbol === 'NEAR-USD') { defaultPrice = 4.350; volatility = 0.005; }
+      else if (item.symbol === 'PEPE-USD') { defaultPrice = 0.000008; volatility = 0.008; }
+      // Forex defaults
       else if (item.symbol === 'EURUSD=X') { defaultPrice = 1.1550; volatility = 0.001; }
       else if (item.symbol === 'GBPUSD=X') { defaultPrice = 1.3490; volatility = 0.0012; }
       else if (item.symbol === 'USDJPY=X') { defaultPrice = 154.20; volatility = 0.0012; }
       else if (item.symbol === 'AUDUSD=X') { defaultPrice = 0.7135; volatility = 0.0012; }
       else if (item.symbol === 'USDCAD=X') { defaultPrice = 1.3900; volatility = 0.0012; }
+      else if (item.symbol === 'USDCHF=X') { defaultPrice = 0.8850; volatility = 0.0011; }
+      else if (item.symbol === 'NZDUSD=X') { defaultPrice = 0.5890; volatility = 0.0013; }
+      else if (item.symbol === 'EURGBP=X') { defaultPrice = 0.8560; volatility = 0.0010; }
+      else if (item.symbol === 'EURJPY=X') { defaultPrice = 178.10; volatility = 0.0014; }
+      else if (item.symbol === 'GBPJPY=X') { defaultPrice = 208.00; volatility = 0.0015; }
+      // Commodities & Indices
       else if (item.symbol === 'GC=F') { defaultPrice = 2635.00; volatility = 0.002; }
       else if (item.symbol === 'SI=F') { defaultPrice = 29.80; volatility = 0.003; }
       else if (item.symbol === 'CL=F') { defaultPrice = 59.80; volatility = 0.0035; }
@@ -75,6 +90,7 @@ export class MarketDataService {
         low24h: Number(latest.low.toFixed(item.decimals)),
         volume: latest.volume,
         candles,
+        trendMomentum: (Math.random() - 0.5) * 0.0004,
         lastFetch: Date.now()
       });
     }
@@ -86,7 +102,13 @@ export class MarketDataService {
       'ETH-USD': 'ETHUSDT',
       'SOL-USD': 'SOLUSDT',
       'BNB-USD': 'BNBUSDT',
-      'XRP-USD': 'XRPUSDT'
+      'XRP-USD': 'XRPUSDT',
+      'DOGE-USD': 'DOGEUSDT',
+      'ADA-USD': 'ADAUSDT',
+      'AVAX-USD': 'AVAXUSDT',
+      'LINK-USD': 'LINKUSDT',
+      'SUI-USD': 'SUIUSDT',
+      'NEAR-USD': 'NEARUSDT'
     };
 
     try {
@@ -117,7 +139,7 @@ export class MarketDataService {
         }
       }
     } catch (err) {
-      // Safe fallback
+      // Safe fallback to simulated ticks
     }
   }
 
@@ -132,16 +154,22 @@ export class MarketDataService {
       if (!rates) return;
 
       const forexUpdates = [
-        { symbol: 'EURUSD=X', price: 1 / rates.EUR },
-        { symbol: 'GBPUSD=X', price: 1 / rates.GBP },
-        { symbol: 'USDJPY=X', price: rates.JPY },
-        { symbol: 'AUDUSD=X', price: 1 / rates.AUD },
-        { symbol: 'USDCAD=X', price: rates.CAD }
+        { symbol: 'EURUSD=X', price: rates.EUR ? 1 / rates.EUR : null },
+        { symbol: 'GBPUSD=X', price: rates.GBP ? 1 / rates.GBP : null },
+        { symbol: 'USDJPY=X', price: rates.JPY ? rates.JPY : null },
+        { symbol: 'AUDUSD=X', price: rates.AUD ? 1 / rates.AUD : null },
+        { symbol: 'USDCAD=X', price: rates.CAD ? rates.CAD : null },
+        { symbol: 'USDCHF=X', price: rates.CHF ? rates.CHF : null },
+        { symbol: 'NZDUSD=X', price: rates.NZD ? 1 / rates.NZD : null },
+        { symbol: 'EURGBP=X', price: rates.EUR && rates.GBP ? rates.GBP / rates.EUR : null },
+        { symbol: 'EURJPY=X', price: rates.EUR && rates.JPY ? rates.JPY / rates.EUR : null },
+        { symbol: 'GBPJPY=X', price: rates.GBP && rates.JPY ? rates.JPY / rates.GBP : null }
       ];
 
       for (const fx of forexUpdates) {
+        if (!fx.price) continue;
         const cached = marketCache.get(fx.symbol);
-        if (cached && fx.price) {
+        if (cached) {
           const newPrice = Number(fx.price.toFixed(cached.decimals));
           cached.price = newPrice;
           const candles = cached.candles;
@@ -159,11 +187,18 @@ export class MarketDataService {
   // Realistic natural 2-way micro ticks (mean-reverting, oscillating between up and down)
   simulateMicroTicks() {
     for (const [symbol, item] of marketCache.entries()) {
-      const vol = item.category === 'Crypto' ? 0.0004 : 0.0002;
-      // Oscillate naturally: 50% chance up, 50% chance down
-      const wave = Math.sin(Date.now() / 15000) * vol * item.price * 0.5;
-      const noise = (Math.random() - 0.5) * vol * item.price;
-      const delta = wave + noise;
+      const vol = item.category === 'Crypto' ? 0.0003 : 0.00015;
+
+      // Update micro-trend momentum (persists across ticks to form coherent trending swings)
+      if (!item.momentumTicks || item.momentumTicks <= 0) {
+        item.momentumTicks = Math.floor(6 + Math.random() * 8); // 6-14 ticks per micro-swing
+        item.trendDirection = Math.random() > 0.48 ? 1 : -1;
+      }
+      item.momentumTicks--;
+
+      const swing = item.trendDirection * vol * item.price * (0.35 + Math.random() * 0.3);
+      const noise = (Math.random() - 0.5) * vol * item.price * 0.3;
+      const delta = swing + noise;
       const newPrice = Number(Math.max(0.0001, item.price + delta).toFixed(item.decimals));
 
       item.price = newPrice;

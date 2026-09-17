@@ -9,9 +9,11 @@ export class AutonomousAgentLoop {
     this.riskManager = new RiskManager({
       riskPerTradePct: 1.5,
       maxConcurrentTrades: 4,
-      minConfidenceThreshold: 78,
-      tradeDirection: 'SHORT_ONLY', // Default to Short trades as requested
-      tradingStyle: 'SCALPING' // Default to Scalping only as requested
+      minConfidenceThreshold: 82,
+      tradeDirection: 'BOTH', // Scan & trade both high-confluence Longs & Shorts
+      tradingStyle: 'SCALPING',
+      defaultLeverage: 500,
+      targetRiskRewardRatio: 1.3
     });
 
     this.tradingEngine = new PaperTradingEngine(10000);
@@ -23,7 +25,7 @@ export class AutonomousAgentLoop {
     this.timerId = null;
     this.assetCooldowns = new Map();
 
-    this.log('⚡ Scalping Engine active: Configured for SHORT TRADES ONLY with dynamic balance control.');
+    this.log('⚡ High-Precision Scalping Engine active: 27 Global Crypto & Forex charts, 500x Lev, 1:1.3 R:R.');
   }
 
   log(message, type = 'INFO') {

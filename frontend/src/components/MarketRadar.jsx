@@ -11,7 +11,7 @@ export default function MarketRadar({ marketScan = [], onSelectAsset, onQuickTra
   const filtered = marketScan.filter(item => {
     const matchesCategory = selectedCategory === 'ALL' || item.category.toLowerCase() === selectedCategory.toLowerCase();
     const matchesSearch = item.symbol.toLowerCase().includes(searchQuery.toLowerCase()) || item.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesConfidence = !highConfidenceOnly || (item.signal && item.signal.confidence >= 75);
+    const matchesConfidence = !highConfidenceOnly || (item.signal && item.signal.confidence >= 82);
     return matchesCategory && matchesSearch && matchesConfidence;
   });
 
@@ -119,7 +119,7 @@ export default function MarketRadar({ marketScan = [], onSelectAsset, onQuickTra
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-            <span>High Edge (≥75%)</span>
+            <span>Sniper Edge (≥82%)</span>
           </button>
         </div>
       </div>
