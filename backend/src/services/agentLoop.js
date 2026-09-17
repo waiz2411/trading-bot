@@ -6,26 +6,65 @@ import { PaperTradingEngine } from './paperTradingEngine.js';
 
 export class AutonomousAgentLoop {
   constructor() {
-    this.riskManager = new RiskManager({
+    this.activeAccount = 'MARGIN'; // 'MARGIN' | 'SPOT'
+
+    // Account 1: Margin Scalper (500x leverage, 4 slots, 1.5% risk)
+    this.marginRiskManager = new RiskManager({
       riskPerTradePct: 1.5,
       maxConcurrentTrades: 4,
       minConfidenceThreshold: 82,
-      tradeDirection: 'BOTH', // Scan & trade both high-confluence Longs & Shorts
+      tradeDirection: 'BOTH',
       tradingStyle: 'SCALPING',
       defaultLeverage: 500,
       targetRiskRewardRatio: 1.3
     });
+    this.marginTradingEngine = new PaperTradingEngine(10);
 
-    this.tradingEngine = new PaperTradingEngine(10000);
+    // Account 2: Pure Spot Crypto (1x Cash Spot, 100% Capital Allocation, 1 Slot)
+    this.spotRiskManager = {
+      capitalAllocationPct: 100, // 100% full balance per spot trade
+      stopLossPct: 1.0, // 1% Stop Loss
+      takeProfitPct: 2.5, // 2.5% Take Profit
+      minConfidenceThreshold: 82
+    };
+    this.spotTradingEngine = new PaperTradingEngine(10);
+
     this.isAutoTradingEnabled = true;
     this.isScanning = false;
     this.agentLogs = [];
     this.latestScanResults = [];
-    this.scanIntervalMs = 5000; // Ultra-fast 5 second scalping radar
+    this.scanIntervalMs = 5000;
     this.timerId = null;
     this.assetCooldowns = new Map();
+    this.spotCooldowns = new Map();
 
-    this.log('⚡ High-Precision Scalping Engine active: 27 Global Crypto & Forex charts, 500x Lev, 1:1.3 R:R.');
+    this.log('⚡ Autonomous Agent active: Dual-Account Engine (Margin Scalper 500x + Pure Spot 100% Crypto).');
+  }
+
+  // Backwards compatibility accessors
+  get tradingEngine() {
+    return this.activeAccount === 'SPOT' ? this.spotTradingEngine : this.marginTradingEngine;
+  }
+
+  get riskManager() {
+    return this.activeAccount === 'SPOT'
+      ? {
+          getSettings: () => ({
+            ...this.spotRiskManager,
+            tradingStyle: 'SPOT_BUY',
+            defaultLeverage: 1,
+            tradeDirection: 'LONG_ONLY',
+            targetRiskRewardRatio: Number((this.spotRiskManager.takeProfitPct / this.spotRiskManager.stopLossPct).toFixed(2))
+          })
+        }
+      : this.marginRiskManager;
+  }
+
+  switchAccount(account) {
+    const target = (account || '').toUpperCase() === 'SPOT' ? 'SPOT' : 'MARGIN';
+    this.activeAccount = target;
+    this.log(`🔄 Switched active view to: ${target === 'SPOT' ? '🪙 PURE SPOT CRYPTO (100% Capital)' : '⚡ MARGIN SCALPER (500x)'}`, 'INFO');
+    return this.activeAccount;
   }
 
   log(message, type = 'INFO') {
@@ -42,7 +81,7 @@ export class AutonomousAgentLoop {
 
   start() {
     if (this.timerId) return;
-    this.log('Scalping Quant Loop active. Auto-Open & Auto-Close scanning 15 global markets...');
+    this.log('Scalping Quant Loop active. Auto-Open & Auto-Close scanning 27 global markets...');
     this.runCycle();
     this.timerId = setInterval(() => this.runCycle(), this.scanIntervalMs);
   }
@@ -64,29 +103,44 @@ export class AutonomousAgentLoop {
     return this.isAutoTradingEnabled;
   }
 
-  setBalance(newBalance, closeOpenPositions = false) {
-    const state = this.tradingEngine.setBalance(newBalance, closeOpenPositions);
-    this.log(`💰 Demo Account Balance updated to $${Number(newBalance).toLocaleString('en-US')}`, 'SUCCESS');
+  setBalance(newBalance, closeOpenPositions = false, account = null) {
+    const targetAcc = account ? account.toUpperCase() : this.activeAccount;
+    const engine = targetAcc === 'SPOT' ? this.spotTradingEngine : this.marginTradingEngine;
+    const state = engine.setBalance(newBalance, closeOpenPositions);
+    this.log(`💰 [${targetAcc}] Balance updated to $${Number(newBalance).toLocaleString('en-US')}`, 'SUCCESS');
     return state;
   }
 
-  adjustBalance(delta) {
-    const state = this.tradingEngine.adjustBalance(delta);
-    this.log(`💰 Demo Balance adjusted by ${delta >= 0 ? '+' : ''}$${delta}. Current Balance: $${state.balance.toLocaleString('en-US')}`, 'SUCCESS');
+  adjustBalance(delta, account = null) {
+    const targetAcc = account ? account.toUpperCase() : this.activeAccount;
+    const engine = targetAcc === 'SPOT' ? this.spotTradingEngine : this.marginTradingEngine;
+    const state = engine.adjustBalance(delta);
+    this.log(`💰 [${targetAcc}] Balance adjusted by ${delta >= 0 ? '+' : ''}$${delta}. Current Balance: $${state.balance.toLocaleString('en-US')}`, 'SUCCESS');
     return state;
+  }
+
+  updateSpotSettings(newSettings = {}) {
+    if (newSettings.stopLossPct !== undefined) {
+      this.spotRiskManager.stopLossPct = Math.max(0.2, Math.min(10, Number(newSettings.stopLossPct)));
+    }
+    if (newSettings.takeProfitPct !== undefined) {
+      this.spotRiskManager.takeProfitPct = Math.max(0.5, Math.min(25, Number(newSettings.takeProfitPct)));
+    }
+    this.log(`⚙️ Spot Strategy updated: SL: -${this.spotRiskManager.stopLossPct}%, TP: +${this.spotRiskManager.takeProfitPct}%`, 'INFO');
+    return this.spotRiskManager;
   }
 
   setTradeDirection(direction) {
-    this.riskManager.tradeDirection = direction;
+    this.marginRiskManager.tradeDirection = direction;
     this.log(`🎯 Trade Direction Mode updated: ${direction}`, 'INFO');
-    return this.riskManager.getSettings();
+    return this.marginRiskManager.getSettings();
   }
 
   setTradingStyle(style) {
-    this.riskManager.tradingStyle = style;
-    this.tradingEngine.scalpModeEnabled = style === 'SCALPING';
+    this.marginRiskManager.tradingStyle = style;
+    this.marginTradingEngine.scalpModeEnabled = style === 'SCALPING';
     this.log(`⏱️ Trading Horizon updated: ${style}`, 'INFO');
-    return this.riskManager.getSettings();
+    return this.marginRiskManager.getSettings();
   }
 
   async runCycle() {
@@ -94,13 +148,14 @@ export class AutonomousAgentLoop {
     this.isScanning = true;
 
     try {
-      // 1. Decrement asset cooldowns
+      // 1. Decrement cooldowns for both accounts
       for (const [symbol, count] of this.assetCooldowns.entries()) {
-        if (count <= 1) {
-          this.assetCooldowns.delete(symbol);
-        } else {
-          this.assetCooldowns.set(symbol, count - 1);
-        }
+        if (count <= 1) this.assetCooldowns.delete(symbol);
+        else this.assetCooldowns.set(symbol, count - 1);
+      }
+      for (const [symbol, count] of this.spotCooldowns.entries()) {
+        if (count <= 1) this.spotCooldowns.delete(symbol);
+        else this.spotCooldowns.set(symbol, count - 1);
       }
 
       // 2. Update live market prices
@@ -111,7 +166,9 @@ export class AutonomousAgentLoop {
       // 3. Pre-calculate technicals map for position auto-exit evaluation
       const technicalsMap = {};
       const scanResults = [];
-      const riskSettings = this.riskManager.getSettings();
+      const marginRiskSettings = this.marginRiskManager.getSettings();
+
+      const validSpotBuys = [];
 
       for (const asset of markets) {
         const technicals = calculateTechnicalMetrics(asset.candles);
@@ -119,7 +176,8 @@ export class AutonomousAgentLoop {
           technicalsMap[asset.symbol] = technicals;
         }
 
-        const signal = evaluateStrategyConfluence(asset, technicals, riskSettings);
+        // Evaluate confluence using margin risk settings as baseline
+        const signal = evaluateStrategyConfluence(asset, technicals, marginRiskSettings);
 
         const scanItem = {
           symbol: asset.symbol,
@@ -142,15 +200,26 @@ export class AutonomousAgentLoop {
 
         scanResults.push(scanItem);
 
-        // 4. Autonomous Scalp Entry Logic (Auto-Open)
-        const isCooldown = (this.assetCooldowns.get(asset.symbol) || 0) > 0;
+        // Collect spot candidates (Crypto only, Long only)
+        if (
+          asset.category === 'Crypto' &&
+          (signal.action === 'STRONG_BUY' || (signal.side === 'LONG' && signal.confidence >= this.spotRiskManager.minConfidenceThreshold)) &&
+          !(this.spotCooldowns.get(asset.symbol) > 0)
+        ) {
+          validSpotBuys.push({ asset, signal });
+        }
 
-        if (this.isAutoTradingEnabled && !isCooldown && (signal.action === 'STRONG_BUY' || signal.action === 'STRONG_SELL')) {
-          const portfolioState = this.tradingEngine.getPortfolioState();
-          const riskEval = this.riskManager.evaluateTradeRisk(portfolioState, signal, asset);
+        // ==========================================
+        // 4A. MARGIN SCALPER AUTO-OPEN (500x Lev)
+        // ==========================================
+        const isMarginCooldown = (this.assetCooldowns.get(asset.symbol) || 0) > 0;
+
+        if (this.isAutoTradingEnabled && !isMarginCooldown && (signal.action === 'STRONG_BUY' || signal.action === 'STRONG_SELL')) {
+          const portfolioState = this.marginTradingEngine.getPortfolioState();
+          const riskEval = this.marginRiskManager.evaluateTradeRisk(portfolioState, signal, asset);
 
           if (riskEval.allowed) {
-            const newTrade = this.tradingEngine.openPosition({
+            this.marginTradingEngine.openPosition({
               symbol: asset.symbol,
               name: asset.name,
               category: asset.category,
@@ -165,14 +234,14 @@ export class AutonomousAgentLoop {
               confidence: signal.confidence,
               reason: signal.reason,
               riskRewardRatio: signal.riskRewardRatio,
-              tradingStyle: riskSettings.tradingStyle,
+              tradingStyle: marginRiskSettings.tradingStyle,
               leverage: riskEval.leverage,
               margin: riskEval.margin,
               liquidationPrice: riskEval.liquidationPrice
             });
 
             this.log(
-              `⚡ SCALP AUTO-OPEN: ${signal.side} ${asset.symbol} @ $${signal.entryPrice} (${riskEval.leverage}x Leverage, Margin: $${riskEval.margin}). Target: $${signal.takeProfit} | Stop: $${signal.stopLoss}`,
+              `⚡ [MARGIN] SCALP OPEN: ${signal.side} ${asset.symbol} @ $${signal.entryPrice} (${riskEval.leverage}x Lev, Margin: $${riskEval.margin}). Target: $${signal.takeProfit} | Stop: $${signal.stopLoss}`,
               'SUCCESS'
             );
           }
@@ -181,52 +250,82 @@ export class AutonomousAgentLoop {
 
       this.latestScanResults = scanResults;
 
-      // 5. Autonomous Intelligent Scalp Position Management & Auto-Close
-      const closedTriggers = this.tradingEngine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
+      // ==========================================
+      // 4B. PURE SPOT CRYPTO AUTO-OPEN (100% Capital Allocation)
+      // ==========================================
+      if (this.isAutoTradingEnabled && this.spotTradingEngine.activePositions.length === 0 && validSpotBuys.length > 0) {
+        // Pick the top confidence crypto setup
+        validSpotBuys.sort((a, b) => b.signal.confidence - a.signal.confidence);
+        const topPick = validSpotBuys[0];
+        const spotCash = this.spotTradingEngine.balance;
 
-      for (const closed of closedTriggers) {
+        if (spotCash >= 0.5) {
+          const entryPrice = topPick.signal.entryPrice;
+          const notional = Number(spotCash.toFixed(2));
+          const rawUnits = notional / entryPrice;
+          const units = Number(rawUnits.toFixed(topPick.asset.decimals || 4));
+
+          const stopDist = Number((entryPrice * (this.spotRiskManager.stopLossPct / 100)).toFixed(topPick.asset.decimals || 4));
+          const targetDist = Number((entryPrice * (this.spotRiskManager.takeProfitPct / 100)).toFixed(topPick.asset.decimals || 4));
+          const stopLoss = Number((entryPrice - stopDist).toFixed(topPick.asset.decimals || 4));
+          const takeProfit = Number((entryPrice + targetDist).toFixed(topPick.asset.decimals || 4));
+
+          this.spotTradingEngine.openPosition({
+            symbol: topPick.asset.symbol,
+            name: topPick.asset.name,
+            category: 'Crypto',
+            side: 'LONG',
+            entryPrice,
+            stopLoss,
+            takeProfit,
+            stopDistance: stopDist,
+            targetDistance: targetDist,
+            units,
+            notional,
+            confidence: topPick.signal.confidence,
+            reason: `Pure Spot 100% Allocation (${topPick.signal.reason})`,
+            riskRewardRatio: Number((this.spotRiskManager.takeProfitPct / this.spotRiskManager.stopLossPct).toFixed(1)),
+            tradingStyle: 'SPOT_BUY',
+            leverage: 1, // 1x Spot Cash
+            margin: notional, // 100% full balance allocated
+            liquidationPrice: 0 // No liquidation in spot
+          });
+
+          this.log(
+            `🪙 [SPOT] 100% CAPITAL BUY: Bought ${topPick.asset.symbol} with $${notional} (100% Balance) @ $${entryPrice}. Target: +${this.spotRiskManager.takeProfitPct}% ($${takeProfit}) | Stop: -${this.spotRiskManager.stopLossPct}% ($${stopLoss})`,
+            'SUCCESS'
+          );
+        }
+      }
+
+      // ==========================================
+      // 5. MANAGE EXITS FOR BOTH ENGINES
+      // ==========================================
+      // A. Margin Engine Trigger Checks
+      const marginClosed = this.marginTradingEngine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
+      for (const closed of marginClosed) {
         this.assetCooldowns.set(closed.symbol, 6);
-
         if (closed.exitReason === 'TAKE_PROFIT_TRIGGER') {
-          this.log(
-            `🎯 SCALP HIT TP: ${closed.symbol} ${closed.side}! Realized Profit: +$${closed.finalPnL} (+${closed.finalPnLPercent}%)`,
-            'SUCCESS'
-          );
-        } else if (closed.exitReason === 'SCALP_QUICK_BANK') {
-          this.log(
-            `💰 SCALP BANKED PROFIT: ${closed.symbol} ${closed.side}! Swift gain banked: +$${closed.finalPnL} (+${closed.finalPnLPercent}%)`,
-            'SUCCESS'
-          );
-        } else if (closed.exitReason === 'SCALP_TIMEOUT_EXIT') {
-          this.log(
-            `⏱️ SCALP TIMEOUT: ${closed.symbol} ${closed.side} exited flat to recycle capital. PnL: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}`,
-            'INFO'
-          );
+          this.log(`🎯 [MARGIN] TP HIT: ${closed.symbol} ${closed.side}! Realized: +$${closed.finalPnL}`, 'SUCCESS');
         } else if (closed.exitReason === 'TRAILING_STOP_TRIGGER') {
-          this.log(
-            `🛡️ TRAILING STOP HIT: ${closed.symbol} ${closed.side}! Scalp Profit Locked: +$${closed.finalPnL}`,
-            'SUCCESS'
-          );
+          this.log(`🛡️ [MARGIN] TRAIL STOP: ${closed.symbol} ${closed.side}! Profit: +$${closed.finalPnL}`, 'SUCCESS');
         } else if (closed.exitReason === 'BREAKEVEN_STOP_TRIGGER') {
-          this.log(
-            `🔒 BREAK-EVEN EXIT: ${closed.symbol} ${closed.side}. $0 Loss guaranteed.`,
-            'INFO'
-          );
-        } else if (closed.exitReason === 'SIGNAL_REVERSAL_EXIT') {
-          this.log(
-            `⚡ REVERSAL CUT: ${closed.symbol} ${closed.side}. Closed early. PnL: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}`,
-            closed.finalPnL >= 0 ? 'SUCCESS' : 'WARN'
-          );
-        } else if (closed.exitReason === 'MOMENTUM_EXHAUSTION_EXIT') {
-          this.log(
-            `✨ MOMENTUM PEAK EXIT: ${closed.symbol} ${closed.side}. Banked +$${closed.finalPnL}`,
-            'SUCCESS'
-          );
+          this.log(`🔒 [MARGIN] BREAK-EVEN: ${closed.symbol} ${closed.side}. $0 Loss protected.`, 'INFO');
         } else if (closed.exitReason === 'STOP_LOSS_TRIGGER') {
-          this.log(
-            `🛡️ SCALP STOP HIT: ${closed.symbol} ${closed.side}. Loss capped at -$${Math.abs(closed.finalPnL)}`,
-            'WARN'
-          );
+          this.log(`🛡️ [MARGIN] STOP HIT: ${closed.symbol} ${closed.side}. Loss capped: -$${Math.abs(closed.finalPnL)}`, 'WARN');
+        }
+      }
+
+      // B. Spot Engine Trigger Checks
+      const spotClosed = this.spotTradingEngine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
+      for (const closed of spotClosed) {
+        this.spotCooldowns.set(closed.symbol, 6);
+        if (closed.exitReason === 'TAKE_PROFIT_TRIGGER') {
+          this.log(`🪙 [SPOT] TARGET HIT: ${closed.symbol}! Sold 100% holding for +$${closed.finalPnL} (+${closed.finalPnLPercent}%)!`, 'SUCCESS');
+        } else if (closed.exitReason === 'STOP_LOSS_TRIGGER') {
+          this.log(`🪙 [SPOT] STOP TRIGGERED: ${closed.symbol} sold at stop. Loss: -$${Math.abs(closed.finalPnL)} (${closed.finalPnLPercent}%)`, 'WARN');
+        } else {
+          this.log(`🪙 [SPOT] EXIT: ${closed.symbol} closed. Realized: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'WARN');
         }
       }
 
@@ -239,9 +338,31 @@ export class AutonomousAgentLoop {
   }
 
   getDashboardData() {
+    const marginPortfolio = this.marginTradingEngine.getPortfolioState();
+    const spotPortfolio = this.spotTradingEngine.getPortfolioState();
+    const marginRisk = this.marginRiskManager.getSettings();
+    const spotRisk = {
+      ...this.spotRiskManager,
+      tradingStyle: 'SPOT_BUY',
+      defaultLeverage: 1,
+      tradeDirection: 'LONG_ONLY',
+      targetRiskRewardRatio: Number((this.spotRiskManager.takeProfitPct / this.spotRiskManager.stopLossPct).toFixed(1))
+    };
+
+    const isSpot = this.activeAccount === 'SPOT';
+
     return {
-      portfolio: this.tradingEngine.getPortfolioState(),
-      riskSettings: this.riskManager.getSettings(),
+      activeAccount: this.activeAccount,
+      margin: {
+        portfolio: marginPortfolio,
+        riskSettings: marginRisk
+      },
+      spot: {
+        portfolio: spotPortfolio,
+        riskSettings: spotRisk
+      },
+      portfolio: isSpot ? spotPortfolio : marginPortfolio,
+      riskSettings: isSpot ? spotRisk : marginRisk,
       isAutoTradingEnabled: this.isAutoTradingEnabled,
       isScanning: this.isScanning,
       marketScan: this.latestScanResults,

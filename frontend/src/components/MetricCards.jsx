@@ -1,12 +1,14 @@
 import React from 'react';
 import { DollarSign, TrendingUp, TrendingDown, Target, Award, ShieldAlert, BarChart3, Edit3, Zap } from 'lucide-react';
 
-export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModal }) {
+export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModal, activeAccount = 'MARGIN' }) {
   if (!portfolio) return null;
 
+  const isSpot = activeAccount === 'SPOT';
+
   const {
-    equity = 10000,
-    balance = 10000,
+    equity = 10,
+    balance = 10,
     realizedPnL = 0,
     unrealizedPnL = 0,
     totalPnL = 0,
@@ -49,15 +51,17 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
       {/* Card 1: Total Equity & Custom Balance */}
       <div
         onClick={onOpenBalanceModal}
-        className="bg-terminal-850/80 border border-terminal-border hover:border-indigo-500/50 rounded-xl p-3.5 relative overflow-hidden group cursor-pointer transition-all shadow-md"
-        title="Click to edit demo account balance"
+        className={`bg-terminal-850/80 border rounded-xl p-3.5 relative overflow-hidden group cursor-pointer transition-all shadow-md ${
+          isSpot ? 'hover:border-emerald-500/50 border-terminal-border' : 'hover:border-indigo-500/50 border-terminal-border'
+        }`}
+        title={`Click to edit ${isSpot ? 'Spot' : 'Margin'} account balance`}
       >
         <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
           <span className="font-mono uppercase tracking-wider text-[11px] flex items-center gap-1">
-            <span>Total Equity</span>
-            <Edit3 className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <span>{isSpot ? 'Spot Equity' : 'Total Equity'}</span>
+            <Edit3 className={`w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity ${isSpot ? 'text-emerald-400' : 'text-indigo-400'}`} />
           </span>
-          <DollarSign className="w-3.5 h-3.5 text-indigo-400" />
+          <DollarSign className={`w-3.5 h-3.5 ${isSpot ? 'text-emerald-400' : 'text-indigo-400'}`} />
         </div>
         <div className="text-xl font-bold font-mono text-white tracking-tight">
           ${equity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -66,23 +70,27 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
           {isNetProfit ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
           <span>{isNetProfit ? '+' : ''}{totalPnL >= 0 ? `$${totalPnL}` : `-$${Math.abs(totalPnL)}`} ({totalPnLPct}%)</span>
         </div>
-        <div className="text-[10px] text-indigo-300/80 font-sans mt-0.5 group-hover:text-indigo-300">
+        <div className={`text-[10px] font-sans mt-0.5 ${isSpot ? 'text-emerald-300/80 group-hover:text-emerald-300' : 'text-indigo-300/80 group-hover:text-indigo-300'}`}>
           Balance: ${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })} (Edit ✏️)
         </div>
-        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-indigo-500 to-rose-500 opacity-60" />
+        <div className={`absolute bottom-0 left-0 right-0 h-[2px] ${
+          isSpot ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-gradient-to-r from-indigo-500 to-rose-500'
+        } opacity-60`} />
       </div>
 
       {/* Card 2: Unrealized PnL */}
       <div className="bg-terminal-850/80 border border-terminal-border rounded-xl p-3.5 relative overflow-hidden">
         <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-          <span className="font-mono uppercase tracking-wider text-[11px]">Open Scalp PnL</span>
+          <span className="font-mono uppercase tracking-wider text-[11px]">
+            {isSpot ? 'Open Spot Holding' : 'Open Scalp PnL'}
+          </span>
           <Activity className="w-3.5 h-3.5 text-slate-400" />
         </div>
         <div className={`text-xl font-bold font-mono tracking-tight ${isUnrealizedProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
           {isUnrealizedProfit ? '+' : '-'}${Math.abs(unrealizedPnL).toFixed(2)}
         </div>
         <div className="text-[11px] font-mono mt-1 text-slate-400">
-          <span>{activePositions.length} active scalp{activePositions.length !== 1 ? 's' : ''}</span>
+          <span>{activePositions.length} active {isSpot ? 'holding' : 'scalp'}{activePositions.length !== 1 ? 's' : ''}</span>
         </div>
         <div className={`absolute bottom-0 left-0 right-0 h-[2px] ${isUnrealizedProfit ? 'bg-emerald-500' : 'bg-rose-500'} opacity-60`} />
       </div>
@@ -97,7 +105,7 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
           {isRealizedProfit ? '+' : '-'}${Math.abs(realizedPnL).toFixed(2)}
         </div>
         <div className="text-[11px] font-mono mt-1 text-slate-400">
-          <span>{totalTrades} closed scalps</span>
+          <span>{totalTrades} closed {isSpot ? 'spot trades' : 'scalps'}</span>
         </div>
         <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-slate-600 opacity-60" />
       </div>
@@ -126,41 +134,81 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
         <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-500 opacity-60" />
       </div>
 
-      {/* Card 5: Scalp Strategy Mode & Leverage */}
-      <div className="bg-terminal-850/80 border border-terminal-border rounded-xl p-3.5 relative overflow-hidden">
-        <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-          <span className="font-mono uppercase tracking-wider text-[11px]">Execution Style</span>
-          <Zap className="w-3.5 h-3.5 text-amber-400" />
+      {/* Card 5: Execution Style & Leverage */}
+      {isSpot ? (
+        <div className="bg-terminal-850/80 border border-terminal-border rounded-xl p-3.5 relative overflow-hidden">
+          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <span className="font-mono uppercase tracking-wider text-[11px]">Execution Style</span>
+            <Zap className="w-3.5 h-3.5 text-emerald-400" />
+          </div>
+          <div className="text-base font-bold font-mono text-emerald-300 tracking-tight flex items-center justify-between">
+            <span>PURE SPOT</span>
+            <span className="text-xs px-2 py-0.5 rounded bg-terminal-950 border border-emerald-500/40 text-emerald-300 font-mono font-bold">
+              1x CASH
+            </span>
+          </div>
+          <div className="text-[11px] font-mono mt-1 text-cyan-300 font-semibold flex items-center justify-between">
+            <span>▲ LONG ONLY</span>
+            <span className="text-slate-400 font-normal">
+              -{riskSettings?.stopLossPct || 1.0}% / +{riskSettings?.takeProfitPct || 2.5}%
+            </span>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-emerald-500 opacity-60" />
         </div>
-        <div className="text-base font-bold font-mono text-amber-300 tracking-tight flex items-center justify-between">
-          <span>SCALPING</span>
-          <span className="text-xs px-2 py-0.5 rounded bg-terminal-950 border border-amber-500/40 text-amber-300 font-mono font-bold">
-            {riskSettings?.defaultLeverage || 10}x LEV
-          </span>
+      ) : (
+        <div className="bg-terminal-850/80 border border-terminal-border rounded-xl p-3.5 relative overflow-hidden">
+          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <span className="font-mono uppercase tracking-wider text-[11px]">Execution Style</span>
+            <Zap className="w-3.5 h-3.5 text-amber-400" />
+          </div>
+          <div className="text-base font-bold font-mono text-amber-300 tracking-tight flex items-center justify-between">
+            <span>SCALPING</span>
+            <span className="text-xs px-2 py-0.5 rounded bg-terminal-950 border border-amber-500/40 text-amber-300 font-mono font-bold">
+              {riskSettings?.defaultLeverage || 500}x LEV
+            </span>
+          </div>
+          <div className="text-[11px] font-mono mt-1 text-rose-300 font-semibold flex items-center justify-between">
+            <span>{riskSettings?.tradeDirection === 'SHORT_ONLY' ? '▼ SHORT ONLY' : riskSettings?.tradeDirection}</span>
+            <span className="text-slate-400 font-normal">1:{riskSettings?.targetRiskRewardRatio || '1.3'} R:R</span>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-500 opacity-60" />
         </div>
-        <div className="text-[11px] font-mono mt-1 text-rose-300 font-semibold flex items-center justify-between">
-          <span>{riskSettings?.tradeDirection === 'SHORT_ONLY' ? '▼ SHORT ONLY' : riskSettings?.tradeDirection}</span>
-          <span className="text-slate-400 font-normal">1:{riskSettings?.targetRiskRewardRatio || '1.3'} R:R</span>
-        </div>
-        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-500 opacity-60" />
-      </div>
+      )}
 
-      {/* Card 6: Margin & Risk Guardian */}
-      <div className="bg-terminal-850/80 border border-terminal-border rounded-xl p-3.5 relative overflow-hidden">
-        <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-          <span className="font-mono uppercase tracking-wider text-[11px]">Margin & Slots</span>
-          <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
+      {/* Card 6: Margin & Risk / Allocation */}
+      {isSpot ? (
+        <div className="bg-terminal-850/80 border border-terminal-border rounded-xl p-3.5 relative overflow-hidden">
+          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <span className="font-mono uppercase tracking-wider text-[11px]">Capital Allocation</span>
+            <ShieldAlert className="w-3.5 h-3.5 text-emerald-400" />
+          </div>
+          <div className="text-base font-bold font-mono text-white tracking-tight flex items-center justify-between">
+            <span className="text-emerald-400">100% PER TRADE</span>
+            <span className="text-xs text-slate-400 font-mono font-normal">1 Slot</span>
+          </div>
+          <div className="text-[11px] font-mono mt-1 text-slate-400 flex items-center justify-between">
+            <span>{activePositions.length > 0 ? `$${usedMargin.toFixed(2)} active` : 'Standing by'}</span>
+            <span className="text-emerald-400 font-semibold">0x Lev (Safe)</span>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-emerald-500 opacity-60" />
         </div>
-        <div className="text-lg font-bold font-mono text-white tracking-tight flex items-center justify-between">
-          <span>${usedMargin.toFixed(0)} <span className="text-xs text-slate-400 font-normal">used</span></span>
-          <span className="text-xs text-emerald-400 font-mono">${freeMargin.toFixed(0)} free</span>
+      ) : (
+        <div className="bg-terminal-850/80 border border-terminal-border rounded-xl p-3.5 relative overflow-hidden">
+          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <span className="font-mono uppercase tracking-wider text-[11px]">Margin & Slots</span>
+            <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
+          </div>
+          <div className="text-lg font-bold font-mono text-white tracking-tight flex items-center justify-between">
+            <span>${usedMargin.toFixed(0)} <span className="text-xs text-slate-400 font-normal">used</span></span>
+            <span className="text-xs text-emerald-400 font-mono">${freeMargin.toFixed(0)} free</span>
+          </div>
+          <div className="text-[11px] font-mono mt-1 text-slate-400 flex items-center justify-between">
+            <span>{activePositions.length}/{riskSettings?.maxConcurrentTrades || 4} slots</span>
+            <span>{riskSettings?.riskPerTradePct || 1.5}% risk</span>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-purple-500 opacity-60" />
         </div>
-        <div className="text-[11px] font-mono mt-1 text-slate-400 flex items-center justify-between">
-          <span>{activePositions.length}/{riskSettings?.maxConcurrentTrades || 4} slots</span>
-          <span>{riskSettings?.riskPerTradePct || 1.5}% risk</span>
-        </div>
-        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-purple-500 opacity-60" />
-      </div>
+      )}
     </div>
   );
 }

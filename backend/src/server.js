@@ -37,12 +37,31 @@ app.post('/api/agent/toggle', (req, res) => {
   }
 });
 
-// API: Update risk management settings
+// API: Switch active account view ('MARGIN' | 'SPOT')
+app.post('/api/account/switch', (req, res) => {
+  try {
+    const { account } = req.body;
+    const active = agentLoop.switchAccount(account);
+    res.json({ success: true, activeAccount: active, ...agentLoop.getDashboardData() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// API: Update risk management settings (supports MARGIN and SPOT)
 app.post('/api/agent/settings', (req, res) => {
   try {
-    agentLoop.riskManager.updateSettings(req.body);
-    agentLoop.log(`Settings updated: ${JSON.stringify(req.body)}`, 'INFO');
-    res.json({ success: true, settings: agentLoop.riskManager.getSettings() });
+    const { account, stopLossPct, takeProfitPct, ...otherSettings } = req.body;
+    const targetAccount = (account || agentLoop.activeAccount).toUpperCase();
+
+    if (targetAccount === 'SPOT' || stopLossPct !== undefined || takeProfitPct !== undefined) {
+      agentLoop.updateSpotSettings({ stopLossPct, takeProfitPct, ...otherSettings });
+      res.json({ success: true, spotSettings: agentLoop.spotRiskManager, settings: agentLoop.getDashboardData().riskSettings });
+    } else {
+      agentLoop.marginRiskManager.updateSettings(otherSettings);
+      agentLoop.log(`Margin settings updated: ${JSON.stringify(otherSettings)}`, 'INFO');
+      res.json({ success: true, settings: agentLoop.marginRiskManager.getSettings() });
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -84,49 +103,53 @@ app.post('/api/agent/leverage', (req, res) => {
     if (isNaN(levNum) || levNum < 1 || levNum > 500) {
       return res.status(400).json({ error: 'Leverage must be between 1x and 500x' });
     }
-    agentLoop.riskManager.updateSettings({ defaultLeverage: levNum });
+    agentLoop.marginRiskManager.updateSettings({ defaultLeverage: levNum });
     agentLoop.log(`⚙️ Account leverage updated to ${levNum}x`, 'INFO');
-    res.json({ success: true, settings: agentLoop.riskManager.getSettings() });
+    res.json({ success: true, settings: agentLoop.marginRiskManager.getSettings() });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// API: Custom Balance Management (Set exact balance)
+// API: Custom Balance Management (Set exact balance for MARGIN or SPOT)
 app.post('/api/portfolio/balance', (req, res) => {
   try {
-    const { balance, closeOpenPositions } = req.body;
+    const { balance, closeOpenPositions, account } = req.body;
     const num = parseFloat(balance);
     if (isNaN(num) || num <= 0) {
       return res.status(400).json({ error: 'Please provide a valid positive balance' });
     }
-    const state = agentLoop.setBalance(num, !!closeOpenPositions);
-    res.json({ success: true, portfolio: state });
+    const state = agentLoop.setBalance(num, !!closeOpenPositions, account);
+    res.json({ success: true, portfolio: state, dashboard: agentLoop.getDashboardData() });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// API: Adjust Balance (Add or Subtract)
+// API: Adjust Balance (Add or Subtract for MARGIN or SPOT)
 app.post('/api/portfolio/adjust', (req, res) => {
   try {
-    const { delta } = req.body;
+    const { delta, account } = req.body;
     const num = parseFloat(delta);
     if (isNaN(num)) {
       return res.status(400).json({ error: 'Invalid delta amount' });
     }
-    const state = agentLoop.adjustBalance(num);
-    res.json({ success: true, portfolio: state });
+    const state = agentLoop.adjustBalance(num, account);
+    res.json({ success: true, portfolio: state, dashboard: agentLoop.getDashboardData() });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// API: Close an active trade manually
+// API: Close an active trade manually (checks active engine, then fallback)
 app.post('/api/trades/close/:id', (req, res) => {
   try {
     const { id } = req.params;
-    const closed = agentLoop.tradingEngine.closePosition(id, null, 'MANUAL_USER_EXIT', 'Manual user exit via dashboard');
+    let closed = agentLoop.tradingEngine.closePosition(id, null, 'MANUAL_USER_EXIT', 'Manual user exit via dashboard');
+    if (!closed) {
+      const otherEngine = agentLoop.activeAccount === 'SPOT' ? agentLoop.marginTradingEngine : agentLoop.spotTradingEngine;
+      closed = otherEngine.closePosition(id, null, 'MANUAL_USER_EXIT', 'Manual user exit via dashboard');
+    }
     if (!closed) {
       return res.status(404).json({ error: 'Trade not found or already closed' });
     }
@@ -143,13 +166,14 @@ app.post('/api/trades/close/:id', (req, res) => {
 // API: Close ALL active trades at once
 app.post('/api/trades/close-all', (req, res) => {
   try {
-    const active = [...agentLoop.tradingEngine.activePositions];
+    const targetEngine = agentLoop.tradingEngine;
+    const active = [...targetEngine.activePositions];
     const closedList = [];
     for (const pos of active) {
-      const closed = agentLoop.tradingEngine.closePosition(pos.id, null, 'MANUAL_USER_EXIT', 'Close All Triggered');
+      const closed = targetEngine.closePosition(pos.id, null, 'MANUAL_USER_EXIT', 'Close All Triggered');
       if (closed) closedList.push(closed);
     }
-    agentLoop.log(`🧹 Closed all ${closedList.length} active positions.`, 'INFO');
+    agentLoop.log(`🧹 Closed all ${closedList.length} active positions in [${agentLoop.activeAccount}].`, 'INFO');
     res.json({ success: true, closedCount: closedList.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -180,14 +204,62 @@ app.post('/api/trades/execute', (req, res) => {
       reason: 'Manual execution triggered via Dashboard'
     };
 
-    const portfolio = agentLoop.tradingEngine.getPortfolioState();
-    const riskEval = agentLoop.riskManager.evaluateTradeRisk(portfolio, { ...signal, confidence: 99 }, asset);
+    // Handle SPOT execution mode
+    if (agentLoop.activeAccount === 'SPOT') {
+      if (asset.category !== 'Crypto') {
+        return res.status(400).json({ error: 'Pure Spot trading is only supported for Crypto assets.' });
+      }
+      if (agentLoop.spotTradingEngine.activePositions.length > 0) {
+        return res.status(400).json({ error: 'Spot Account allows 1 active coin position at 100% capital allocation. Close current position first.' });
+      }
+      const spotCash = agentLoop.spotTradingEngine.balance;
+      if (spotCash < 0.5) {
+        return res.status(400).json({ error: 'Insufficient Spot balance to open trade.' });
+      }
+
+      const notional = Number(spotCash.toFixed(2));
+      const entryPrice = asset.price;
+      const rawUnits = notional / entryPrice;
+      const units = Number(rawUnits.toFixed(asset.decimals || 4));
+      const stopDist = Number((entryPrice * (agentLoop.spotRiskManager.stopLossPct / 100)).toFixed(asset.decimals || 4));
+      const targetDist = Number((entryPrice * (agentLoop.spotRiskManager.takeProfitPct / 100)).toFixed(asset.decimals || 4));
+      const stopLoss = Number((entryPrice - stopDist).toFixed(asset.decimals || 4));
+      const takeProfit = Number((entryPrice + targetDist).toFixed(asset.decimals || 4));
+
+      const trade = agentLoop.spotTradingEngine.openPosition({
+        symbol: asset.symbol,
+        name: asset.name,
+        category: 'Crypto',
+        side: 'LONG',
+        entryPrice,
+        stopLoss,
+        takeProfit,
+        stopDistance: stopDist,
+        targetDistance: targetDist,
+        units,
+        notional,
+        confidence: 90,
+        reason: 'Manual 100% Spot Buy via Dashboard',
+        riskRewardRatio: Number((agentLoop.spotRiskManager.takeProfitPct / agentLoop.spotRiskManager.stopLossPct).toFixed(1)),
+        tradingStyle: 'SPOT_BUY',
+        leverage: 1,
+        margin: notional,
+        liquidationPrice: 0
+      });
+
+      agentLoop.log(`🪙 [SPOT] MANUAL 100% BUY: Bought ${trade.symbol} with $${notional} (100% Spot Balance) @ $${entryPrice}`, 'SUCCESS');
+      return res.json({ success: true, trade });
+    }
+
+    // MARGIN SCALPER execution mode
+    const portfolio = agentLoop.marginTradingEngine.getPortfolioState();
+    const riskEval = agentLoop.marginRiskManager.evaluateTradeRisk(portfolio, { ...signal, confidence: 99 }, asset);
 
     if (!riskEval.allowed) {
       return res.status(400).json({ error: riskEval.reason });
     }
 
-    const trade = agentLoop.tradingEngine.openPosition({
+    const trade = agentLoop.marginTradingEngine.openPosition({
       symbol: asset.symbol,
       name: asset.name,
       category: asset.category,
@@ -208,7 +280,7 @@ app.post('/api/trades/execute', (req, res) => {
       liquidationPrice: riskEval.liquidationPrice
     });
 
-    agentLoop.log(`🖐️ MANUAL SCALP OPENED: ${trade.side} ${trade.symbol} @ $${trade.entryPrice} (${riskEval.leverage}x Lev, Margin: $${riskEval.margin})`, 'INFO');
+    agentLoop.log(`🖐️ [MARGIN] MANUAL SCALP OPENED: ${trade.side} ${trade.symbol} @ $${trade.entryPrice} (${riskEval.leverage}x Lev, Margin: $${riskEval.margin})`, 'INFO');
     res.json({ success: true, trade });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -218,10 +290,13 @@ app.post('/api/trades/execute', (req, res) => {
 // API: Reset paper portfolio to initial state
 app.post('/api/portfolio/reset', (req, res) => {
   try {
-    const initialBalance = req.body.initialBalance || 10000;
-    const resetState = agentLoop.tradingEngine.reset(initialBalance);
-    agentLoop.log(`🔄 Portfolio reset to $${initialBalance.toLocaleString('en-US')} virtual balance.`, 'WARN');
-    res.json({ success: true, portfolio: resetState });
+    const { initialBalance, account } = req.body;
+    const targetAccount = (account || agentLoop.activeAccount).toUpperCase();
+    const engine = targetAccount === 'SPOT' ? agentLoop.spotTradingEngine : agentLoop.marginTradingEngine;
+    const initBal = initialBalance !== undefined ? parseFloat(initialBalance) : 10;
+    const resetState = engine.reset(initBal);
+    agentLoop.log(`🔄 [${targetAccount}] Portfolio reset to $${initBal.toLocaleString('en-US')} virtual balance.`, 'WARN');
+    res.json({ success: true, portfolio: resetState, dashboard: agentLoop.getDashboardData() });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

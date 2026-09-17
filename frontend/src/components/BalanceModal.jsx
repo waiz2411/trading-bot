@@ -1,11 +1,24 @@
 import React, { useState } from 'react';
-import { X, DollarSign, Wallet, Plus, Minus, Check, AlertCircle } from 'lucide-react';
+import { X, DollarSign, Wallet, Plus, Minus, Check, Zap, Coins } from 'lucide-react';
 
-export default function BalanceModal({ currentBalance, onUpdateBalance, onAdjustBalance, onClose }) {
-  const [customBalance, setCustomBalance] = useState(currentBalance?.toString() || '10000');
+export default function BalanceModal({
+  activeAccount = 'MARGIN',
+  marginBalance = 10,
+  spotBalance = 10,
+  currentBalance,
+  onUpdateBalance,
+  onAdjustBalance,
+  onClose
+}) {
+  const [targetAccount, setTargetAccount] = useState(activeAccount || 'MARGIN');
+  const activeBal = targetAccount === 'SPOT' ? spotBalance : marginBalance;
+
+  const [customBalance, setCustomBalance] = useState((activeBal ?? currentBalance ?? 10).toString());
   const [closePositions, setClosePositions] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+
+  const isSpot = targetAccount === 'SPOT';
 
   const presets = [
     { value: 5, label: '$5', tag: 'Micro 🔥' },
@@ -19,15 +32,21 @@ export default function BalanceModal({ currentBalance, onUpdateBalance, onAdjust
     { value: 10000, label: '$10,000' }
   ];
 
+  const handleAccountChange = (acc) => {
+    setTargetAccount(acc);
+    const bal = acc === 'SPOT' ? spotBalance : marginBalance;
+    setCustomBalance((bal ?? 10).toString());
+  };
+
   const handleApply = async (e) => {
     e?.preventDefault();
     const val = parseFloat(customBalance);
     if (isNaN(val) || val <= 0) return;
 
     setIsSubmitting(true);
-    await onUpdateBalance(val, closePositions);
+    await onUpdateBalance(val, closePositions, targetAccount);
     setIsSubmitting(false);
-    setSuccessMsg(`Balance updated to $${val.toLocaleString('en-US')}`);
+    setSuccessMsg(`[${targetAccount}] Balance updated to $${val.toLocaleString('en-US')}`);
     setTimeout(() => {
       setSuccessMsg('');
       onClose();
@@ -36,7 +55,7 @@ export default function BalanceModal({ currentBalance, onUpdateBalance, onAdjust
 
   const handleQuickAdjust = async (delta) => {
     setIsSubmitting(true);
-    await onAdjustBalance(delta);
+    await onAdjustBalance(delta, targetAccount);
     setIsSubmitting(false);
     const newBal = Math.max(1, (parseFloat(customBalance) || 0) + delta);
     setCustomBalance(newBal.toString());
@@ -48,12 +67,16 @@ export default function BalanceModal({ currentBalance, onUpdateBalance, onAdjust
         {/* Modal Header */}
         <div className="p-5 border-b border-terminal-border flex items-center justify-between bg-terminal-850">
           <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+            <div className={`w-8 h-8 rounded-lg border flex items-center justify-center ${
+              isSpot ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' : 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400'
+            }`}>
               <Wallet className="w-4 h-4" />
             </div>
             <div>
               <h2 className="text-sm font-bold font-mono text-white">Edit Demo Account Balance</h2>
-              <p className="text-[11px] text-slate-400 font-sans">Set custom simulated capital for scalping</p>
+              <p className="text-[11px] text-slate-400 font-sans">
+                {isSpot ? 'Set capital for 100% Pure Spot Trades' : 'Set capital for 500x Margin Scalper'}
+              </p>
             </div>
           </div>
           <button
@@ -64,19 +87,53 @@ export default function BalanceModal({ currentBalance, onUpdateBalance, onAdjust
           </button>
         </div>
 
+        {/* Account Selector Tabs */}
+        <div className="flex border-b border-terminal-border bg-terminal-950 px-6 pt-3 gap-2">
+          <button
+            type="button"
+            onClick={() => handleAccountChange('MARGIN')}
+            className={`flex items-center gap-1.5 pb-2.5 px-3 border-b-2 font-mono text-xs font-bold transition-all ${
+              !isSpot
+                ? 'border-amber-400 text-amber-300'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-400" />
+            <span>Margin (${marginBalance.toLocaleString('en-US')})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAccountChange('SPOT')}
+            className={`flex items-center gap-1.5 pb-2.5 px-3 border-b-2 font-mono text-xs font-bold transition-all ${
+              isSpot
+                ? 'border-emerald-400 text-emerald-300'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Coins className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Spot (${spotBalance.toLocaleString('en-US')})</span>
+          </button>
+        </div>
+
         {/* Modal Body */}
         <div className="p-6 space-y-5 font-mono text-xs">
           {/* Current Balance Display */}
           <div className="p-3.5 rounded-xl bg-terminal-950 border border-terminal-border flex items-center justify-between">
             <div>
-              <span className="text-slate-500 text-[10px] uppercase">Active Capital</span>
+              <span className="text-slate-500 text-[10px] uppercase">
+                {isSpot ? 'Spot Account Capital' : 'Margin Account Capital'}
+              </span>
               <div className="text-lg font-bold text-white tracking-tight">
-                ${currentBalance?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                ${(isSpot ? spotBalance : marginBalance)?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </div>
             </div>
             <div className="text-right">
-              <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                Simulated USD
+              <span className={`text-[10px] px-2 py-0.5 rounded border font-semibold ${
+                isSpot
+                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                  : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+              }`}>
+                {isSpot ? '100% Capital Per Buy' : '500x Leverage Margin'}
               </span>
             </div>
           </div>
@@ -84,7 +141,7 @@ export default function BalanceModal({ currentBalance, onUpdateBalance, onAdjust
           {/* Custom Balance Input */}
           <div>
             <label className="block text-slate-300 font-bold mb-2 uppercase tracking-wider text-[11px]">
-              Set Custom Balance ($)
+              Set Custom Balance for {isSpot ? 'Spot' : 'Margin'} ($)
             </label>
             <div className="relative">
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">$</span>
