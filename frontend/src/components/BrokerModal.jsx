@@ -22,6 +22,7 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
   const [mt5Password, setMt5Password] = useState('');
   const [mt5Server, setMt5Server] = useState('');
   const [mt5Gateway, setMt5Gateway] = useState('http://localhost:5001');
+  const [metaApiToken, setMetaApiToken] = useState('');
   const [showAdvancedGateway, setShowAdvancedGateway] = useState(false);
   const [showMt5Password, setShowMt5Password] = useState(false);
   const [mt5Testing, setMt5Testing] = useState(false);
@@ -94,7 +95,8 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
           login: mt5Login,
           password: mt5Password,
           server: mt5Server,
-          gatewayUrl: mt5Gateway || 'http://localhost:5001'
+          gatewayUrl: mt5Gateway || 'http://localhost:5001',
+          metaApiToken
         })
       });
 
@@ -107,7 +109,8 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
           login: mt5Login,
           password: mt5Password,
           server: mt5Server,
-          gatewayUrl: mt5Gateway || 'http://localhost:5001'
+          gatewayUrl: mt5Gateway || 'http://localhost:5001',
+          metaApiToken
         })
       });
       const data = await res.json();
@@ -404,32 +407,62 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
                 </div>
               </div>
 
-              {/* Optional Advanced Settings Toggle */}
+              {/* Cloud SaaS & Advanced Connection Options */}
               <div className="pt-1">
                 <button
                   type="button"
                   onClick={() => setShowAdvancedGateway(!showAdvancedGateway)}
-                  className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 font-mono transition-colors"
+                  className="text-[11px] text-amber-400/90 hover:text-amber-300 flex items-center gap-1 font-mono transition-colors font-semibold"
                 >
-                  <span>Advanced: Custom Gateway / VPS Endpoint (Optional)</span>
-                  {showAdvancedGateway ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  <span>⚙️ Cloud Gateway & Tunnel Settings (Click to expand)</span>
+                  {showAdvancedGateway ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 </button>
 
                 {showAdvancedGateway && (
-                  <div className="mt-2 p-3 rounded-xl bg-terminal-950 border border-terminal-border space-y-2">
-                    <label className="block text-slate-400 text-[10px] uppercase font-bold">
-                      MT5 Gateway REST URL
-                    </label>
-                    <input
-                      type="text"
-                      value={mt5Gateway}
-                      onChange={(e) => setMt5Gateway(e.target.value)}
-                      placeholder="http://localhost:5001 or https://mt5.yourdomain.com"
-                      className="w-full px-3 py-1.5 bg-terminal-900 border border-terminal-border rounded-lg text-white font-mono text-xs focus:outline-none focus:border-amber-500"
-                    />
-                    <span className="text-[10px] text-slate-500 font-sans block">
-                      Leave default if using standard gateway.
-                    </span>
+                  <div className="mt-2 p-3.5 rounded-xl bg-terminal-950 border border-terminal-border space-y-3">
+                    {/* Method 1: MetaApi Cloud Token */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-slate-300 text-[10px] uppercase font-bold">
+                          Option 1: MetaApi Cloud Token (Recommended for 100% Cloud SaaS)
+                        </label>
+                        <a
+                          href="https://metaapi.cloud"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[10px] text-amber-400 hover:underline"
+                        >
+                          Get Free Token ↗
+                        </a>
+                      </div>
+                      <input
+                        type="password"
+                        value={metaApiToken}
+                        onChange={(e) => setMetaApiToken(e.target.value)}
+                        placeholder="Paste your free MetaApi token from metaapi.cloud..."
+                        className="w-full px-3 py-1.5 bg-terminal-900 border border-terminal-border rounded-lg text-white font-mono text-xs focus:outline-none focus:border-amber-500"
+                      />
+                      <span className="text-[10px] text-slate-400 font-sans block mt-1">
+                        Connects Vault Markets directly in the cloud from Render without needing your computer on.
+                      </span>
+                    </div>
+
+                    {/* Method 2: Public Tunnel / Bridge URL */}
+                    <div className="pt-2 border-t border-terminal-border/60">
+                      <label className="block text-slate-300 text-[10px] uppercase font-bold mb-1">
+                        Option 2: Public Bridge / Ngrok Tunnel URL
+                      </label>
+                      <input
+                        type="text"
+                        value={mt5Gateway}
+                        onChange={(e) => setMt5Gateway(e.target.value)}
+                        placeholder="https://your-tunnel.ngrok-free.app or http://localhost:5001"
+                        className="w-full px-3 py-1.5 bg-terminal-900 border border-terminal-border rounded-lg text-white font-mono text-xs focus:outline-none focus:border-amber-500"
+                      />
+                      <span className="text-[10px] text-slate-400 font-sans block mt-1">
+                        If running <code className="text-amber-300">python mt5_bridge.py</code> on your laptop, expose it using <code className="text-amber-300">ngrok http 5001</code> so the cloud server on Render can reach it.
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
