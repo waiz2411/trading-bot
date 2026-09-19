@@ -1,0 +1,123 @@
+"""
+MetaTrader 5 Python Gateway Bridge for NexusQuant
+Runs a local HTTP REST microservice on port 5001 that bridges
+NexusQuant requests directly to your locally installed MetaTrader 5 terminal.
+"""
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import MetaTrader5 as mt5
+
+app = Flask(__name__)
+CORS(app)
+
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'ONLINE', 'bridge': 'MT5-Python-Bridge', 'port': 5001})
+
+@app.route('/api/mt5/status', methods=['POST'])
+def status():
+    data = request.json or {}
+    login = data.get('login')
+    password = data.get('password')
+    server = data.get('server')
+
+    if login and server:
+        login_int = int(login) if str(login).isdigit() else login
+        if password:
+            init_ok = mt5.initialize(login=login_int, password=str(password), server=str(server))
+        else:
+            init_ok = mt5.initialize(login=login_int, server=str(server))
+    else:
+        init_ok = mt5.initialize()
+
+    if not init_ok:
+        err = mt5.last_error()
+        return jsonify({
+            'success': False,
+            'error': f'MT5 initialize failed: {err}. Please ensure MetaTrader 5 is installed and running.'
+        }), 400
+
+    account_info = mt5.account_info()
+    if account_info is None:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to fetch account info: {mt5.last_error()}'
+        }), 400
+
+    return jsonify({
+        'success': True,
+        'login': account_info.login,
+        'balance': float(account_info.balance),
+        'equity': float(account_info.equity),
+        'margin': float(account_info.margin),
+        'freeMargin': float(account_info.margin_free),
+        'leverage': int(account_info.leverage),
+        'currency': account_info.currency,
+        'company': account_info.company,
+        'server': account_info.server
+    })
+
+@app.route('/api/mt5/order', methods=['POST'])
+def place_order():
+    data = request.json or {}
+    symbol = data.get('symbol', 'BTCUSD')
+    side = data.get('side', 'BUY').upper()
+    volume = float(data.get('volume', 0.01))
+    sl = data.get('sl')
+    tp = data.get('tp')
+    comment = data.get('comment', 'NexusQuant Scalp')
+
+    symbol_info = mt5.symbol_info(symbol)
+    if symbol_info is None:
+        return jsonify({'success': False, 'error': f'Symbol {symbol} not found in Market Watch'}), 400
+
+    if not symbol_info.visible:
+        mt5.symbol_select(symbol, True)
+
+    tick = mt5.symbol_info_tick(symbol)
+    if tick is None:
+        return jsonify({'success': False, 'error': f'Cannot get live tick for {symbol}'}), 400
+
+    order_type = mt5.ORDER_TYPE_BUY if side == 'BUY' else mt5.ORDER_TYPE_SELL
+    price = tick.ask if side == 'BUY' else tick.bid
+
+    request_payload = {
+        "action": mt5.TRADE_ACTION_DEAL,
+        "symbol": symbol,
+        "volume": volume,
+        "type": order_type,
+        "price": price,
+        "deviation": 20,
+        "magic": 241100,
+        "comment": comment,
+        "type_time": mt5.ORDER_TIME_GTC,
+        "type_filling": mt5.ORDER_FILLING_IOC,
+    }
+    if sl:
+        request_payload["sl"] = float(sl)
+    if tp:
+        request_payload["tp"] = float(tp)
+
+    result = mt5.order_send(request_payload)
+    if result.retcode != mt5.TRADE_RETCODE_DONE:
+        return jsonify({
+            'success': False,
+            'retcode': result.retcode,
+            'comment': result.comment,
+            'error': f'Order failed: {result.comment} (code {result.retcode})'
+        }), 400
+
+    return jsonify({
+        'success': True,
+        'ticket': result.order,
+        'volume': result.volume,
+        'price': result.price,
+        'comment': result.comment
+    })
+
+if __name__ == '__main__':
+    print("=" * 60)
+    print("MetaTrader 5 Python Gateway Bridge active on http://localhost:5001")
+    print("Bridge endpoint: POST http://localhost:5001/api/mt5/status")
+    print("=" * 60)
+    app.run(host='0.0.0.0', port=5001, debug=False)

@@ -91,10 +91,10 @@ export class MT5Connector {
         this.status = 'CONNECTED';
         this.lastChecked = new Date().toISOString();
         this.accountInfo = {
-          balance: data.balance || 1000,
-          equity: data.equity || 1000,
-          margin: data.margin || 0,
-          freeMargin: data.freeMargin || 1000,
+          balance: Number(data.balance || 0),
+          equity: Number(data.equity || data.balance || 0),
+          margin: Number(data.margin || 0),
+          freeMargin: Number(data.freeMargin || data.balance || 0),
           leverage: data.leverage || 500,
           currency: data.currency || 'USD',
           company: data.company || this.server,
@@ -110,16 +110,15 @@ export class MT5Connector {
         };
       }
 
-      // 2. Graceful standby fallback if local MT5 terminal service is starting or configured via web
-      // Validates credential structure and returns standby status with clear guidance
-      this.connected = true;
-      this.status = 'STANDBY';
+      // If gateway is unreachable
+      this.connected = false;
+      this.status = 'DISCONNECTED';
       this.lastChecked = new Date().toISOString();
       this.accountInfo = {
-        balance: 10,
-        equity: 10,
+        balance: null,
+        equity: null,
         margin: 0,
-        freeMargin: 10,
+        freeMargin: null,
         leverage: 500,
         currency: 'USD',
         company: this.server,
@@ -127,12 +126,10 @@ export class MT5Connector {
       };
 
       return {
-        success: true,
-        connected: true,
-        status: 'STANDBY',
+        success: false,
+        connected: false,
         latencyMs: this.latencyMs,
-        message: `MT5 Credentials verified for ${this.server} (Login: ${this.login.slice(0, 3)}****). MT5 Bridge standby on port 5001.`,
-        accountInfo: this.accountInfo
+        error: `Could not reach MT5 Gateway Bridge at ${this.gatewayUrl}. Please start the MT5 bridge service or verify the URL.`
       };
     } catch (err) {
       this.status = 'ERROR';
