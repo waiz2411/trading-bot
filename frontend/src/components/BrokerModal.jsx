@@ -28,6 +28,8 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
   const [mt5Result, setMt5Result] = useState(null);
 
   const POPULAR_SERVERS = [
+    'VaultMarkets-Live',
+    'VaultMarkets-Demo',
     'Exness-Real',
     'ICMarketsSC-Demo',
     'Pepperstone-Edge',
