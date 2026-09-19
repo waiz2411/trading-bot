@@ -8,9 +8,23 @@ import AgentLogs from './components/AgentLogs';
 import SettingsModal from './components/SettingsModal';
 import AssetDetailModal from './components/AssetDetailModal';
 import BalanceModal from './components/BalanceModal';
-import { Compass, Target, History, Terminal, Zap, ArrowDownRight, Coins } from 'lucide-react';
+import BrokerModal from './components/BrokerModal';
+import LoginPage from './components/LoginPage';
+import { Compass, Target, History, Terminal, Zap, ArrowDownRight, Coins, Key, ShieldCheck } from 'lucide-react';
 
 export default function App() {
+  const [token, setToken] = useState(() => localStorage.getItem('nexus_auth_token') || null);
+  const [user, setUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('nexus_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isBrokerModalOpen, setIsBrokerModalOpen] = useState(false);
+
   const [data, setData] = useState({
     activeAccount: 'MARGIN',
     margin: null,
@@ -21,6 +35,7 @@ export default function App() {
     isScanning: false,
     marketScan: [],
     logs: [],
+    brokers: null,
     serverTime: null
   });
 
@@ -36,9 +51,85 @@ export default function App() {
     setTimeout(() => setNotification(null), 4000);
   };
 
+  // Verify auth session on load
+  useEffect(() => {
+    const verifyAuth = async () => {
+      const storedToken = localStorage.getItem('nexus_auth_token');
+      if (!storedToken) {
+        setIsAuthLoading(false);
+        return;
+      }
+      try {
+        const res = await fetch('/api/auth/me', {
+          headers: { Authorization: `Bearer ${storedToken}` }
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.user) {
+            setUser(json.user);
+            setToken(storedToken);
+            localStorage.setItem('nexus_user', JSON.stringify(json.user));
+          } else {
+            setToken(null);
+            setUser(null);
+            localStorage.removeItem('nexus_auth_token');
+            localStorage.removeItem('nexus_user');
+          }
+        } else {
+          setToken(null);
+          setUser(null);
+          localStorage.removeItem('nexus_auth_token');
+          localStorage.removeItem('nexus_user');
+        }
+      } catch (err) {
+        console.error('Failed to verify token:', err);
+      } finally {
+        setIsAuthLoading(false);
+      }
+    };
+    verifyAuth();
+  }, []);
+
+  const handleLoginSuccess = (authData) => {
+    setToken(authData.token);
+    setUser(authData.user);
+    localStorage.setItem('nexus_auth_token', authData.token);
+    localStorage.setItem('nexus_user', JSON.stringify(authData.user));
+    showNotification(
+      `Authenticated as ${authData.user.email} (${authData.user.mode === 'LIVE' ? '🔴 Live Broker Mode' : '🟢 Demo Paper Mode'})`,
+      'SUCCESS'
+    );
+    fetchDashboard();
+  };
+
+  const handleLogout = async () => {
+    try {
+      const storedToken = localStorage.getItem('nexus_auth_token');
+      if (storedToken) {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${storedToken}` }
+        });
+      }
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      setToken(null);
+      setUser(null);
+      localStorage.removeItem('nexus_auth_token');
+      localStorage.removeItem('nexus_user');
+      showNotification('Logged out successfully', 'INFO');
+    }
+  };
+
   const fetchDashboard = useCallback(async () => {
     try {
-      const res = await fetch('/api/dashboard');
+      const headers = {};
+      const storedToken = localStorage.getItem('nexus_auth_token');
+      if (storedToken) {
+        headers['Authorization'] = `Bearer ${storedToken}`;
+      }
+      const res = await fetch('/api/dashboard', { headers });
       if (!res.ok) return;
       const json = await res.json();
       setData(json);
@@ -47,12 +138,13 @@ export default function App() {
     }
   }, []);
 
-  // Poll state every 2.5 seconds for ultra-responsive feel
+  // Poll state every 2.5 seconds when authenticated
   useEffect(() => {
+    if (!token || !user) return;
     fetchDashboard();
     const interval = setInterval(fetchDashboard, 2500);
     return () => clearInterval(interval);
-  }, [fetchDashboard]);
+  }, [fetchDashboard, token, user]);
 
   const handleSwitchAccount = async (account) => {
     try {
@@ -260,6 +352,26 @@ export default function App() {
   const closedTradesCount = data.portfolio?.closedTrades?.length || 0;
   const tradeDirection = data.riskSettings?.tradeDirection || 'SHORT_ONLY';
 
+  // Loading Splash Screen
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-[#07090e] flex items-center justify-center font-mono text-indigo-400">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="w-10 h-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin shadow-lg shadow-indigo-500/30" />
+          <div>
+            <div className="text-sm font-bold tracking-widest text-white">NEXUS QUANT</div>
+            <div className="text-[11px] text-slate-500 uppercase tracking-wider mt-1">Verifying Secure Session...</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Unauthenticated: Show Login Page
+  if (!token || !user) {
+    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
     <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col font-sans selection:bg-indigo-600 selection:text-white">
       {/* Top Header */}
@@ -280,10 +392,57 @@ export default function App() {
         tradingStyle={data.riskSettings?.tradingStyle || 'SCALPING'}
         lastUpdated={data.serverTime}
         activePositionsCount={activePositionsCount}
+        user={user}
+        brokers={data.brokers}
+        onOpenBrokerModal={() => setIsBrokerModalOpen(true)}
+        onLogout={handleLogout}
       />
 
       {/* Main Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-6">
+        {/* Live Broker Execution Routing Banner (Active when test@gmail.com / LIVE mode) */}
+        {user?.mode === 'LIVE' && (
+          <div className="p-4 rounded-xl bg-gradient-to-r from-rose-950/40 via-amber-950/25 to-emerald-950/30 border border-amber-500/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs font-mono shadow-lg">
+            <div className="flex items-center gap-3">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping shrink-0" />
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-rose-400 uppercase tracking-wider">LIVE BROKER ROUTING ACTIVE:</span>
+                  <span className="px-1.5 py-0.2 rounded text-[10px] bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                    REAL EXECUTION
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 font-sans mt-0.5">
+                  Spot orders route directly to <strong>Binance API</strong>. 500x Margin Scalps dispatch to <strong>MetaTrader 5 (MT5)</strong>.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-terminal-950 border border-terminal-border text-[11px]">
+                <span className={`w-2 h-2 rounded-full ${data.brokers?.binance?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                <span className="text-slate-400">Binance:</span>
+                <span className={data.brokers?.binance?.connected ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
+                  {data.brokers?.binance?.connected ? 'Connected' : 'Standby'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-terminal-950 border border-terminal-border text-[11px]">
+                <span className={`w-2 h-2 rounded-full ${data.brokers?.mt5?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                <span className="text-slate-400">MT5:</span>
+                <span className={data.brokers?.mt5?.connected ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
+                  {data.brokers?.mt5?.connected ? 'Connected' : 'Standby'}
+                </span>
+              </div>
+              <button
+                onClick={() => setIsBrokerModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition-colors shadow-sm"
+              >
+                <Key className="w-3.5 h-3.5" />
+                <span>Configure APIs</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Account Mode Banner */}
         {isSpot ? (
           <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-cyan-500/10 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs font-mono">
@@ -488,6 +647,16 @@ export default function App() {
           onSaveSettings={handleSaveSettings}
           onResetPortfolio={handleResetPortfolio}
           onClose={() => setIsSettingsOpen(false)}
+        />
+      )}
+
+      {/* Live MT5 & Binance Broker Setup Modal */}
+      {isBrokerModalOpen && (
+        <BrokerModal
+          isOpen={isBrokerModalOpen}
+          onClose={() => setIsBrokerModalOpen(false)}
+          user={user}
+          onBrokerUpdated={fetchDashboard}
         />
       )}
     </div>

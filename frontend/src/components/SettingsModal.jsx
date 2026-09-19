@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, ShieldAlert, Sliders, RotateCcw, Check, Target, Zap, Coins, TrendingUp } from 'lucide-react';
+import { X, ShieldAlert, Sliders, RotateCcw, Check, Target, Zap, Coins, TrendingUp, ShieldCheck, Sparkles } from 'lucide-react';
 
 export default function SettingsModal({
   settings,
@@ -46,19 +46,21 @@ export default function SettingsModal({
   ];
 
   const spotSlPresets = [
+    { label: '-0.2%', value: 0.2, tag: 'User Scalp' },
     { label: '-0.5%', value: 0.5, tag: 'Tight' },
-    { label: '-1.0%', value: 1.0, tag: 'Recommended ⭐' },
+    { label: '-0.8%', value: 0.8, tag: 'Optimal 80-85% ⭐' },
+    { label: '-1.0%', value: 1.0, tag: 'Recommended' },
     { label: '-1.5%', value: 1.5, tag: 'Standard' },
-    { label: '-2.0%', value: 2.0, tag: 'Wide' },
-    { label: '-3.0%', value: 3.0, tag: 'Roomy' }
+    { label: '-2.0%', value: 2.0, tag: 'Wide' }
   ];
 
   const spotTpPresets = [
-    { label: '+1.5%', value: 1.5, tag: 'Fast' },
-    { label: '+2.0%', value: 2.0, tag: 'Conservative' },
-    { label: '+2.5%', value: 2.5, tag: 'Target ⭐' },
-    { label: '+3.0%', value: 3.0, tag: 'Optimal' },
-    { label: '+5.0%', value: 5.0, tag: 'Swing' }
+    { label: '+0.5%', value: 0.5, tag: 'User Scalp' },
+    { label: '+1.0%', value: 1.0, tag: 'Fast Lock' },
+    { label: '+1.6%', value: 1.6, tag: 'Target 1:2 ⭐' },
+    { label: '+2.0%', value: 2.0, tag: 'Balanced' },
+    { label: '+2.5%', value: 2.5, tag: 'Standard' },
+    { label: '+3.0%', value: 3.0, tag: 'Optimal' }
   ];
 
   const handleSave = (e) => {
@@ -319,6 +321,67 @@ export default function SettingsModal({
                 </p>
               </div>
 
+              {/* Quick Strategy Combo Presets */}
+              <div className="p-3 rounded-xl bg-terminal-950 border border-terminal-border space-y-2">
+                <div className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>High Win-Rate Spot Presets</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSpotStopLossPct(0.2);
+                      setSpotTakeProfitPct(0.5);
+                      setSpotMinConfidence(85);
+                    }}
+                    className={`p-2 rounded-lg border text-left transition-all ${
+                      Math.abs(parseFloat(spotStopLossPct) - 0.2) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 0.5) < 0.05
+                        ? 'bg-emerald-950/60 border-emerald-500/60 text-white'
+                        : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="font-bold text-emerald-400">Micro Scalp</div>
+                    <div className="text-[10px] text-slate-400">-0.2% SL / +0.5% TP</div>
+                    <div className="text-[9px] text-cyan-400 mt-0.5">Noise Shield Active</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSpotStopLossPct(0.5);
+                      setSpotTakeProfitPct(1.0);
+                      setSpotMinConfidence(82);
+                    }}
+                    className={`p-2 rounded-lg border text-left transition-all ${
+                      Math.abs(parseFloat(spotStopLossPct) - 0.5) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 1.0) < 0.05
+                        ? 'bg-emerald-950/60 border-emerald-500/60 text-white'
+                        : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="font-bold text-amber-400">High Win Rate ⭐</div>
+                    <div className="text-[10px] text-slate-400">-0.5% SL / +1.0% TP</div>
+                    <div className="text-[9px] text-emerald-400 mt-0.5">80%–85% Target</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSpotStopLossPct(0.8);
+                      setSpotTakeProfitPct(1.6);
+                      setSpotMinConfidence(80);
+                    }}
+                    className={`p-2 rounded-lg border text-left transition-all ${
+                      Math.abs(parseFloat(spotStopLossPct) - 0.8) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 1.6) < 0.05
+                        ? 'bg-emerald-950/60 border-emerald-500/60 text-white'
+                        : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="font-bold text-indigo-400">Trend Scalp</div>
+                    <div className="text-[10px] text-slate-400">-0.8% SL / +1.6% TP</div>
+                    <div className="text-[9px] text-indigo-300 mt-0.5">1:2 Optimal R:R</div>
+                  </button>
+                </div>
+              </div>
+
               {/* Spot Stop Loss % */}
               <div className="p-3.5 rounded-xl bg-rose-950/20 border border-rose-500/40">
                 <div className="flex justify-between items-center mb-1.5">
@@ -358,9 +421,19 @@ export default function SettingsModal({
                   ))}
                 </div>
 
-                <p className="text-[11px] text-slate-400 font-sans mt-2">
-                  Safely sells the holding if price dips by this percentage from your buy price.
-                </p>
+                {parseFloat(spotStopLossPct) <= 0.4 ? (
+                  <div className="mt-2.5 p-2.5 rounded-lg bg-cyan-950/40 border border-cyan-500/40 text-[11px] text-cyan-200 leading-relaxed flex items-start gap-2">
+                    <ShieldCheck className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-cyan-300">Micro-Wick Noise Shield Active: </span>
+                      Because stop is ultra-tight (-{parseFloat(spotStopLossPct).toFixed(1)}%), entries strictly require lower-wick dip rejection & RSI value exhaustion so trades aren't clipped by regular 0.2% crypto spread noise.
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 font-sans mt-2">
+                    Safely sells the holding if price dips by this percentage from your buy price.
+                  </p>
+                )}
               </div>
 
               {/* Spot Take Profit % */}

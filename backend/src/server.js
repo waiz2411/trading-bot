@@ -4,6 +4,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { agentLoop } from './services/agentLoop.js';
 import { marketDataService } from './services/marketData.js';
+import { authService } from './services/authService.js';
+import { binanceConnector } from './services/binanceConnector.js';
+import { mt5Connector } from './services/mt5Connector.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,6 +19,124 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE']
 }));
 app.use(express.json());
+
+// ====================================================
+// AUTHENTICATION ROUTES
+// ====================================================
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const result = authService.login(email, password);
+    agentLoop.setUserMode(result.user.email, result.user.mode);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(401).json({ error: err.message });
+  }
+});
+
+app.get('/api/auth/me', (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = authService.validateToken(token);
+    if (!user) {
+      return res.status(401).json({ error: 'Session expired or invalid' });
+    }
+    agentLoop.setUserMode(user.email, user.mode);
+    res.json({ success: true, user });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    authService.logout(token);
+    agentLoop.setUserMode('demo@gmail.com', 'SIMULATED');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ====================================================
+// BROKER & EXCHANGE INTEGRATION ROUTES
+// ====================================================
+// Binance Spot Config & Test
+app.post('/api/broker/binance/config', (req, res) => {
+  try {
+    const { email, apiKey, apiSecret, isTestnet } = req.body;
+    const status = binanceConnector.configure({ apiKey, apiSecret, isTestnet });
+    if (email) {
+      authService.updateBrokerConfig(email, 'binance', {
+        apiKey,
+        isTestnet: !!isTestnet,
+        connected: false,
+        status: apiKey ? 'STANDBY' : 'DISCONNECTED'
+      });
+    }
+    res.json({ success: true, binance: status });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/broker/binance/test', async (req, res) => {
+  try {
+    const result = await binanceConnector.testConnection();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/broker/binance/balances', async (req, res) => {
+  try {
+    const balances = await binanceConnector.getBalances();
+    res.json({ success: true, balances });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// MetaTrader 5 Config & Test
+app.post('/api/broker/mt5/config', (req, res) => {
+  try {
+    const { email, login, password, server, gatewayUrl } = req.body;
+    const status = mt5Connector.configure({ login, password, server, gatewayUrl });
+    if (email) {
+      authService.updateBrokerConfig(email, 'mt5', {
+        login,
+        server,
+        gatewayUrl,
+        connected: false,
+        status: login && server ? 'STANDBY' : 'DISCONNECTED'
+      });
+    }
+    res.json({ success: true, mt5: status });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/broker/mt5/test', async (req, res) => {
+  try {
+    const result = await mt5Connector.testConnection();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/broker/mt5/account', (req, res) => {
+  try {
+    res.json({ success: true, mt5: mt5Connector.getStatus() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // API: Get complete dashboard state
 app.get('/api/dashboard', (req, res) => {

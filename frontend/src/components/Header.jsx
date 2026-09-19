@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, RefreshCw, Sliders, Wallet, Zap, ArrowDownRight, ArrowUpRight, Repeat, Trash2, Coins } from 'lucide-react';
+import { Play, Pause, RefreshCw, Sliders, Wallet, Zap, ArrowDownRight, ArrowUpRight, Repeat, Trash2, Coins, Key, LogOut, Globe } from 'lucide-react';
 
 export default function Header({
   activeAccount = 'MARGIN',
@@ -17,7 +17,11 @@ export default function Header({
   onChangeDirection,
   tradingStyle = 'SCALPING',
   lastUpdated,
-  activePositionsCount = 0
+  activePositionsCount = 0,
+  user,
+  brokers,
+  onOpenBrokerModal,
+  onLogout
 }) {
   const isSpot = activeAccount === 'SPOT';
   const marginBal = marginPortfolio?.balance || 0;
@@ -242,11 +246,56 @@ export default function Header({
           {/* Settings */}
           <button
             onClick={onOpenSettings}
-            className="p-2 rounded-lg bg-terminal-800 hover:bg-terminal-700 border border-terminal-border text-slate-300 text-xs transition-colors"
+            className="p-2 rounded-lg bg-terminal-800 hover:bg-terminal-750 border border-terminal-border text-slate-300 text-xs transition-colors"
             title="Risk & Strategy Settings"
           >
             <Sliders className={`w-3.5 h-3.5 ${isSpot ? 'text-emerald-400' : 'text-indigo-400'}`} />
           </button>
+
+          {/* Broker Connections Manager */}
+          <button
+            onClick={onOpenBrokerModal}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all shadow-sm ${
+              brokers?.binance?.connected || brokers?.mt5?.connected
+                ? 'bg-emerald-950/40 hover:bg-emerald-900/50 border-emerald-500/50 text-emerald-300'
+                : 'bg-terminal-800 hover:bg-terminal-750 border-terminal-border text-slate-300 hover:text-white'
+            }`}
+            title="Configure Binance & MetaTrader 5 live broker connectors"
+          >
+            <Key className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden md:inline">Brokers</span>
+            <span className={`w-2 h-2 rounded-full ${
+              brokers?.binance?.connected || brokers?.mt5?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
+            }`} />
+          </button>
+
+          {/* User Account / Mode Badge */}
+          {user && (
+            <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-mono text-xs border ${
+              user.email === 'test@gmail.com'
+                ? 'bg-gradient-to-r from-emerald-950/60 to-cyan-950/60 border-emerald-500/40 text-emerald-300'
+                : 'bg-terminal-950 border-terminal-border text-slate-300'
+            }`}>
+              <span className={`w-2 h-2 rounded-full ${user.email === 'test@gmail.com' ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
+              <span className="font-semibold">{user.email.split('@')[0]}</span>
+              <span className={`text-[10px] px-1 py-0.2 rounded uppercase font-bold ${
+                user.email === 'test@gmail.com' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'
+              }`}>
+                {user.mode === 'LIVE' ? 'LIVE' : 'DEMO'}
+              </span>
+            </div>
+          )}
+
+          {/* Logout Button */}
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="p-2 rounded-lg bg-terminal-800 hover:bg-rose-500/20 border border-terminal-border hover:border-rose-500/40 text-slate-400 hover:text-rose-300 text-xs transition-colors"
+              title="Log out of session"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
     </header>

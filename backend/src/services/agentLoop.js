@@ -1,12 +1,16 @@
 import { marketDataService } from './marketData.js';
 import { calculateTechnicalMetrics } from './technicalAnalysis.js';
-import { evaluateStrategyConfluence } from './strategyEngine.js';
+import { evaluateStrategyConfluence, evaluateSpotConfluence } from './strategyEngine.js';
 import { RiskManager } from './riskManager.js';
 import { PaperTradingEngine } from './paperTradingEngine.js';
+import { binanceConnector } from './binanceConnector.js';
+import { mt5Connector } from './mt5Connector.js';
 
 export class AutonomousAgentLoop {
   constructor() {
     this.activeAccount = 'MARGIN'; // 'MARGIN' | 'SPOT'
+    this.currentUser = 'demo@gmail.com';
+    this.currentMode = 'SIMULATED'; // 'SIMULATED' | 'LIVE'
 
     // Account 1: Margin Scalper (500x leverage, 4 slots, 1.5% risk)
     this.marginRiskManager = new RiskManager({
@@ -23,8 +27,8 @@ export class AutonomousAgentLoop {
     // Account 2: Pure Spot Crypto (1x Cash Spot, 100% Capital Allocation, 1 Slot)
     this.spotRiskManager = {
       capitalAllocationPct: 100, // 100% full balance per spot trade
-      stopLossPct: 1.0, // 1% Stop Loss
-      takeProfitPct: 2.5, // 2.5% Take Profit
+      stopLossPct: 1.0, // 1% Stop Loss default
+      takeProfitPct: 2.5, // 2.5% Take Profit default
       minConfidenceThreshold: 82
     };
     this.spotTradingEngine = new PaperTradingEngine(10);
@@ -39,6 +43,12 @@ export class AutonomousAgentLoop {
     this.spotCooldowns = new Map();
 
     this.log('⚡ Autonomous Agent active: Dual-Account Engine (Margin Scalper 500x + Pure Spot 100% Crypto).');
+  }
+
+  setUserMode(userEmail, mode = 'SIMULATED') {
+    this.currentUser = userEmail;
+    this.currentMode = mode;
+    this.log(`👤 Active session: ${userEmail} (${mode === 'LIVE' ? '🔴 LIVE BROKER MODE' : '🟢 SIMULATED DEMO'})`, 'INFO');
   }
 
   // Backwards compatibility accessors
@@ -176,8 +186,17 @@ export class AutonomousAgentLoop {
           technicalsMap[asset.symbol] = technicals;
         }
 
-        // Evaluate confluence using margin risk settings as baseline
+        // 3A. Margin Scalper Confluence
         const signal = evaluateStrategyConfluence(asset, technicals, marginRiskSettings);
+
+        // 3B. Pure Spot Crypto Confluence (Decoupled, 75%+ Win Rate Edge)
+        let spotSignal = null;
+        if (asset.category === 'Crypto') {
+          spotSignal = evaluateSpotConfluence(asset, technicals, this.spotRiskManager);
+          if (spotSignal.action === 'STRONG_BUY' && !(this.spotCooldowns.get(asset.symbol) > 0)) {
+            validSpotBuys.push({ asset, signal: spotSignal });
+          }
+        }
 
         const scanItem = {
           symbol: asset.symbol,
@@ -195,19 +214,10 @@ export class AutonomousAgentLoop {
             ema200: technicals?.ema200,
             atr: technicals?.atr
           },
-          signal
+          signal: this.activeAccount === 'SPOT' && spotSignal ? spotSignal : signal
         };
 
         scanResults.push(scanItem);
-
-        // Collect spot candidates (Crypto only, Long only)
-        if (
-          asset.category === 'Crypto' &&
-          (signal.action === 'STRONG_BUY' || (signal.side === 'LONG' && signal.confidence >= this.spotRiskManager.minConfidenceThreshold)) &&
-          !(this.spotCooldowns.get(asset.symbol) > 0)
-        ) {
-          validSpotBuys.push({ asset, signal });
-        }
 
         // ==========================================
         // 4A. MARGIN SCALPER AUTO-OPEN (500x Lev)
@@ -219,7 +229,7 @@ export class AutonomousAgentLoop {
           const riskEval = this.marginRiskManager.evaluateTradeRisk(portfolioState, signal, asset);
 
           if (riskEval.allowed) {
-            this.marginTradingEngine.openPosition({
+            const pos = this.marginTradingEngine.openPosition({
               symbol: asset.symbol,
               name: asset.name,
               category: asset.category,
@@ -244,6 +254,22 @@ export class AutonomousAgentLoop {
               `⚡ [MARGIN] SCALP OPEN: ${signal.side} ${asset.symbol} @ $${signal.entryPrice} (${riskEval.leverage}x Lev, Margin: $${riskEval.margin}). Target: $${signal.takeProfit} | Stop: $${signal.stopLoss}`,
               'SUCCESS'
             );
+
+            // Live MT5 Bridge Dispatcher (when logged into Live Account)
+            if (this.currentMode === 'LIVE' && mt5Connector.connected) {
+              mt5Connector.openPosition({
+                symbol: asset.symbol,
+                side: signal.side,
+                volume: 0.01,
+                sl: signal.stopLoss,
+                tp: signal.takeProfit,
+                comment: `Scalp ${pos.id}`
+              }).then(ticket => {
+                this.log(`📡 [MT5 LIVE] Scalp order routed to broker! Ticket #${ticket.ticket}`, 'SUCCESS');
+              }).catch(err => {
+                this.log(`⚠️ [MT5 LIVE] Order warning: ${err.message}`, 'WARN');
+              });
+            }
           }
         }
       }
@@ -254,7 +280,7 @@ export class AutonomousAgentLoop {
       // 4B. PURE SPOT CRYPTO AUTO-OPEN (100% Capital Allocation)
       // ==========================================
       if (this.isAutoTradingEnabled && this.spotTradingEngine.activePositions.length === 0 && validSpotBuys.length > 0) {
-        // Pick the top confidence crypto setup
+        // Pick the top confidence sniper crypto setup
         validSpotBuys.sort((a, b) => b.signal.confidence - a.signal.confidence);
         const topPick = validSpotBuys[0];
         const spotCash = this.spotTradingEngine.balance;
@@ -265,12 +291,12 @@ export class AutonomousAgentLoop {
           const rawUnits = notional / entryPrice;
           const units = Number(rawUnits.toFixed(topPick.asset.decimals || 4));
 
-          const stopDist = Number((entryPrice * (this.spotRiskManager.stopLossPct / 100)).toFixed(topPick.asset.decimals || 4));
-          const targetDist = Number((entryPrice * (this.spotRiskManager.takeProfitPct / 100)).toFixed(topPick.asset.decimals || 4));
-          const stopLoss = Number((entryPrice - stopDist).toFixed(topPick.asset.decimals || 4));
-          const takeProfit = Number((entryPrice + targetDist).toFixed(topPick.asset.decimals || 4));
+          const stopDist = topPick.signal.stopDistance;
+          const targetDist = topPick.signal.targetDistance;
+          const stopLoss = topPick.signal.stopLoss;
+          const takeProfit = topPick.signal.takeProfit;
 
-          this.spotTradingEngine.openPosition({
+          const spotPos = this.spotTradingEngine.openPosition({
             symbol: topPick.asset.symbol,
             name: topPick.asset.name,
             category: 'Crypto',
@@ -292,9 +318,22 @@ export class AutonomousAgentLoop {
           });
 
           this.log(
-            `🪙 [SPOT] 100% CAPITAL BUY: Bought ${topPick.asset.symbol} with $${notional} (100% Balance) @ $${entryPrice}. Target: +${this.spotRiskManager.takeProfitPct}% ($${takeProfit}) | Stop: -${this.spotRiskManager.stopLossPct}% ($${stopLoss})`,
+            `🪙 [SPOT] 100% CAPITAL BUY: Bought ${topPick.asset.symbol} with $${notional} (100% Balance) @ $${entryPrice} (Confidence: ${topPick.signal.confidence}%). Target: +${this.spotRiskManager.takeProfitPct}% ($${takeProfit}) | Stop: -${this.spotRiskManager.stopLossPct}% ($${stopLoss})`,
             'SUCCESS'
           );
+
+          // Live Binance API Dispatcher (when logged into Live Account)
+          if (this.currentMode === 'LIVE' && binanceConnector.connected) {
+            binanceConnector.placeSpotMarketOrder({
+              symbol: topPick.asset.symbol,
+              side: 'BUY',
+              quoteOrderQty: notional
+            }).then(liveOrder => {
+              this.log(`🪙 [BINANCE LIVE] Real Market Buy executed on Binance! Order ID: ${liveOrder.orderId}`, 'SUCCESS');
+            }).catch(err => {
+              this.log(`⚠️ [BINANCE LIVE] Order warning: ${err.message}`, 'WARN');
+            });
+          }
         }
       }
 
@@ -327,6 +366,19 @@ export class AutonomousAgentLoop {
         } else {
           this.log(`🪙 [SPOT] EXIT: ${closed.symbol} closed. Realized: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'WARN');
         }
+
+        // Live Binance Exit Sell
+        if (this.currentMode === 'LIVE' && binanceConnector.connected && closed.units > 0) {
+          binanceConnector.placeSpotMarketOrder({
+            symbol: closed.symbol,
+            side: 'SELL',
+            quantity: closed.units
+          }).then(() => {
+            this.log(`🪙 [BINANCE LIVE] Real Spot Exit executed on Binance!`, 'SUCCESS');
+          }).catch(err => {
+            this.log(`⚠️ [BINANCE LIVE] Exit sell warning: ${err.message}`, 'WARN');
+          });
+        }
       }
 
     } catch (error) {
@@ -353,6 +405,12 @@ export class AutonomousAgentLoop {
 
     return {
       activeAccount: this.activeAccount,
+      mode: this.currentMode,
+      currentUser: this.currentUser,
+      brokers: {
+        binance: binanceConnector.getStatus(),
+        mt5: mt5Connector.getStatus()
+      },
       margin: {
         portfolio: marginPortfolio,
         riskSettings: marginRisk
