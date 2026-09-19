@@ -1,5 +1,7 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { agentLoop } from './services/agentLoop.js';
@@ -175,6 +177,61 @@ app.post('/api/broker/mt5/test', async (req, res) => {
 app.get('/api/broker/mt5/account', (req, res) => {
   try {
     res.json({ success: true, mt5: mt5Connector.getStatus() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// MT5 Expert Advisor (EA) Heartbeat & Order Sync (100% Free / Unlimited SaaS Clients)
+app.post('/api/broker/mt5/sync', (req, res) => {
+  try {
+    const { syncToken, login, server, balance, equity, freeMargin, leverage, currency } = req.body;
+    if (!syncToken) {
+      return res.status(400).json({ success: false, error: 'Missing syncToken in request.' });
+    }
+
+    const user = authService.getUserBySyncToken(syncToken);
+    const result = mt5Connector.handleEaSync({
+      syncToken,
+      login,
+      server,
+      balance,
+      equity,
+      freeMargin,
+      leverage,
+      currency
+    });
+
+    if (user) {
+      authService.updateBrokerConfig(user.email, 'mt5', {
+        login: login || user.brokerConnections?.mt5?.login,
+        server: server || user.brokerConnections?.mt5?.server,
+        connected: true,
+        status: 'CONNECTED',
+        lastChecked: new Date().toISOString()
+      });
+    }
+
+    res.json({
+      success: true,
+      connected: true,
+      server: result.server,
+      orders: result.orders || []
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Download Expert Advisor file directly
+app.get('/api/broker/mt5/download-ea', (req, res) => {
+  try {
+    const eaPath = path.resolve(__dirname, '../../mt5-bridge/NexusQuant_Sync.mq5');
+    if (fs.existsSync(eaPath)) {
+      res.download(eaPath, 'NexusQuant_Sync.mq5');
+    } else {
+      res.status(404).json({ error: 'EA source file not found.' });
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -16,7 +16,8 @@
       "mt5": {
         "connected": false,
         "login": "",
-        "server": ""
+        "server": "",
+        "syncToken": "NQ-SYNC-MO_001"
       }
     }
   },
@@ -38,13 +39,15 @@
         "lastChecked": null
       },
       "mt5": {
-        "connected": false,
-        "login": "",
+        "connected": true,
+        "login": 8636748,
         "password": "",
-        "server": "",
+        "server": "VaultMarkets-Live",
         "gatewayUrl": "http://localhost:5001",
-        "status": "STANDBY",
-        "lastChecked": null
+        "status": "CONNECTED",
+        "lastChecked": "2026-09-19T17:19:17.112Z",
+        "syncToken": "NQ-SYNC-VE_002",
+        "lastUpdated": "2026-09-19T17:19:17.112Z"
       }
     }
   }

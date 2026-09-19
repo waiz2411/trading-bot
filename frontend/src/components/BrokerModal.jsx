@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Check, AlertCircle, RefreshCw, Eye, EyeOff, ShieldCheck, Zap, Coins, Globe, Key, Server, Cpu, ChevronDown, ChevronUp, Cloud } from 'lucide-react';
+import { X, Check, AlertCircle, RefreshCw, Eye, EyeOff, ShieldCheck, Zap, Coins, Globe, Key, Server, Cpu, ChevronDown, ChevronUp, Cloud, Copy, Download, KeyRound, Radio } from 'lucide-react';
 
 export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab = 'BINANCE' }) {
   const [activeTab, setActiveTab] = useState(initialTab || 'BINANCE'); // 'BINANCE' | 'MT5'
@@ -18,15 +18,37 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
   const [binanceResult, setBinanceResult] = useState(null);
 
   // MT5 State
-  const [mt5Login, setMt5Login] = useState('');
+  const [mt5Method, setMt5Method] = useState('CLOUD'); // 'CLOUD' | 'EA'
+  const [mt5Login, setMt5Login] = useState(user?.brokerConnections?.mt5?.login?.replace(/\*+/g, '') || '');
   const [mt5Password, setMt5Password] = useState('');
-  const [mt5Server, setMt5Server] = useState('');
+  const [mt5Server, setMt5Server] = useState(user?.brokerConnections?.mt5?.server || 'VaultMarkets-Live');
   const [mt5Gateway, setMt5Gateway] = useState('http://localhost:5001');
-  const [metaApiToken, setMetaApiToken] = useState('');
-  const [showAdvancedGateway, setShowAdvancedGateway] = useState(false);
   const [showMt5Password, setShowMt5Password] = useState(false);
   const [mt5Testing, setMt5Testing] = useState(false);
   const [mt5Result, setMt5Result] = useState(null);
+  const [copiedSyncKey, setCopiedSyncKey] = useState(false);
+
+  // Update MT5 fields when user changes
+  React.useEffect(() => {
+    if (user?.brokerConnections?.mt5) {
+      if (user.brokerConnections.mt5.login && !mt5Login) {
+        setMt5Login(user.brokerConnections.mt5.login.replace(/\*+/g, ''));
+      }
+      if (user.brokerConnections.mt5.server && !mt5Server) {
+        setMt5Server(user.brokerConnections.mt5.server);
+      }
+    }
+  }, [user]);
+
+  const syncToken = user?.brokerConnections?.mt5?.syncToken || `NQ-SYNC-${(user?.id || 'TEST').slice(-6).toUpperCase()}`;
+
+  const handleCopySyncKey = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(syncToken);
+      setCopiedSyncKey(true);
+      setTimeout(() => setCopiedSyncKey(false), 2500);
+    }
+  };
 
   const POPULAR_SERVERS = [
     'VaultMarkets-Live',
@@ -95,8 +117,7 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
           login: mt5Login,
           password: mt5Password,
           server: mt5Server,
-          gatewayUrl: mt5Gateway || 'http://localhost:5001',
-          metaApiToken
+          gatewayUrl: mt5Gateway || 'http://localhost:5001'
         })
       });
 
@@ -109,8 +130,7 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
           login: mt5Login,
           password: mt5Password,
           server: mt5Server,
-          gatewayUrl: mt5Gateway || 'http://localhost:5001',
-          metaApiToken
+          gatewayUrl: mt5Gateway || 'http://localhost:5001'
         })
       });
       const data = await res.json();
@@ -323,169 +343,242 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
           {/* ==================================================== */}
           {activeTab === 'MT5' && (
             <div className="space-y-4">
-              <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30 flex items-start gap-3">
-                <Cloud className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                <div className="text-[11px] text-slate-300 font-sans leading-relaxed">
-                  <strong>Cloud MetaTrader 5 Integration.</strong> Link your broker account for automated 500x leverage margin scalping.
-                  Pure web-based execution—no desktop MT5 or Python script required on your device.
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* MT5 Login */}
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1.5 uppercase tracking-wider text-[10px]">
-                    MT5 Account Number / Login
-                  </label>
-                  <input
-                    type="text"
-                    value={mt5Login}
-                    onChange={(e) => setMt5Login(e.target.value)}
-                    placeholder="e.g. 50123984"
-                    className="w-full px-3 py-2 bg-terminal-950 border border-terminal-border rounded-xl text-white font-mono text-xs focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-
-                {/* MT5 Server */}
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1.5 uppercase tracking-wider text-[10px]">
-                    Broker Server Name
-                  </label>
-                  <input
-                    type="text"
-                    value={mt5Server}
-                    onChange={(e) => setMt5Server(e.target.value)}
-                    placeholder="e.g. Exness-Real or ICMarketsSC-Demo"
-                    className="w-full px-3 py-2 bg-terminal-950 border border-terminal-border rounded-xl text-white font-mono text-xs focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-              </div>
-
-              {/* Server Quick Suggestions */}
-              <div>
-                <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
-                  Popular Server Shortcuts:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {POPULAR_SERVERS.map(srv => (
-                    <button
-                      key={srv}
-                      type="button"
-                      onClick={() => setMt5Server(srv)}
-                      className={`px-2 py-0.5 rounded text-[10px] border transition-colors ${
-                        mt5Server === srv
-                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
-                          : 'bg-terminal-950 text-slate-400 border-terminal-border hover:text-slate-200'
-                      }`}
-                    >
-                      {srv}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* MT5 Password */}
-              <div>
-                <label className="block text-slate-300 font-bold mb-1.5 uppercase tracking-wider text-[10px]">
-                  Master / Trading Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showMt5Password ? 'text' : 'password'}
-                    value={mt5Password}
-                    onChange={(e) => setMt5Password(e.target.value)}
-                    placeholder="Enter MT5 trading password..."
-                    className="w-full pl-3.5 pr-10 py-2 bg-terminal-950 border border-terminal-border rounded-xl text-white font-mono text-xs focus:outline-none focus:border-amber-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowMt5Password(!showMt5Password)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                  >
-                    {showMt5Password ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Cloud SaaS & Advanced Connection Options */}
-              <div className="pt-1">
+              {/* MT5 Mode Selector */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-terminal-950 rounded-xl border border-terminal-border">
                 <button
                   type="button"
-                  onClick={() => setShowAdvancedGateway(!showAdvancedGateway)}
-                  className="text-[11px] text-amber-400/90 hover:text-amber-300 flex items-center gap-1 font-mono transition-colors font-semibold"
+                  onClick={() => setMt5Method('CLOUD')}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    mt5Method === 'CLOUD'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
                 >
-                  <span>⚙️ Cloud Gateway & Tunnel Settings (Click to expand)</span>
-                  {showAdvancedGateway ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  <Cloud className="w-3.5 h-3.5" />
+                  <span>⚡ 1-Click Cloud Connect</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setMt5Method('EA')}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    mt5Method === 'EA'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Cpu className="w-3.5 h-3.5" />
+                  <span>🔌 Free MT5 EA Sync ($0 Fee)</span>
+                </button>
+              </div>
 
-                {showAdvancedGateway && (
-                  <div className="mt-2 p-3.5 rounded-xl bg-terminal-950 border border-terminal-border space-y-3">
-                    {/* Method 1: MetaApi Cloud Token */}
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block text-slate-300 text-[10px] uppercase font-bold">
-                          Option 1: MetaApi Cloud Token (Recommended for 100% Cloud SaaS)
-                        </label>
-                        <a
-                          href="https://metaapi.cloud"
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[10px] text-amber-400 hover:underline"
-                        >
-                          Get Free Token ↗
-                        </a>
-                      </div>
-                      <input
-                        type="password"
-                        value={metaApiToken}
-                        onChange={(e) => setMetaApiToken(e.target.value)}
-                        placeholder="Paste your free MetaApi token from metaapi.cloud..."
-                        className="w-full px-3 py-1.5 bg-terminal-900 border border-terminal-border rounded-lg text-white font-mono text-xs focus:outline-none focus:border-amber-500"
-                      />
-                      <span className="text-[10px] text-slate-400 font-sans block mt-1">
-                        Connects Vault Markets directly in the cloud from Render without needing your computer on.
-                      </span>
+              {/* ---------------------------------------------------- */}
+              {/* SUB-TAB 1: 1-CLICK CLOUD CONNECT                     */}
+              {/* ---------------------------------------------------- */}
+              {mt5Method === 'CLOUD' && (
+                <div className="space-y-4">
+                  <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30 flex items-start gap-3">
+                    <Cloud className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="text-[11px] text-slate-300 font-sans leading-relaxed">
+                      <strong>Cloud MetaTrader 5 Automation.</strong> Pure cloud execution hosted by NexusQuant.
+                      No software, no PC, no terminal installation required on your device. Just enter your broker credentials below.
                     </div>
+                  </div>
 
-                    {/* Method 2: Public Tunnel / Bridge URL */}
-                    <div className="pt-2 border-t border-terminal-border/60">
-                      <label className="block text-slate-300 text-[10px] uppercase font-bold mb-1">
-                        Option 2: Public Bridge / Ngrok Tunnel URL
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* MT5 Login */}
+                    <div>
+                      <label className="block text-slate-300 font-bold mb-1.5 uppercase tracking-wider text-[10px]">
+                        MT5 Account Number / Login
                       </label>
                       <input
                         type="text"
-                        value={mt5Gateway}
-                        onChange={(e) => setMt5Gateway(e.target.value)}
-                        placeholder="https://your-tunnel.ngrok-free.app or http://localhost:5001"
-                        className="w-full px-3 py-1.5 bg-terminal-900 border border-terminal-border rounded-lg text-white font-mono text-xs focus:outline-none focus:border-amber-500"
+                        value={mt5Login}
+                        onChange={(e) => setMt5Login(e.target.value)}
+                        placeholder="e.g. 8636748"
+                        className="w-full px-3 py-2 bg-terminal-950 border border-terminal-border rounded-xl text-white font-mono text-xs focus:outline-none focus:border-amber-500"
                       />
-                      <span className="text-[10px] text-slate-400 font-sans block mt-1">
-                        If running <code className="text-amber-300">python mt5_bridge.py</code> on your laptop, expose it using <code className="text-amber-300">ngrok http 5001</code> so the cloud server on Render can reach it.
-                      </span>
+                    </div>
+
+                    {/* MT5 Server */}
+                    <div>
+                      <label className="block text-slate-300 font-bold mb-1.5 uppercase tracking-wider text-[10px]">
+                        Broker Server Name
+                      </label>
+                      <input
+                        type="text"
+                        value={mt5Server}
+                        onChange={(e) => setMt5Server(e.target.value)}
+                        placeholder="e.g. VaultMarkets-Live"
+                        className="w-full px-3 py-2 bg-terminal-950 border border-terminal-border rounded-xl text-white font-mono text-xs focus:outline-none focus:border-amber-500"
+                      />
                     </div>
                   </div>
-                )}
-              </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center justify-between pt-2">
-                <button
-                  type="button"
-                  onClick={handleTestMt5}
-                  disabled={mt5Testing || !mt5Login || !mt5Server}
-                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-md shadow-amber-600/20 disabled:opacity-50 cursor-pointer"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${mt5Testing ? 'animate-spin' : ''}`} />
-                  <span>{mt5Testing ? 'Connecting MT5 Cloud...' : 'Connect & Verify MT5'}</span>
-                </button>
-                {mt5Result?.latencyMs && (
-                  <span className="text-[11px] text-amber-400 font-mono">
-                    Gateway Latency: {mt5Result.latencyMs}ms
-                  </span>
-                )}
-              </div>
+                  {/* Server Quick Suggestions */}
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
+                      Popular Server Shortcuts:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {POPULAR_SERVERS.map(srv => (
+                        <button
+                          key={srv}
+                          type="button"
+                          onClick={() => setMt5Server(srv)}
+                          className={`px-2 py-0.5 rounded text-[10px] border transition-colors cursor-pointer ${
+                            mt5Server === srv
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
+                              : 'bg-terminal-950 text-slate-400 border-terminal-border hover:text-slate-200'
+                          }`}
+                        >
+                          {srv}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-              {/* MT5 Result Output */}
+                  {/* MT5 Password */}
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1.5 uppercase tracking-wider text-[10px]">
+                      Master / Trading Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showMt5Password ? 'text' : 'password'}
+                        value={mt5Password}
+                        onChange={(e) => setMt5Password(e.target.value)}
+                        placeholder="Enter MT5 trading password..."
+                        className="w-full pl-3.5 pr-10 py-2 bg-terminal-950 border border-terminal-border rounded-xl text-white font-mono text-xs focus:outline-none focus:border-amber-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowMt5Password(!showMt5Password)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                      >
+                        {showMt5Password ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Action Button */}
+                  <div className="flex items-center justify-between pt-1">
+                    <button
+                      type="button"
+                      onClick={handleTestMt5}
+                      disabled={mt5Testing || !mt5Login || !mt5Server}
+                      className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-md shadow-amber-600/20 disabled:opacity-50 cursor-pointer"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${mt5Testing ? 'animate-spin' : ''}`} />
+                      <span>{mt5Testing ? 'Connecting MT5 Cloud...' : 'Connect & Verify MT5 Cloud'}</span>
+                    </button>
+                    {mt5Result?.latencyMs && (
+                      <span className="text-[11px] text-amber-400 font-mono">
+                        Ping: {mt5Result.latencyMs}ms
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ---------------------------------------------------- */}
+              {/* SUB-TAB 2: FREE MT5 EXPERT ADVISOR (EA) CONNECTOR   */}
+              {/* ---------------------------------------------------- */}
+              {mt5Method === 'EA' && (
+                <div className="space-y-4">
+                  <div className="p-3.5 rounded-xl bg-blue-950/20 border border-blue-500/30 flex items-start gap-3">
+                    <Cpu className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                    <div className="text-[11px] text-slate-300 font-sans leading-relaxed">
+                      <strong>100% Free & Unlimited Client Scaling.</strong> Connect directly via our lightweight Expert Advisor running on your MT5 terminal (PC, Mac, or VPS). Zero monthly third-party fees, unlimited accounts, and compatible with Vault Markets, Exness, FTMO, Deriv, and any MT5 broker worldwide!
+                    </div>
+                  </div>
+
+                  {/* Personal Sync Token */}
+                  <div className="p-3.5 rounded-xl bg-terminal-950 border border-terminal-border space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider flex items-center gap-1.5">
+                        <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                        Your Unique Account Sync Key
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleCopySyncKey}
+                        className="px-2.5 py-1 rounded-lg bg-terminal-800 hover:bg-terminal-700 text-amber-300 text-[11px] font-mono flex items-center gap-1.5 transition-colors cursor-pointer border border-terminal-border"
+                      >
+                        {copiedSyncKey ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedSyncKey ? 'Copied!' : 'Copy Key'}</span>
+                      </button>
+                    </div>
+                    <div className="p-2.5 bg-terminal-900 rounded-lg border border-terminal-border/80 font-mono text-xs text-amber-300 font-bold select-all break-all">
+                      {syncToken}
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-sans block">
+                      Paste this key into the <code>InpSyncToken</code> parameter in your MT5 Expert Advisor.
+                    </span>
+                  </div>
+
+                  {/* Download EA & Instructions */}
+                  <div className="p-3.5 rounded-xl bg-terminal-950 border border-terminal-border space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <Download className="w-3.5 h-3.5 text-blue-400" />
+                        Download Expert Advisor File
+                      </span>
+                      <a
+                        href="/api/broker/mt5/download-ea"
+                        download="NexusQuant_Sync.mq5"
+                        className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-blue-600/20 cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download NexusQuant_Sync.mq5</span>
+                      </a>
+                    </div>
+
+                    {/* Quick 3-Step Setup Guide */}
+                    <div className="border-t border-terminal-border pt-2 space-y-2 text-[11px] text-slate-300 font-sans">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                        Quick 60-Second Setup:
+                      </span>
+                      <ol className="list-decimal list-inside space-y-1.5 text-slate-300">
+                        <li>
+                          Open MT5 $\rightarrow$ click <strong>File $\rightarrow$ Open Data Folder $\rightarrow$ MQL5 $\rightarrow$ Experts</strong> and paste <code className="text-blue-300">NexusQuant_Sync.mq5</code>.
+                        </li>
+                        <li>
+                          In MT5: <strong>Tools $\rightarrow$ Options $\rightarrow$ Expert Advisors</strong> $\rightarrow$ Check <strong>Allow WebRequest</strong> and add:
+                          <div className="mt-1 p-1 bg-terminal-900 rounded font-mono text-[10px] text-amber-300 select-all inline-block">
+                            https://trading-bot-lm51.onrender.com
+                          </div>
+                        </li>
+                        <li>
+                          Drag <strong>NexusQuant_Sync</strong> onto any chart (e.g. EURUSD), paste your <strong>Sync Key</strong> in inputs, and click <strong>OK</strong>!
+                        </li>
+                      </ol>
+                    </div>
+                  </div>
+
+                  {/* Live Status Badge */}
+                  <div className="p-3 rounded-xl bg-terminal-950 border border-terminal-border flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2.5 h-2.5 rounded-full ${
+                        user?.brokerConnections?.mt5?.connected || mt5Result?.connected
+                          ? 'bg-emerald-500 animate-pulse'
+                          : 'bg-amber-500'
+                      }`} />
+                      <span className="text-xs font-bold text-white">
+                        {user?.brokerConnections?.mt5?.connected || mt5Result?.connected
+                          ? 'EA Terminal Connected & Streaming'
+                          : 'Awaiting EA Heartbeat'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {user?.brokerConnections?.mt5?.lastChecked
+                        ? `Last sync: ${new Date(user.brokerConnections.mt5.lastChecked).toLocaleTimeString()}`
+                        : 'Standby'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* MT5 Result Output Banner */}
               {mt5Result && (
                 <div className={`p-3.5 rounded-xl border ${
                   mt5Result.success
@@ -494,9 +587,10 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
                 }`}>
                   <div className="flex items-center gap-1.5 font-bold mb-1">
                     {mt5Result.success ? <Check className="w-4 h-4 text-emerald-400" /> : <AlertCircle className="w-4 h-4 text-rose-400" />}
-                    <span>{mt5Result.success ? 'MetaTrader 5 Connected!' : 'Connection Failed'}</span>
+                    <span>{mt5Result.success ? 'MetaTrader 5 Connected!' : 'Connection Status'}</span>
                   </div>
                   {mt5Result.error && <p className="text-[11px] font-sans">{mt5Result.error}</p>}
+                  {mt5Result.message && <p className="text-[11px] font-sans text-amber-300">{mt5Result.message}</p>}
                   {mt5Result.accountInfo && (
                     <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono border-t border-amber-500/30 pt-2">
                       <div className="bg-terminal-950 p-1.5 rounded border border-terminal-border">

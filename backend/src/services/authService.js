@@ -55,7 +55,7 @@ class AuthService {
         createdAt: '2026-09-01T00:00:00.000Z',
         brokerConnections: {
           binance: { connected: false, apiKey: '', isTestnet: true },
-          mt5: { connected: false, login: '', server: '' }
+          mt5: { connected: false, login: '', server: '', syncToken: 'NQ-DEMO-001' }
         }
       };
     }
@@ -80,15 +80,25 @@ class AuthService {
           },
           mt5: {
             connected: false,
-            login: '',
+            login: '8636748',
             password: '',
-            server: '',
+            server: 'VaultMarkets-Live',
             gatewayUrl: 'http://localhost:5001',
+            syncToken: 'NQ-SYNC-TEST002',
             status: 'STANDBY',
             lastChecked: null
           }
         }
       };
+    }
+
+    // Ensure all existing users have syncToken
+    for (const user of Object.values(this.users)) {
+      if (!user.brokerConnections) user.brokerConnections = {};
+      if (!user.brokerConnections.mt5) user.brokerConnections.mt5 = {};
+      if (!user.brokerConnections.mt5.syncToken) {
+        user.brokerConnections.mt5.syncToken = `NQ-SYNC-${(user.id || 'usr').slice(-6).toUpperCase()}`;
+      }
     }
 
     this.saveUsers();
@@ -138,6 +148,7 @@ class AuthService {
           password: '',
           server: '',
           gatewayUrl: 'http://localhost:5001',
+          syncToken: `NQ-SYNC-${userId.slice(-6).toUpperCase()}`,
           status: 'DISCONNECTED',
           lastChecked: null
         }
@@ -211,6 +222,14 @@ class AuthService {
     return Object.values(this.users).find(u => u.id === id) || null;
   }
 
+  getUserBySyncToken(syncToken) {
+    if (!syncToken) return null;
+    const clean = syncToken.toString().trim().toUpperCase();
+    return Object.values(this.users).find(u =>
+      (u.brokerConnections?.mt5?.syncToken || '').toUpperCase() === clean
+    ) || null;
+  }
+
   updateBrokerConfig(email, broker, config) {
     const user = this.getUser(email);
     if (!user) throw new Error('User not found');
@@ -254,6 +273,7 @@ class AuthService {
           connected: user.brokerConnections?.mt5?.connected || false,
           login: user.brokerConnections?.mt5?.login ? `${user.brokerConnections.mt5.login.toString().slice(0, 3)}****` : '',
           server: user.brokerConnections?.mt5?.server || '',
+          syncToken: user.brokerConnections?.mt5?.syncToken || `NQ-SYNC-${(user.id || 'usr').slice(-6).toUpperCase()}`,
           status: user.brokerConnections?.mt5?.status || 'DISCONNECTED',
           lastChecked: user.brokerConnections?.mt5?.lastChecked || null
         }
