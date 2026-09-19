@@ -33,7 +33,7 @@ export class AutonomousAgentLoop {
     };
     this.spotTradingEngine = new PaperTradingEngine(10);
 
-    this.isAutoTradingEnabled = true;
+    this.isAutoTradingEnabled = false; // Bot is OFF by default until explicitly turned on
     this.isScanning = false;
     this.agentLogs = [];
     this.latestScanResults = [];
@@ -42,13 +42,14 @@ export class AutonomousAgentLoop {
     this.assetCooldowns = new Map();
     this.spotCooldowns = new Map();
 
-    this.log('⚡ Autonomous Agent active: Dual-Account Engine (Margin Scalper 500x + Pure Spot 100% Crypto).');
+    this.log('⚡ Autonomous Agent initialized: Dual-Account Engine (Margin Scalper 500x + Pure Spot 100% Crypto). Bot is OFF by default.');
   }
 
   setUserMode(userEmail, mode = 'SIMULATED') {
     this.currentUser = userEmail;
     this.currentMode = mode;
-    this.log(`👤 Active session: ${userEmail} (${mode === 'LIVE' ? '🔴 LIVE BROKER MODE' : '🟢 SIMULATED DEMO'})`, 'INFO');
+    this.isAutoTradingEnabled = false; // Always start paused on mode/session change
+    this.log(`👤 Active session: ${userEmail} (${mode === 'LIVE' ? '🔴 LIVE BROKER MODE' : '🟢 SIMULATED DEMO'}) - Bot Paused`, 'INFO');
   }
 
   // Backwards compatibility accessors
@@ -73,8 +74,8 @@ export class AutonomousAgentLoop {
   switchAccount(account) {
     const target = (account || '').toUpperCase() === 'SPOT' ? 'SPOT' : 'MARGIN';
     this.activeAccount = target;
-    this.log(`🔄 Switched active view to: ${target === 'SPOT' ? '🪙 PURE SPOT CRYPTO (100% Capital)' : '⚡ MARGIN SCALPER (500x)'}`, 'INFO');
-    return this.activeAccount;
+    this.log(`🔄 Switched active view to: [${target}] Account`, 'INFO');
+    return this.getDashboardData();
   }
 
   log(message, type = 'INFO') {
@@ -105,7 +106,16 @@ export class AutonomousAgentLoop {
   }
 
   toggleAutoTrading() {
-    this.isAutoTradingEnabled = !this.isAutoTradingEnabled;
+    const targetState = !this.isAutoTradingEnabled;
+    if (targetState && this.currentMode === 'LIVE') {
+      if (this.activeAccount === 'SPOT' && !binanceConnector.getStatus().connected) {
+        throw new Error('Cannot start auto-trading: Binance Spot API is not connected. Connect Binance in Broker settings first.');
+      }
+      if (this.activeAccount === 'MARGIN' && !mt5Connector.getStatus().connected) {
+        throw new Error('Cannot start auto-trading: MetaTrader 5 Margin broker is not connected. Connect MT5 in Broker settings first.');
+      }
+    }
+    this.isAutoTradingEnabled = targetState;
     this.log(
       `Autonomous execution switched to: ${this.isAutoTradingEnabled ? 'ENABLED (Auto-open & auto-close active)' : 'DISABLED (Manual only)'}`,
       this.isAutoTradingEnabled ? 'SUCCESS' : 'WARN'
@@ -114,6 +124,9 @@ export class AutonomousAgentLoop {
   }
 
   setBalance(newBalance, closeOpenPositions = false, account = null) {
+    if (this.currentMode === 'LIVE') {
+      throw new Error('Manual balance editing is disabled in Live Broker Mode. Balances are fetched directly from your broker.');
+    }
     const targetAcc = account ? account.toUpperCase() : this.activeAccount;
     const engine = targetAcc === 'SPOT' ? this.spotTradingEngine : this.marginTradingEngine;
     const state = engine.setBalance(newBalance, closeOpenPositions);
@@ -122,6 +135,9 @@ export class AutonomousAgentLoop {
   }
 
   adjustBalance(delta, account = null) {
+    if (this.currentMode === 'LIVE') {
+      throw new Error('Manual balance adjustments are disabled in Live Broker Mode.');
+    }
     const targetAcc = account ? account.toUpperCase() : this.activeAccount;
     const engine = targetAcc === 'SPOT' ? this.spotTradingEngine : this.marginTradingEngine;
     const state = engine.adjustBalance(delta);
@@ -390,8 +406,142 @@ export class AutonomousAgentLoop {
   }
 
   getDashboardData() {
-    const marginPortfolio = this.marginTradingEngine.getPortfolioState();
-    const spotPortfolio = this.spotTradingEngine.getPortfolioState();
+    const isLive = this.currentMode === 'LIVE';
+    const isSpot = this.activeAccount === 'SPOT';
+
+    const binanceStatus = binanceConnector.getStatus();
+    const mt5Status = mt5Connector.getStatus();
+
+    // 1. Resolve Margin Portfolio (MetaTrader 5 Only)
+    let marginPortfolio;
+    if (isLive) {
+      if (mt5Status.connected) {
+        const bal = Number(mt5Status.accountInfo.balance || 0);
+        const eq = Number(mt5Status.accountInfo.equity || bal);
+        const pnl = Number((eq - bal).toFixed(2));
+        marginPortfolio = {
+          isLive: true,
+          isConnected: true,
+          broker: 'MT5',
+          brokerName: 'MetaTrader 5',
+          balance: bal,
+          equity: eq,
+          margin: Number(mt5Status.accountInfo.margin || 0),
+          freeMargin: Number(mt5Status.accountInfo.freeMargin || bal),
+          leverage: mt5Status.accountInfo.leverage || 500,
+          unrealizedPnL: pnl,
+          realizedPnL: 0,
+          totalPnL: pnl,
+          totalPnLPct: bal > 0 ? Number(((pnl / bal) * 100).toFixed(2)) : 0,
+          activePositions: [],
+          closedTrades: []
+        };
+      } else {
+        marginPortfolio = {
+          isLive: true,
+          isConnected: false,
+          broker: 'MT5',
+          brokerName: 'MetaTrader 5',
+          balance: null,
+          equity: null,
+          margin: 0,
+          freeMargin: null,
+          leverage: 500,
+          unrealizedPnL: 0,
+          realizedPnL: 0,
+          totalPnL: 0,
+          totalPnLPct: 0,
+          activePositions: [],
+          closedTrades: [],
+          statusMessage: 'MetaTrader 5 Margin Account Not Connected. Connect MT5 to view real balance and trade.'
+        };
+      }
+    } else {
+      marginPortfolio = {
+        ...this.marginTradingEngine.getPortfolioState(),
+        isLive: false,
+        isConnected: true,
+        isDemo: true,
+        broker: 'DEMO_PAPER',
+        brokerName: 'Simulated Paper Engine'
+      };
+    }
+
+    // 2. Resolve Spot Portfolio (Binance Spot Only)
+    let spotPortfolio;
+    if (isLive) {
+      if (binanceStatus.connected) {
+        const usdtObj = (binanceStatus.balances || []).find(b => b.asset === 'USDT');
+        const usdtFree = usdtObj ? Number(usdtObj.free) : 0;
+        let spotEquity = usdtFree;
+
+        const activeSpotHoldings = [];
+        const nonUsdtBalances = (binanceStatus.balances || []).filter(b => b.asset !== 'USDT');
+        for (const coin of nonUsdtBalances) {
+          const scan = this.latestScanResults.find(s => s.symbol.replace(/[-_/]/g, '').startsWith(coin.asset));
+          const price = scan ? scan.price : 0;
+          const totalCoin = coin.free + coin.locked;
+          const valueUsdt = price * totalCoin;
+          spotEquity += valueUsdt;
+
+          if (valueUsdt > 1.0) {
+            activeSpotHoldings.push({
+              id: `BINANCE-${coin.asset}`,
+              symbol: `${coin.asset}-USD`,
+              name: coin.asset,
+              side: 'BUY',
+              units: totalCoin,
+              entryPrice: price,
+              currentPrice: price,
+              unrealizedPnL: 0,
+              unrealizedPnLPct: 0,
+              notional: Number(valueUsdt.toFixed(2))
+            });
+          }
+        }
+
+        spotPortfolio = {
+          isLive: true,
+          isConnected: true,
+          broker: 'BINANCE',
+          brokerName: 'Binance Spot',
+          balance: Number(usdtFree.toFixed(2)),
+          equity: Number(spotEquity.toFixed(2)),
+          unrealizedPnL: 0,
+          realizedPnL: 0,
+          totalPnL: 0,
+          totalPnLPct: 0,
+          activePositions: activeSpotHoldings,
+          closedTrades: []
+        };
+      } else {
+        spotPortfolio = {
+          isLive: true,
+          isConnected: false,
+          broker: 'BINANCE',
+          brokerName: 'Binance Spot',
+          balance: null,
+          equity: null,
+          unrealizedPnL: 0,
+          realizedPnL: 0,
+          totalPnL: 0,
+          totalPnLPct: 0,
+          activePositions: [],
+          closedTrades: [],
+          statusMessage: 'Binance Spot Exchange Not Connected. Connect Binance API to view real balance and trade.'
+        };
+      }
+    } else {
+      spotPortfolio = {
+        ...this.spotTradingEngine.getPortfolioState(),
+        isLive: false,
+        isConnected: true,
+        isDemo: true,
+        broker: 'DEMO_PAPER',
+        brokerName: 'Simulated Paper Engine'
+      };
+    }
+
     const marginRisk = this.marginRiskManager.getSettings();
     const spotRisk = {
       ...this.spotRiskManager,
@@ -401,15 +551,13 @@ export class AutonomousAgentLoop {
       targetRiskRewardRatio: Number((this.spotRiskManager.takeProfitPct / this.spotRiskManager.stopLossPct).toFixed(1))
     };
 
-    const isSpot = this.activeAccount === 'SPOT';
-
     return {
       activeAccount: this.activeAccount,
       mode: this.currentMode,
       currentUser: this.currentUser,
       brokers: {
-        binance: binanceConnector.getStatus(),
-        mt5: mt5Connector.getStatus()
+        binance: binanceStatus,
+        mt5: mt5Status
       },
       margin: {
         portfolio: marginPortfolio,

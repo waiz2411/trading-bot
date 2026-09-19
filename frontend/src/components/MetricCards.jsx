@@ -1,24 +1,26 @@
 import React from 'react';
 import { DollarSign, TrendingUp, TrendingDown, Target, Award, ShieldAlert, BarChart3, Edit3, Zap } from 'lucide-react';
 
-export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModal, activeAccount = 'MARGIN' }) {
+export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModal, activeAccount = 'MARGIN', onOpenBrokerModal }) {
   if (!portfolio) return null;
 
   const isSpot = activeAccount === 'SPOT';
+  const isLive = portfolio.isLive === true;
+  const isConnected = portfolio.isConnected !== false;
+  const brokerName = isSpot ? 'Binance Spot' : 'MetaTrader 5';
+  const brokerTab = isSpot ? 'BINANCE' : 'MT5';
 
-  const {
-    equity = 10,
-    balance = 10,
-    realizedPnL = 0,
-    unrealizedPnL = 0,
-    totalPnL = 0,
-    totalPnLPct = 0,
-    profitFactor = 0,
-    activePositions = [],
-    usedMargin = 0,
-    freeMargin = equity,
-    marginLevelPercent = 100
-  } = portfolio;
+  const balance = portfolio.balance != null ? Number(portfolio.balance) : null;
+  const equity = portfolio.equity != null ? Number(portfolio.equity) : null;
+  const realizedPnL = portfolio.realizedPnL != null ? Number(portfolio.realizedPnL) : 0;
+  const unrealizedPnL = portfolio.unrealizedPnL != null ? Number(portfolio.unrealizedPnL) : 0;
+  const totalPnL = portfolio.totalPnL != null ? Number(portfolio.totalPnL) : 0;
+  const totalPnLPct = portfolio.totalPnLPct != null ? Number(portfolio.totalPnLPct) : 0;
+  const profitFactor = portfolio.profitFactor != null ? Number(portfolio.profitFactor) : 0;
+  const activePositions = portfolio.activePositions || [];
+  const usedMargin = portfolio.margin != null ? Number(portfolio.margin) : (portfolio.usedMargin != null ? Number(portfolio.usedMargin) : 0);
+  const freeMargin = portfolio.freeMargin != null ? Number(portfolio.freeMargin) : (equity || 0);
+  const marginLevelPercent = portfolio.marginLevelPercent != null ? Number(portfolio.marginLevelPercent) : 100;
 
   const tradesList = portfolio.closedTrades || [];
   const totalTrades = (portfolio.totalTrades !== undefined && portfolio.totalTrades > 0)
@@ -50,32 +52,70 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
       {/* Card 1: Total Equity & Custom Balance */}
       <div
-        onClick={onOpenBalanceModal}
+        onClick={() => {
+          if (isLive && !isConnected) {
+            onOpenBrokerModal && onOpenBrokerModal(brokerTab);
+          } else if (isLive) {
+            onOpenBrokerModal && onOpenBrokerModal(brokerTab);
+          } else {
+            onOpenBalanceModal && onOpenBalanceModal();
+          }
+        }}
         className={`bg-terminal-850/80 border rounded-xl p-3.5 relative overflow-hidden group cursor-pointer transition-all shadow-md ${
-          isSpot ? 'hover:border-emerald-500/50 border-terminal-border' : 'hover:border-indigo-500/50 border-terminal-border'
+          isLive && !isConnected
+            ? 'border-amber-500/40 hover:border-amber-500/80 bg-amber-950/10'
+            : isSpot
+            ? 'hover:border-emerald-500/50 border-terminal-border'
+            : 'hover:border-indigo-500/50 border-terminal-border'
         }`}
-        title={`Click to edit ${isSpot ? 'Spot' : 'Margin'} account balance`}
+        title={
+          isLive && !isConnected
+            ? `Click to connect ${brokerName}`
+            : isLive
+            ? `Connected to ${brokerName}`
+            : `Click to edit ${isSpot ? 'Spot' : 'Margin'} demo balance`
+        }
       >
         <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
           <span className="font-mono uppercase tracking-wider text-[11px] flex items-center gap-1">
             <span>{isSpot ? 'Spot Equity' : 'Total Equity'}</span>
-            <Edit3 className={`w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity ${isSpot ? 'text-emerald-400' : 'text-indigo-400'}`} />
+            {!isLive && (
+              <Edit3 className={`w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity ${isSpot ? 'text-emerald-400' : 'text-indigo-400'}`} />
+            )}
           </span>
-          <DollarSign className={`w-3.5 h-3.5 ${isSpot ? 'text-emerald-400' : 'text-indigo-400'}`} />
+          <DollarSign className={`w-3.5 h-3.5 ${isLive && !isConnected ? 'text-amber-400' : isSpot ? 'text-emerald-400' : 'text-indigo-400'}`} />
         </div>
-        <div className="text-xl font-bold font-mono text-white tracking-tight">
-          ${equity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-        </div>
-        <div className={`text-[11px] font-mono mt-1 flex items-center gap-1 ${isNetProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
-          {isNetProfit ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-          <span>{isNetProfit ? '+' : ''}{totalPnL >= 0 ? `$${totalPnL}` : `-$${Math.abs(totalPnL)}`} ({totalPnLPct}%)</span>
-        </div>
-        <div className={`text-[10px] font-sans mt-0.5 ${isSpot ? 'text-emerald-300/80 group-hover:text-emerald-300' : 'text-indigo-300/80 group-hover:text-indigo-300'}`}>
-          Balance: ${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })} (Edit ✏️)
-        </div>
-        <div className={`absolute bottom-0 left-0 right-0 h-[2px] ${
-          isSpot ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-gradient-to-r from-indigo-500 to-rose-500'
-        } opacity-60`} />
+
+        {isLive && !isConnected ? (
+          <>
+            <div className="text-base font-bold font-mono text-amber-400 tracking-tight flex items-center gap-1.5 py-0.5">
+              <span>NOT CONNECTED</span>
+            </div>
+            <div className="text-[11px] font-mono mt-1 text-amber-400/80 flex items-center gap-1">
+              <span>⚠️ Connect {isSpot ? 'Binance' : 'MT5'}</span>
+            </div>
+            <div className="text-[10px] font-sans mt-0.5 text-amber-300 group-hover:underline">
+              Click to link broker account →
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-500 opacity-60" />
+          </>
+        ) : (
+          <>
+            <div className="text-xl font-bold font-mono text-white tracking-tight">
+              ${(equity ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className={`text-[11px] font-mono mt-1 flex items-center gap-1 ${isNetProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {isNetProfit ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+              <span>{isNetProfit ? '+' : ''}{totalPnL >= 0 ? `$${totalPnL}` : `-$${Math.abs(totalPnL)}`} ({totalPnLPct}%)</span>
+            </div>
+            <div className={`text-[10px] font-sans mt-0.5 ${isLive ? 'text-emerald-400' : isSpot ? 'text-emerald-300/80 group-hover:text-emerald-300' : 'text-indigo-300/80 group-hover:text-indigo-300'}`}>
+              {isLive ? `Live Balance: $${(balance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} 🟢` : `Balance: $${(balance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} (Edit ✏️)`}
+            </div>
+            <div className={`absolute bottom-0 left-0 right-0 h-[2px] ${
+              isSpot ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-gradient-to-r from-indigo-500 to-rose-500'
+            } opacity-60`} />
+          </>
+        )}
       </div>
 
       {/* Card 2: Unrealized PnL */}
@@ -187,7 +227,11 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
             <span className="text-xs text-slate-400 font-mono font-normal">1 Slot</span>
           </div>
           <div className="text-[11px] font-mono mt-1 text-slate-400 flex items-center justify-between">
-            <span>{activePositions.length > 0 ? `$${usedMargin.toFixed(2)} active` : 'Standing by'}</span>
+            {isLive && !isConnected ? (
+              <span className="text-amber-400">Awaiting Binance API</span>
+            ) : (
+              <span>{activePositions.length > 0 ? `$${usedMargin.toFixed(2)} active` : 'Standing by'}</span>
+            )}
             <span className="text-emerald-400 font-semibold">0x Lev (Safe)</span>
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-emerald-500 opacity-60" />
@@ -198,14 +242,29 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
             <span className="font-mono uppercase tracking-wider text-[11px]">Margin & Slots</span>
             <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
           </div>
-          <div className="text-lg font-bold font-mono text-white tracking-tight flex items-center justify-between">
-            <span>${usedMargin.toFixed(0)} <span className="text-xs text-slate-400 font-normal">used</span></span>
-            <span className="text-xs text-emerald-400 font-mono">${freeMargin.toFixed(0)} free</span>
-          </div>
-          <div className="text-[11px] font-mono mt-1 text-slate-400 flex items-center justify-between">
-            <span>{activePositions.length}/{riskSettings?.maxConcurrentTrades || 4} slots</span>
-            <span>{riskSettings?.riskPerTradePct || 1.5}% risk</span>
-          </div>
+          {isLive && !isConnected ? (
+            <>
+              <div className="text-base font-bold font-mono text-amber-400 tracking-tight flex items-center justify-between">
+                <span>OFFLINE</span>
+                <span className="text-xs text-slate-400 font-mono font-normal">500x Lev</span>
+              </div>
+              <div className="text-[11px] font-mono mt-1 text-slate-400 flex items-center justify-between">
+                <span className="text-amber-400">Awaiting MT5 bridge</span>
+                <span>{riskSettings?.riskPerTradePct || 1.5}% risk</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-lg font-bold font-mono text-white tracking-tight flex items-center justify-between">
+                <span>${usedMargin.toFixed(0)} <span className="text-xs text-slate-400 font-normal">used</span></span>
+                <span className="text-xs text-emerald-400 font-mono">${freeMargin.toFixed(0)} free</span>
+              </div>
+              <div className="text-[11px] font-mono mt-1 text-slate-400 flex items-center justify-between">
+                <span>{activePositions.length}/{riskSettings?.maxConcurrentTrades || 4} slots</span>
+                <span>{riskSettings?.riskPerTradePct || 1.5}% risk</span>
+              </div>
+            </>
+          )}
           <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-purple-500 opacity-60" />
         </div>
       )}

@@ -154,7 +154,7 @@ app.post('/api/agent/toggle', (req, res) => {
     const newState = agentLoop.toggleAutoTrading();
     res.json({ success: true, isAutoTradingEnabled: newState });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(400).json({ success: false, error: err.message });
   }
 });
 

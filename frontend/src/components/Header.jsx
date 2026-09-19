@@ -24,8 +24,11 @@ export default function Header({
   onLogout
 }) {
   const isSpot = activeAccount === 'SPOT';
-  const marginBal = marginPortfolio?.balance || 0;
-  const spotBal = spotPortfolio?.balance || 0;
+  const isLive = user?.mode === 'LIVE' || user?.email === 'test@gmail.com';
+  const isMarginConnected = marginPortfolio?.isConnected ?? (!isLive);
+  const isSpotConnected = spotPortfolio?.isConnected ?? (!isLive);
+  const marginBal = marginPortfolio?.balance;
+  const spotBal = spotPortfolio?.balance;
 
   return (
     <header className="border-b border-terminal-border bg-terminal-900/90 backdrop-blur-md sticky top-0 z-40 px-4 lg:px-8 py-3">
@@ -97,7 +100,7 @@ export default function Header({
                 ? 'bg-gradient-to-r from-amber-500/20 to-indigo-600/30 text-amber-300 border border-amber-500/50 shadow-md shadow-amber-500/10 font-bold'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-terminal-800/60'
             }`}
-            title="Switch to 500x Margin Scalper Account (Multi-asset, 4 slots)"
+            title="Switch to 500x Margin Scalper Account (Multi-asset, MT5 Only)"
           >
             <Zap className={`w-3.5 h-3.5 ${!isSpot ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} />
             <div className="flex flex-col items-start leading-tight">
@@ -105,9 +108,21 @@ export default function Header({
                 <span>MARGIN SCALPER</span>
                 <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-semibold">500x</span>
               </div>
-              <span className="text-[10px] text-slate-300 font-mono font-normal">
-                ${marginBal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
+              {isLive && !isMarginConnected ? (
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenBrokerModal && onOpenBrokerModal('MT5');
+                  }}
+                  className="text-[10px] text-amber-400 font-mono font-semibold flex items-center gap-1 hover:underline"
+                >
+                  ⚠️ Connect MT5
+                </span>
+              ) : (
+                <span className="text-[10px] text-slate-300 font-mono font-normal">
+                  ${(marginBal ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              )}
             </div>
           </button>
 
@@ -119,7 +134,7 @@ export default function Header({
                 ? 'bg-gradient-to-r from-emerald-500/20 to-teal-600/30 text-emerald-300 border border-emerald-500/50 shadow-md shadow-emerald-500/10 font-bold'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-terminal-800/60'
             }`}
-            title="Switch to Pure Spot Crypto Account (100% Capital Allocation, Long only)"
+            title="Switch to Pure Spot Crypto Account (Binance Spot Only, 100% Capital)"
           >
             <Coins className={`w-3.5 h-3.5 ${isSpot ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
             <div className="flex flex-col items-start leading-tight">
@@ -127,9 +142,21 @@ export default function Header({
                 <span>PURE SPOT</span>
                 <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-semibold">100%</span>
               </div>
-              <span className="text-[10px] text-slate-300 font-mono font-normal">
-                ${spotBal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
+              {isLive && !isSpotConnected ? (
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenBrokerModal && onOpenBrokerModal('BINANCE');
+                  }}
+                  className="text-[10px] text-emerald-400 font-mono font-semibold flex items-center gap-1 hover:underline"
+                >
+                  ⚠️ Connect Binance
+                </span>
+              ) : (
+                <span className="text-[10px] text-slate-300 font-mono font-normal">
+                  ${(spotBal ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              )}
             </div>
           </button>
         </div>
@@ -185,19 +212,34 @@ export default function Header({
             </div>
           )}
 
-          {/* Edit Demo Balance Button */}
-          <button
-            onClick={onOpenBalanceModal}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono font-semibold transition-all shadow-sm ${
-              isSpot
-                ? 'bg-emerald-600/20 hover:bg-emerald-600/30 border-emerald-500/40 text-emerald-300 hover:text-white'
-                : 'bg-indigo-600/20 hover:bg-indigo-600/30 border-indigo-500/40 text-indigo-300 hover:text-white'
-            }`}
-            title={`Edit ${isSpot ? 'Spot' : 'Margin'} Account Balance`}
-          >
-            <Wallet className={`w-3.5 h-3.5 ${isSpot ? 'text-emerald-400' : 'text-indigo-400'}`} />
-            <span>Edit Balance</span>
-          </button>
+          {/* Live Broker API / Edit Demo Balance Button */}
+          {isLive ? (
+            <button
+              onClick={() => onOpenBrokerModal && onOpenBrokerModal(isSpot ? 'BINANCE' : 'MT5')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono font-semibold transition-all shadow-sm ${
+                isSpot
+                  ? 'bg-emerald-600/20 hover:bg-emerald-600/30 border-emerald-500/40 text-emerald-300 hover:text-white'
+                  : 'bg-amber-600/20 hover:bg-amber-600/30 border-amber-500/40 text-amber-300 hover:text-white'
+              }`}
+              title={isSpot ? "Configure Binance Spot API (Spot Trading ONLY)" : "Configure MetaTrader 5 (Margin Scalping ONLY)"}
+            >
+              <Key className={`w-3.5 h-3.5 ${isSpot ? 'text-emerald-400' : 'text-amber-400'}`} />
+              <span>{isSpot ? 'Binance API' : 'MT5 Broker'}</span>
+            </button>
+          ) : (
+            <button
+              onClick={onOpenBalanceModal}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono font-semibold transition-all shadow-sm ${
+                isSpot
+                  ? 'bg-emerald-600/20 hover:bg-emerald-600/30 border-emerald-500/40 text-emerald-300 hover:text-white'
+                  : 'bg-indigo-600/20 hover:bg-indigo-600/30 border-indigo-500/40 text-indigo-300 hover:text-white'
+              }`}
+              title={`Edit ${isSpot ? 'Spot' : 'Margin'} Account Balance`}
+            >
+              <Wallet className={`w-3.5 h-3.5 ${isSpot ? 'text-emerald-400' : 'text-indigo-400'}`} />
+              <span>Edit Balance</span>
+            </button>
+          )}
 
           {/* Auto-Trading Master Switch */}
           <button
@@ -252,22 +294,26 @@ export default function Header({
             <Sliders className={`w-3.5 h-3.5 ${isSpot ? 'text-emerald-400' : 'text-indigo-400'}`} />
           </button>
 
-          {/* Broker Connections Manager */}
-          <button
-            onClick={onOpenBrokerModal}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all shadow-sm ${
-              brokers?.binance?.connected || brokers?.mt5?.connected
-                ? 'bg-emerald-950/40 hover:bg-emerald-900/50 border-emerald-500/50 text-emerald-300'
-                : 'bg-terminal-800 hover:bg-terminal-750 border-terminal-border text-slate-300 hover:text-white'
-            }`}
-            title="Configure Binance & MetaTrader 5 live broker connectors"
-          >
-            <Key className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden md:inline">Brokers</span>
-            <span className={`w-2 h-2 rounded-full ${
-              brokers?.binance?.connected || brokers?.mt5?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
-            }`} />
-          </button>
+          {/* Dedicated Broker Connector Button */}
+          {(() => {
+            const isBrokerOnline = isSpot ? brokers?.binance?.connected : brokers?.mt5?.connected;
+            const brokerName = isSpot ? 'Binance Spot' : 'MT5 Margin';
+            return (
+              <button
+                onClick={() => onOpenBrokerModal && onOpenBrokerModal(isSpot ? 'BINANCE' : 'MT5')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all shadow-sm ${
+                  isBrokerOnline
+                    ? 'bg-emerald-950/40 hover:bg-emerald-900/50 border-emerald-500/50 text-emerald-300'
+                    : 'bg-terminal-800 hover:bg-amber-950/30 border-terminal-border hover:border-amber-500/40 text-slate-300 hover:text-amber-300'
+                }`}
+                title={`Configure ${brokerName} (${isBrokerOnline ? 'Online' : 'Offline / Standby'})`}
+              >
+                <Key className={`w-3.5 h-3.5 ${isBrokerOnline ? 'text-emerald-400' : 'text-amber-400'}`} />
+                <span className="hidden md:inline">{isSpot ? 'Binance' : 'MT5'}</span>
+                <span className={`w-2 h-2 rounded-full ${isBrokerOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-500'}`} />
+              </button>
+            );
+          })()}
 
           {/* User Account / Mode Badge */}
           {user && (

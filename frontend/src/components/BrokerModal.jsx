@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
 import { X, Check, AlertCircle, RefreshCw, Eye, EyeOff, ShieldCheck, Zap, Coins, Globe, Key, Server, Cpu } from 'lucide-react';
 
-export default function BrokerModal({ user, onClose, onUpdateBrokers }) {
-  const [activeTab, setActiveTab] = useState('BINANCE'); // 'BINANCE' | 'MT5'
+export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab = 'BINANCE' }) {
+  const [activeTab, setActiveTab] = useState(initialTab || 'BINANCE'); // 'BINANCE' | 'MT5'
+
+  // Update activeTab if initialTab changes
+  React.useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
 
   // Binance State
   const [binanceKey, setBinanceKey] = useState('');
@@ -125,7 +130,8 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers }) {
             }`}
           >
             <Coins className="w-4 h-4 text-emerald-400" />
-            <span>Binance Spot API</span>
+            <span>Binance (Spot Trading ONLY)</span>
+            <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">100% Capital</span>
           </button>
           <button
             type="button"
@@ -137,7 +143,8 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers }) {
             }`}
           >
             <Zap className="w-4 h-4 text-amber-400" />
-            <span>MetaTrader 5 (Margin 500x)</span>
+            <span>MetaTrader 5 (Margin Scalp ONLY)</span>
+            <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">500x Leverage</span>
           </button>
         </div>
 
@@ -151,8 +158,8 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers }) {
               <div className="p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex items-start gap-3">
                 <Coins className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                 <div className="text-[11px] text-slate-300 font-sans leading-relaxed">
-                  Connect your <strong>Binance API</strong> to execute pure spot crypto purchases with 100% capital allocation.
-                  Enable <strong>Reading</strong> and <strong>Spot & Margin Trading</strong> permissions on Binance. Never enable withdrawals.
+                  <strong>Binance is dedicated to Spot Trading ONLY.</strong> All crypto purchases use 100% of your current available USDT balance with 0x leverage (safe, direct asset ownership).
+                  Enable <strong>Reading</strong> and <strong>Spot Trading</strong> permissions on Binance. Never enable withdrawals.
                 </div>
               </div>
 

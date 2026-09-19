@@ -10,7 +10,7 @@ import AssetDetailModal from './components/AssetDetailModal';
 import BalanceModal from './components/BalanceModal';
 import BrokerModal from './components/BrokerModal';
 import LoginPage from './components/LoginPage';
-import { Compass, Target, History, Terminal, Zap, ArrowDownRight, Coins, Key, ShieldCheck } from 'lucide-react';
+import { Compass, Target, History, Terminal, Zap, ArrowDownRight, Coins, Key, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem('nexus_auth_token') || null);
@@ -24,6 +24,7 @@ export default function App() {
   });
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isBrokerModalOpen, setIsBrokerModalOpen] = useState(false);
+  const [brokerModalTab, setBrokerModalTab] = useState('BINANCE');
 
   const [data, setData] = useState({
     activeAccount: 'MARGIN',
@@ -31,13 +32,22 @@ export default function App() {
     spot: null,
     portfolio: null,
     riskSettings: null,
-    isAutoTradingEnabled: true,
+    isAutoTradingEnabled: false,
     isScanning: false,
     marketScan: [],
     logs: [],
     brokers: null,
     serverTime: null
   });
+
+  const openBrokerModal = (tab = null) => {
+    if (tab) {
+      setBrokerModalTab(tab);
+    } else {
+      setBrokerModalTab(data.activeAccount === 'SPOT' ? 'BINANCE' : 'MT5');
+    }
+    setIsBrokerModalOpen(true);
+  };
 
   const [activeTab, setActiveTab] = useState('POSITIONS');
   const [selectedAsset, setSelectedAsset] = useState(null);
@@ -178,6 +188,11 @@ export default function App() {
           json.isAutoTradingEnabled ? 'Auto-Trading Activated' : 'Auto-Trading Paused (Manual Mode)',
           json.isAutoTradingEnabled ? 'SUCCESS' : 'WARN'
         );
+      } else {
+        showNotification(json.error || 'Failed to toggle auto-trading', 'ERROR');
+        if (json.error && (json.error.includes('Binance') || json.error.includes('MetaTrader') || json.error.includes('broker') || json.error.includes('Connect') || json.error.includes('connected'))) {
+          openBrokerModal(data.activeAccount === 'SPOT' ? 'BINANCE' : 'MT5');
+        }
       }
     } catch (err) {
       showNotification('Failed to toggle agent state', 'ERROR');
@@ -372,6 +387,9 @@ export default function App() {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />;
   }
 
+  const isLiveMode = user?.mode === 'LIVE' || user?.email === 'test@gmail.com';
+  const isBrokerConnected = isSpot ? data.brokers?.binance?.connected : data.brokers?.mt5?.connected;
+
   return (
     <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col font-sans selection:bg-indigo-600 selection:text-white">
       {/* Top Header */}
@@ -394,7 +412,7 @@ export default function App() {
         activePositionsCount={activePositionsCount}
         user={user}
         brokers={data.brokers}
-        onOpenBrokerModal={() => setIsBrokerModalOpen(true)}
+        onOpenBrokerModal={openBrokerModal}
         onLogout={handleLogout}
       />
 
@@ -420,26 +438,61 @@ export default function App() {
             <div className="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-terminal-950 border border-terminal-border text-[11px]">
                 <span className={`w-2 h-2 rounded-full ${data.brokers?.binance?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-                <span className="text-slate-400">Binance:</span>
+                <span className="text-slate-400">Binance Spot:</span>
                 <span className={data.brokers?.binance?.connected ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
-                  {data.brokers?.binance?.connected ? 'Connected' : 'Standby'}
+                  {data.brokers?.binance?.connected ? 'Connected' : 'Offline'}
                 </span>
               </div>
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-terminal-950 border border-terminal-border text-[11px]">
                 <span className={`w-2 h-2 rounded-full ${data.brokers?.mt5?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-                <span className="text-slate-400">MT5:</span>
+                <span className="text-slate-400">MT5 Margin:</span>
                 <span className={data.brokers?.mt5?.connected ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
-                  {data.brokers?.mt5?.connected ? 'Connected' : 'Standby'}
+                  {data.brokers?.mt5?.connected ? 'Connected' : 'Offline'}
                 </span>
               </div>
               <button
-                onClick={() => setIsBrokerModalOpen(true)}
+                onClick={() => openBrokerModal(isSpot ? 'BINANCE' : 'MT5')}
                 className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition-colors shadow-sm"
               >
                 <Key className="w-3.5 h-3.5" />
                 <span>Configure APIs</span>
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Disconnected Broker Notice when in LIVE mode */}
+        {isLiveMode && !isBrokerConnected && (
+          <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-500/60 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs font-mono shadow-2xl">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-lg bg-amber-500/20 text-amber-400 shrink-0 mt-0.5 border border-amber-500/40">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-amber-300 text-sm">
+                    {isSpot ? '⚠️ Binance Spot Account Not Connected' : '⚠️ MetaTrader 5 Margin Account Not Connected'}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-400 font-bold border border-amber-500/40 uppercase">
+                    Broker Offline
+                  </span>
+                </div>
+                <p className="text-slate-300 font-sans text-xs mt-1 leading-relaxed">
+                  {isSpot
+                    ? 'Live Spot trading requires Binance API connectivity. Connect your API Key and Secret to load your real USDT balance and execute spot buys.'
+                    : 'Live Margin trading requires MetaTrader 5 connectivity. Connect your MT5 account credentials to load your real balance and execute 500x scalps.'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => openBrokerModal(isSpot ? 'BINANCE' : 'MT5')}
+              className={`px-4 py-2.5 rounded-lg text-white font-bold text-xs transition-all shadow-lg shrink-0 flex items-center gap-2 ${
+                isSpot ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20' : 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/20'
+              }`}
+            >
+              <Key className="w-4 h-4" />
+              <span>Connect {isSpot ? 'Binance API' : 'MetaTrader 5'}</span>
+            </button>
           </div>
         )}
 
@@ -450,7 +503,7 @@ export default function App() {
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
               <span className="font-bold text-emerald-300">PURE SPOT CRYPTO ENGINE ACTIVE:</span>
               <span className="text-slate-300">
-                100% Capital Allocation per trade (${data.portfolio?.balance?.toFixed(2)} full balance buy). 0x leverage. Stop: -{data.riskSettings?.stopLossPct || 1.0}% | Target: +{data.riskSettings?.takeProfitPct || 2.5}%.
+                100% Capital Allocation per trade ({isLiveMode && !data.brokers?.binance?.connected ? 'Connect Binance to see balance' : `$${(data.portfolio?.balance ?? 0).toFixed(2)} full balance buy`}). 0x leverage. Stop: -{data.riskSettings?.stopLossPct || 1.0}% | Target: +{data.riskSettings?.takeProfitPct || 2.5}%.
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -458,12 +511,22 @@ export default function App() {
                 <Coins className="w-3.5 h-3.5" />
                 LONG ONLY (SPOT)
               </span>
-              <button
-                onClick={() => setIsBalanceModalOpen(true)}
-                className="px-2.5 py-0.5 rounded bg-emerald-600/30 hover:bg-emerald-600 text-emerald-200 hover:text-white border border-emerald-500/50 transition-colors"
-              >
-                Change Spot Balance (${data.portfolio?.balance?.toLocaleString('en-US')})
-              </button>
+              {isLiveMode ? (
+                <button
+                  onClick={() => openBrokerModal('BINANCE')}
+                  className="px-2.5 py-0.5 rounded bg-emerald-600/30 hover:bg-emerald-600 text-emerald-200 hover:text-white border border-emerald-500/50 transition-colors flex items-center gap-1"
+                >
+                  <Key className="w-3 h-3" />
+                  {data.brokers?.binance?.connected ? `Binance Connected ($${Number(data.portfolio?.balance ?? 0).toLocaleString('en-US')})` : 'Connect Binance'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsBalanceModalOpen(true)}
+                  className="px-2.5 py-0.5 rounded bg-emerald-600/30 hover:bg-emerald-600 text-emerald-200 hover:text-white border border-emerald-500/50 transition-colors"
+                >
+                  Change Spot Balance (${data.portfolio?.balance?.toLocaleString('en-US')})
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -480,12 +543,22 @@ export default function App() {
                 <ArrowDownRight className="w-3.5 h-3.5" />
                 {tradeDirection === 'SHORT_ONLY' ? 'SHORT TRADES ONLY' : tradeDirection}
               </span>
-              <button
-                onClick={() => setIsBalanceModalOpen(true)}
-                className="px-2.5 py-0.5 rounded bg-indigo-600/30 hover:bg-indigo-600 text-indigo-200 hover:text-white border border-indigo-500/50 transition-colors"
-              >
-                Change Margin Balance (${data.portfolio?.balance?.toLocaleString('en-US')})
-              </button>
+              {isLiveMode ? (
+                <button
+                  onClick={() => openBrokerModal('MT5')}
+                  className="px-2.5 py-0.5 rounded bg-amber-600/30 hover:bg-amber-600 text-amber-200 hover:text-white border border-amber-500/50 transition-colors flex items-center gap-1"
+                >
+                  <Key className="w-3 h-3" />
+                  {data.brokers?.mt5?.connected ? `MT5 Connected ($${Number(data.portfolio?.balance ?? 0).toLocaleString('en-US')})` : 'Connect MT5'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsBalanceModalOpen(true)}
+                  className="px-2.5 py-0.5 rounded bg-indigo-600/30 hover:bg-indigo-600 text-indigo-200 hover:text-white border border-indigo-500/50 transition-colors"
+                >
+                  Change Margin Balance (${data.portfolio?.balance?.toLocaleString('en-US')})
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -509,6 +582,7 @@ export default function App() {
           riskSettings={data.riskSettings}
           activeAccount={data.activeAccount || 'MARGIN'}
           onOpenBalanceModal={() => setIsBalanceModalOpen(true)}
+          onOpenBrokerModal={openBrokerModal}
         />
 
         {/* Navigation Tabs */}
@@ -656,6 +730,7 @@ export default function App() {
           isOpen={isBrokerModalOpen}
           onClose={() => setIsBrokerModalOpen(false)}
           user={user}
+          initialTab={brokerModalTab}
           onBrokerUpdated={fetchDashboard}
         />
       )}
