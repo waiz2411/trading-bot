@@ -23,6 +23,17 @@ app.use(express.json());
 // ====================================================
 // AUTHENTICATION ROUTES
 // ====================================================
+app.post('/api/auth/register', (req, res) => {
+  try {
+    const { email, password, name } = req.body;
+    const result = authService.register({ email, password, name });
+    agentLoop.setUserMode(result.user.email, result.user.mode);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 app.post('/api/auth/login', (req, res) => {
   try {
     const { email, password } = req.body;
@@ -72,6 +83,7 @@ app.post('/api/broker/binance/config', (req, res) => {
     if (email) {
       authService.updateBrokerConfig(email, 'binance', {
         apiKey,
+        apiSecret,
         isTestnet: !!isTestnet,
         connected: false,
         status: apiKey ? 'STANDBY' : 'DISCONNECTED'
@@ -85,7 +97,21 @@ app.post('/api/broker/binance/config', (req, res) => {
 
 app.post('/api/broker/binance/test', async (req, res) => {
   try {
+    const { email, apiKey, apiSecret, isTestnet } = req.body;
+    if (apiKey || apiSecret) {
+      binanceConnector.configure({ apiKey, apiSecret, isTestnet });
+    }
     const result = await binanceConnector.testConnection();
+    if (result.connected && email) {
+      authService.updateBrokerConfig(email, 'binance', {
+        apiKey,
+        apiSecret,
+        isTestnet: !!isTestnet,
+        connected: true,
+        status: 'CONNECTED',
+        lastChecked: new Date().toISOString()
+      });
+    }
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -109,6 +135,7 @@ app.post('/api/broker/mt5/config', (req, res) => {
     if (email) {
       authService.updateBrokerConfig(email, 'mt5', {
         login,
+        password,
         server,
         gatewayUrl,
         connected: false,
@@ -123,7 +150,22 @@ app.post('/api/broker/mt5/config', (req, res) => {
 
 app.post('/api/broker/mt5/test', async (req, res) => {
   try {
+    const { email, login, password, server, gatewayUrl } = req.body;
+    if (login || server) {
+      mt5Connector.configure({ login, password, server, gatewayUrl });
+    }
     const result = await mt5Connector.testConnection();
+    if (result.connected && email) {
+      authService.updateBrokerConfig(email, 'mt5', {
+        login,
+        password,
+        server,
+        gatewayUrl,
+        connected: true,
+        status: 'CONNECTED',
+        lastChecked: new Date().toISOString()
+      });
+    }
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });

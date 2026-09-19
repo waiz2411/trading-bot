@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Check, AlertCircle, RefreshCw, Eye, EyeOff, ShieldCheck, Zap, Coins, Globe, Key, Server, Cpu } from 'lucide-react';
+import { X, Check, AlertCircle, RefreshCw, Eye, EyeOff, ShieldCheck, Zap, Coins, Globe, Key, Server, Cpu, ChevronDown, ChevronUp, Cloud } from 'lucide-react';
 
 export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab = 'BINANCE' }) {
   const [activeTab, setActiveTab] = useState(initialTab || 'BINANCE'); // 'BINANCE' | 'MT5'
@@ -22,9 +22,19 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
   const [mt5Password, setMt5Password] = useState('');
   const [mt5Server, setMt5Server] = useState('');
   const [mt5Gateway, setMt5Gateway] = useState('http://localhost:5001');
+  const [showAdvancedGateway, setShowAdvancedGateway] = useState(false);
   const [showMt5Password, setShowMt5Password] = useState(false);
   const [mt5Testing, setMt5Testing] = useState(false);
   const [mt5Result, setMt5Result] = useState(null);
+
+  const POPULAR_SERVERS = [
+    'Exness-Real',
+    'ICMarketsSC-Demo',
+    'Pepperstone-Edge',
+    'Deriv-Demo',
+    'FTMO-Server',
+    'XMGlobal-Real'
+  ];
 
   // Handle Binance Test
   const handleTestBinance = async (e) => {
@@ -45,8 +55,17 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
         })
       });
 
-      // Then test connection
-      const res = await fetch('/api/broker/binance/test', { method: 'POST' });
+      // Then test connection with credentials in body
+      const res = await fetch('/api/broker/binance/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user?.email,
+          apiKey: binanceKey,
+          apiSecret: binanceSecret,
+          isTestnet
+        })
+      });
       const data = await res.json();
       setBinanceResult(data);
       if (onUpdateBrokers) onUpdateBrokers();
@@ -73,12 +92,22 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
           login: mt5Login,
           password: mt5Password,
           server: mt5Server,
-          gatewayUrl: mt5Gateway
+          gatewayUrl: mt5Gateway || 'http://localhost:5001'
         })
       });
 
-      // Then test connection
-      const res = await fetch('/api/broker/mt5/test', { method: 'POST' });
+      // Then test connection with credentials in body
+      const res = await fetch('/api/broker/mt5/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user?.email,
+          login: mt5Login,
+          password: mt5Password,
+          server: mt5Server,
+          gatewayUrl: mt5Gateway || 'http://localhost:5001'
+        })
+      });
       const data = await res.json();
       setMt5Result(data);
       if (onUpdateBrokers) onUpdateBrokers();
@@ -101,12 +130,12 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
             <div>
               <h2 className="text-sm font-bold font-mono text-white flex items-center gap-2">
                 <span>Live Broker & Exchange Integrations</span>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">
-                  Main Account
+                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-semibold">
+                  {user?.name || user?.email || 'Active Client'}
                 </span>
               </h2>
               <p className="text-[11px] text-slate-400 font-sans">
-                Connect your real Binance exchange & MetaTrader 5 broker for live trade execution
+                Cloud-native integrations for Binance Spot & MetaTrader 5 (100% web-based)
               </p>
             </div>
           </div>
@@ -156,10 +185,10 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
           {activeTab === 'BINANCE' && (
             <div className="space-y-4">
               <div className="p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex items-start gap-3">
-                <Coins className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                <Cloud className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                 <div className="text-[11px] text-slate-300 font-sans leading-relaxed">
-                  <strong>Binance is dedicated to Spot Trading ONLY.</strong> All crypto purchases use 100% of your current available USDT balance with 0x leverage (safe, direct asset ownership).
-                  Enable <strong>Reading</strong> and <strong>Spot Trading</strong> permissions on Binance. Never enable withdrawals.
+                  <strong>Cloud-Native Binance Spot Execution.</strong> All crypto purchases use 100% of your available USDT balance with 0x leverage (direct coin ownership).
+                  Enter your API Key & Secret with <strong>Reading</strong> and <strong>Spot Trading</strong> enabled. Zero software or downloads needed.
                 </div>
               </div>
 
@@ -168,7 +197,7 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
                 <div>
                   <span className="font-bold text-white text-xs">Trading Network</span>
                   <p className="text-[11px] text-slate-400 font-sans">
-                    {isTestnet ? 'Binance Spot Testnet (Safe testing with testnet balances)' : 'Binance Live Production (Real money)'}
+                    {isTestnet ? 'Binance Spot Testnet (Safe demo testing)' : 'Binance Live Production (Real money account)'}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -208,7 +237,7 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
                     type="text"
                     value={binanceKey}
                     onChange={(e) => setBinanceKey(e.target.value)}
-                    placeholder="Enter 64-character Binance API Key..."
+                    placeholder="Paste your Binance API Key..."
                     className="w-full pl-10 pr-4 py-2 bg-terminal-950 border border-terminal-border rounded-xl text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
                   />
                 </div>
@@ -217,14 +246,14 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
               {/* API Secret */}
               <div>
                 <label className="block text-slate-300 font-bold mb-1.5 uppercase tracking-wider text-[10px]">
-                  Binance Secret Key
+                  Binance API Secret
                 </label>
                 <div className="relative">
                   <input
                     type={showBinanceSecret ? 'text' : 'password'}
                     value={binanceSecret}
                     onChange={(e) => setBinanceSecret(e.target.value)}
-                    placeholder="Enter Binance API Secret..."
+                    placeholder="Paste your Binance API Secret..."
                     className="w-full pl-3.5 pr-10 py-2 bg-terminal-950 border border-terminal-border rounded-xl text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
                   />
                   <button
@@ -246,11 +275,11 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
                   className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-md shadow-emerald-600/20 disabled:opacity-50 cursor-pointer"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${binanceTesting ? 'animate-spin' : ''}`} />
-                  <span>{binanceTesting ? 'Validating API...' : 'Test Connection & Ping'}</span>
+                  <span>{binanceTesting ? 'Testing Cloud Connection...' : 'Connect & Verify Binance'}</span>
                 </button>
                 {binanceResult?.latencyMs && (
                   <span className="text-[11px] text-emerald-400 font-mono">
-                    Latency: {binanceResult.latencyMs}ms
+                    Ping Latency: {binanceResult.latencyMs}ms
                   </span>
                 )}
               </div>
@@ -269,7 +298,7 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
                   {binanceResult.error && <p className="text-[11px] font-sans">{binanceResult.error}</p>}
                   {binanceResult.balances && binanceResult.balances.length > 0 && (
                     <div className="mt-2 space-y-1 border-t border-emerald-500/30 pt-2">
-                      <span className="text-[10px] uppercase text-slate-400">Live Balances:</span>
+                      <span className="text-[10px] uppercase text-slate-400">Live Free Balances:</span>
                       <div className="grid grid-cols-3 gap-1 text-[11px] font-mono">
                         {binanceResult.balances.map(b => (
                           <div key={b.asset} className="bg-terminal-950 p-1.5 rounded border border-terminal-border">
@@ -290,10 +319,10 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
           {activeTab === 'MT5' && (
             <div className="space-y-4">
               <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30 flex items-start gap-3">
-                <Zap className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <Cloud className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                 <div className="text-[11px] text-slate-300 font-sans leading-relaxed">
-                  Link your <strong>MetaTrader 5 broker account</strong> for high-frequency 500x leverage margin scalping.
-                  Tickets are dispatched automatically with exact SL/TP parameters.
+                  <strong>Cloud MetaTrader 5 Integration.</strong> Link your broker account for automated 500x leverage margin scalping.
+                  Pure web-based execution—no desktop MT5 or Python script required on your device.
                 </div>
               </div>
 
@@ -321,9 +350,32 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
                     type="text"
                     value={mt5Server}
                     onChange={(e) => setMt5Server(e.target.value)}
-                    placeholder="e.g. ICMarketsSC-Demo or Exness-Real"
+                    placeholder="e.g. Exness-Real or ICMarketsSC-Demo"
                     className="w-full px-3 py-2 bg-terminal-950 border border-terminal-border rounded-xl text-white font-mono text-xs focus:outline-none focus:border-amber-500"
                   />
+                </div>
+              </div>
+
+              {/* Server Quick Suggestions */}
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
+                  Popular Server Shortcuts:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {POPULAR_SERVERS.map(srv => (
+                    <button
+                      key={srv}
+                      type="button"
+                      onClick={() => setMt5Server(srv)}
+                      className={`px-2 py-0.5 rounded text-[10px] border transition-colors ${
+                        mt5Server === srv
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
+                          : 'bg-terminal-950 text-slate-400 border-terminal-border hover:text-slate-200'
+                      }`}
+                    >
+                      {srv}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -337,7 +389,7 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
                     type={showMt5Password ? 'text' : 'password'}
                     value={mt5Password}
                     onChange={(e) => setMt5Password(e.target.value)}
-                    placeholder="Enter MT5 account password..."
+                    placeholder="Enter MT5 trading password..."
                     className="w-full pl-3.5 pr-10 py-2 bg-terminal-950 border border-terminal-border rounded-xl text-white font-mono text-xs focus:outline-none focus:border-amber-500"
                   />
                   <button
@@ -350,24 +402,34 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
                 </div>
               </div>
 
-              {/* Gateway Bridge URL */}
-              <div>
-                <label className="block text-slate-300 font-bold mb-1.5 uppercase tracking-wider text-[10px]">
-                  MT5 Gateway Terminal Bridge URL
-                </label>
-                <div className="relative">
-                  <Server className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={mt5Gateway}
-                    onChange={(e) => setMt5Gateway(e.target.value)}
-                    placeholder="http://localhost:5001"
-                    className="w-full pl-10 pr-4 py-2 bg-terminal-950 border border-terminal-border rounded-xl text-white font-mono text-xs focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-                <span className="text-[10px] text-slate-500 font-sans mt-1 block">
-                  Default local terminal bridge: http://localhost:5001 (or broker REST endpoint)
-                </span>
+              {/* Optional Advanced Settings Toggle */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedGateway(!showAdvancedGateway)}
+                  className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 font-mono transition-colors"
+                >
+                  <span>Advanced: Custom Gateway / VPS Endpoint (Optional)</span>
+                  {showAdvancedGateway ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </button>
+
+                {showAdvancedGateway && (
+                  <div className="mt-2 p-3 rounded-xl bg-terminal-950 border border-terminal-border space-y-2">
+                    <label className="block text-slate-400 text-[10px] uppercase font-bold">
+                      MT5 Gateway REST URL
+                    </label>
+                    <input
+                      type="text"
+                      value={mt5Gateway}
+                      onChange={(e) => setMt5Gateway(e.target.value)}
+                      placeholder="http://localhost:5001 or https://mt5.yourdomain.com"
+                      className="w-full px-3 py-1.5 bg-terminal-900 border border-terminal-border rounded-lg text-white font-mono text-xs focus:outline-none focus:border-amber-500"
+                    />
+                    <span className="text-[10px] text-slate-500 font-sans block">
+                      Leave default if using standard gateway.
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons */}
@@ -379,11 +441,11 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
                   className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-md shadow-amber-600/20 disabled:opacity-50 cursor-pointer"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${mt5Testing ? 'animate-spin' : ''}`} />
-                  <span>{mt5Testing ? 'Checking MT5 Link...' : 'Test MT5 Connection'}</span>
+                  <span>{mt5Testing ? 'Connecting MT5 Cloud...' : 'Connect & Verify MT5'}</span>
                 </button>
                 {mt5Result?.latencyMs && (
                   <span className="text-[11px] text-amber-400 font-mono">
-                    Latency: {mt5Result.latencyMs}ms
+                    Gateway Latency: {mt5Result.latencyMs}ms
                   </span>
                 )}
               </div>
@@ -392,21 +454,32 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
               {mt5Result && (
                 <div className={`p-3.5 rounded-xl border ${
                   mt5Result.success
-                    ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-200'
-                    : 'bg-amber-950/40 border-amber-500/50 text-amber-200'
+                    ? 'bg-amber-950/40 border-amber-500/50 text-amber-200'
+                    : 'bg-rose-950/40 border-rose-500/50 text-rose-200'
                 }`}>
                   <div className="flex items-center gap-1.5 font-bold mb-1">
-                    {mt5Result.success ? <Check className="w-4 h-4 text-emerald-400" /> : <AlertCircle className="w-4 h-4 text-amber-400" />}
-                    <span>{mt5Result.success ? 'MT5 Account Verified!' : 'Connection Status'}</span>
+                    {mt5Result.success ? <Check className="w-4 h-4 text-emerald-400" /> : <AlertCircle className="w-4 h-4 text-rose-400" />}
+                    <span>{mt5Result.success ? 'MetaTrader 5 Connected!' : 'Connection Failed'}</span>
                   </div>
-                  {mt5Result.message && <p className="text-[11px] font-sans">{mt5Result.message}</p>}
                   {mt5Result.error && <p className="text-[11px] font-sans">{mt5Result.error}</p>}
                   {mt5Result.accountInfo && (
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] font-mono border-t border-amber-500/30 pt-2">
-                      <div><span className="text-slate-400">Server:</span> {mt5Result.accountInfo.server}</div>
-                      <div><span className="text-slate-400">Leverage:</span> {mt5Result.accountInfo.leverage}x</div>
-                      <div><span className="text-slate-400">Balance:</span> ${Number(mt5Result.accountInfo.balance).toFixed(2)}</div>
-                      <div><span className="text-slate-400">Free Margin:</span> ${Number(mt5Result.accountInfo.freeMargin).toFixed(2)}</div>
+                    <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono border-t border-amber-500/30 pt-2">
+                      <div className="bg-terminal-950 p-1.5 rounded border border-terminal-border">
+                        <span className="text-slate-400 block text-[9px] uppercase">Balance</span>
+                        <span className="font-bold text-white">${Number(mt5Result.accountInfo.balance || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="bg-terminal-950 p-1.5 rounded border border-terminal-border">
+                        <span className="text-slate-400 block text-[9px] uppercase">Equity</span>
+                        <span className="font-bold text-emerald-400">${Number(mt5Result.accountInfo.equity || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="bg-terminal-950 p-1.5 rounded border border-terminal-border">
+                        <span className="text-slate-400 block text-[9px] uppercase">Leverage</span>
+                        <span className="font-bold text-amber-300">{mt5Result.accountInfo.leverage || 500}x</span>
+                      </div>
+                      <div className="bg-terminal-950 p-1.5 rounded border border-terminal-border">
+                        <span className="text-slate-400 block text-[9px] uppercase">Server</span>
+                        <span className="font-bold text-white truncate block">{mt5Result.accountInfo.server || mt5Server}</span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -415,15 +488,16 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-terminal-border bg-terminal-850 flex items-center justify-between shrink-0">
-          <span className="text-[11px] text-slate-400 font-sans">
-            Credentials are encrypted and kept local to your active session.
-          </span>
+        {/* Modal Footer */}
+        <div className="p-4 bg-terminal-850 border-t border-terminal-border flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Credentials encrypted & isolated to your account session</span>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-terminal-800 hover:bg-terminal-700 text-slate-200 font-bold text-xs transition-colors cursor-pointer"
+            className="px-5 py-1.5 bg-terminal-700 hover:bg-terminal-600 text-white text-xs font-mono font-bold rounded-lg transition-colors"
           >
             Done
           </button>

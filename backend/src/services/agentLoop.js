@@ -5,6 +5,7 @@ import { RiskManager } from './riskManager.js';
 import { PaperTradingEngine } from './paperTradingEngine.js';
 import { binanceConnector } from './binanceConnector.js';
 import { mt5Connector } from './mt5Connector.js';
+import { authService } from './authService.js';
 
 export class AutonomousAgentLoop {
   constructor() {
@@ -24,9 +25,10 @@ export class AutonomousAgentLoop {
     });
     this.marginTradingEngine = new PaperTradingEngine(10);
 
-    // Account 2: Pure Spot Crypto (1x Cash Spot, 100% Capital Allocation, 1 Slot)
+    // Account 2: Pure Spot Crypto (100% USDT balance allocation, 0x leverage, long only)
     this.spotRiskManager = {
-      capitalAllocationPct: 100, // 100% full balance per spot trade
+      allocationPct: 100, // 100% of available free USDT
+      maxConcurrentTrades: 1, // Pure spot coin focus
       stopLossPct: 1.0, // 1% Stop Loss default
       takeProfitPct: 2.5, // 2.5% Take Profit default
       minConfidenceThreshold: 82
@@ -49,6 +51,31 @@ export class AutonomousAgentLoop {
     this.currentUser = userEmail;
     this.currentMode = mode;
     this.isAutoTradingEnabled = false; // Always start paused on mode/session change
+
+    // Synchronize broker connectors for this specific user session
+    try {
+      const user = authService.getUser(userEmail);
+      if (user && user.brokerConnections) {
+        if (user.brokerConnections.binance) {
+          binanceConnector.configure({
+            apiKey: user.brokerConnections.binance.apiKey || '',
+            apiSecret: user.brokerConnections.binance.apiSecret || '',
+            isTestnet: user.brokerConnections.binance.isTestnet ?? true
+          });
+        }
+        if (user.brokerConnections.mt5) {
+          mt5Connector.configure({
+            login: user.brokerConnections.mt5.login || '',
+            password: user.brokerConnections.mt5.password || '',
+            server: user.brokerConnections.mt5.server || '',
+            gatewayUrl: user.brokerConnections.mt5.gatewayUrl || 'http://localhost:5001'
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Could not sync user broker configs:', err.message);
+    }
+
     this.log(`👤 Active session: ${userEmail} (${mode === 'LIVE' ? '🔴 LIVE BROKER MODE' : '🟢 SIMULATED DEMO'}) - Bot Paused`, 'INFO');
   }
 

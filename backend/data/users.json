@@ -1,0 +1,51 @@
+{
+  "demo@gmail.com": {
+    "id": "usr_demo_001",
+    "email": "demo@gmail.com",
+    "password": "demoPass",
+    "name": "Demo Paper Trader",
+    "role": "DEMO",
+    "mode": "SIMULATED",
+    "createdAt": "2026-09-01T00:00:00.000Z",
+    "brokerConnections": {
+      "binance": {
+        "connected": false,
+        "apiKey": "",
+        "isTestnet": true
+      },
+      "mt5": {
+        "connected": false,
+        "login": "",
+        "server": ""
+      }
+    }
+  },
+  "test@gmail.com": {
+    "id": "usr_live_002",
+    "email": "test@gmail.com",
+    "password": "testPass",
+    "name": "Main Live Account",
+    "role": "LIVE_BROKER",
+    "mode": "LIVE",
+    "createdAt": "2026-09-01T00:00:00.000Z",
+    "brokerConnections": {
+      "binance": {
+        "connected": false,
+        "apiKey": "",
+        "apiSecret": "",
+        "isTestnet": true,
+        "status": "STANDBY",
+        "lastChecked": null
+      },
+      "mt5": {
+        "connected": false,
+        "login": "",
+        "password": "",
+        "server": "",
+        "gatewayUrl": "http://localhost:5001",
+        "status": "STANDBY",
+        "lastChecked": null
+      }
+    }
+  }
+}

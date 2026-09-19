@@ -1,19 +1,55 @@
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DATA_DIR = path.join(__dirname, '../../data');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
 /**
- * Authentication Service for NexusQuant
- * - Demo Account: demo@gmail.com / demoPass (Simulated Paper Trading)
- * - Main Live Account: test@gmail.com / testPass (Real Broker & Exchange Trading)
+ * Multi-Tenant Authentication & User Storage Service for NexusQuant SaaS
+ * - Supports self-registration of client accounts
+ * - Persistent disk storage across server restarts
+ * - Per-user isolated broker credentials and live connection states
  */
-
 class AuthService {
   constructor() {
-    this.users = {
-      'demo@gmail.com': {
+    this.users = {};
+    this.sessions = new Map();
+    this.ensureDataDir();
+    this.loadUsers();
+  }
+
+  ensureDataDir() {
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+    } catch (err) {
+      console.error('Failed to create data directory:', err);
+    }
+  }
+
+  loadUsers() {
+    try {
+      if (fs.existsSync(USERS_FILE)) {
+        const raw = fs.readFileSync(USERS_FILE, 'utf-8');
+        this.users = JSON.parse(raw);
+      }
+    } catch (err) {
+      console.warn('Could not load users.json, re-initializing defaults:', err.message);
+      this.users = {};
+    }
+
+    // Seed default demo and test accounts if missing
+    if (!this.users['demo@gmail.com']) {
+      this.users['demo@gmail.com'] = {
         id: 'usr_demo_001',
         email: 'demo@gmail.com',
         password: 'demoPass',
-        name: 'Demo Trader',
+        name: 'Demo Paper Trader',
         role: 'DEMO',
         mode: 'SIMULATED',
         createdAt: '2026-09-01T00:00:00.000Z',
@@ -21,8 +57,11 @@ class AuthService {
           binance: { connected: false, apiKey: '', isTestnet: true },
           mt5: { connected: false, login: '', server: '' }
         }
-      },
-      'test@gmail.com': {
+      };
+    }
+
+    if (!this.users['test@gmail.com']) {
+      this.users['test@gmail.com'] = {
         id: 'usr_live_002',
         email: 'test@gmail.com',
         password: 'testPass',
@@ -49,17 +88,75 @@ class AuthService {
             lastChecked: null
           }
         }
+      };
+    }
+
+    this.saveUsers();
+  }
+
+  saveUsers() {
+    try {
+      fs.writeFileSync(USERS_FILE, JSON.stringify(this.users, null, 2), 'utf-8');
+    } catch (err) {
+      console.error('Failed to persist users to disk:', err);
+    }
+  }
+
+  register({ email, password, name }) {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      throw new Error('Please enter a valid email address.');
+    }
+    if (!password || password.length < 5) {
+      throw new Error('Password must be at least 5 characters long.');
+    }
+    if (this.users[cleanEmail]) {
+      throw new Error('An account with this email already exists. Please sign in.');
+    }
+
+    const userId = `usr_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const newUser = {
+      id: userId,
+      email: cleanEmail,
+      password,
+      name: (name || cleanEmail.split('@')[0]).trim(),
+      role: 'CLIENT',
+      mode: 'LIVE', // New client accounts are real live accounts ready to connect brokers
+      createdAt: new Date().toISOString(),
+      brokerConnections: {
+        binance: {
+          connected: false,
+          apiKey: '',
+          apiSecret: '',
+          isTestnet: true,
+          status: 'DISCONNECTED',
+          lastChecked: null
+        },
+        mt5: {
+          connected: false,
+          login: '',
+          password: '',
+          server: '',
+          gatewayUrl: 'http://localhost:5001',
+          status: 'DISCONNECTED',
+          lastChecked: null
+        }
       }
     };
 
-    this.sessions = new Map();
+    this.users[cleanEmail] = newUser;
+    this.saveUsers();
 
-    const defaultToken = 'sess_demo_default_token';
-    this.sessions.set(defaultToken, {
-      userId: 'usr_demo_001',
-      email: 'demo@gmail.com',
-      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
+    // Automatically create authenticated session
+    const token = `sess_${crypto.randomBytes(24).toString('hex')}`;
+    const expiresAt = Date.now() + 14 * 24 * 60 * 60 * 1000;
+    this.sessions.set(token, {
+      userId: newUser.id,
+      email: newUser.email,
+      expiresAt
     });
+
+    return { token, user: this.sanitizeUser(newUser) };
   }
 
   login(email, password) {
@@ -79,8 +176,7 @@ class AuthService {
       expiresAt
     });
 
-    const userProfile = this.sanitizeUser(user);
-    return { token, user: userProfile };
+    return { token, user: this.sanitizeUser(user) };
   }
 
   validateToken(token) {
@@ -111,6 +207,10 @@ class AuthService {
     return this.users[cleanEmail] || null;
   }
 
+  getUserById(id) {
+    return Object.values(this.users).find(u => u.id === id) || null;
+  }
+
   updateBrokerConfig(email, broker, config) {
     const user = this.getUser(email);
     if (!user) throw new Error('User not found');
@@ -121,6 +221,7 @@ class AuthService {
         ...config,
         lastUpdated: new Date().toISOString()
       };
+      this.saveUsers();
       return user.brokerConnections.binance;
     } else if (broker === 'mt5') {
       user.brokerConnections.mt5 = {
@@ -128,6 +229,7 @@ class AuthService {
         ...config,
         lastUpdated: new Date().toISOString()
       };
+      this.saveUsers();
       return user.brokerConnections.mt5;
     }
     throw new Error('Unknown broker type');
@@ -142,18 +244,18 @@ class AuthService {
       mode: user.mode,
       brokerConnections: {
         binance: {
-          connected: user.brokerConnections.binance.connected,
-          apiKey: user.brokerConnections.binance.apiKey ? `${user.brokerConnections.binance.apiKey.slice(0, 6)}...` : '',
-          isTestnet: user.brokerConnections.binance.isTestnet,
-          status: user.brokerConnections.binance.status,
-          lastChecked: user.brokerConnections.binance.lastChecked
+          connected: user.brokerConnections?.binance?.connected || false,
+          apiKey: user.brokerConnections?.binance?.apiKey ? `${user.brokerConnections.binance.apiKey.slice(0, 6)}...` : '',
+          isTestnet: user.brokerConnections?.binance?.isTestnet ?? true,
+          status: user.brokerConnections?.binance?.status || 'DISCONNECTED',
+          lastChecked: user.brokerConnections?.binance?.lastChecked || null
         },
         mt5: {
-          connected: user.brokerConnections.mt5.connected,
-          login: user.brokerConnections.mt5.login ? `${user.brokerConnections.mt5.login.slice(0, 3)}****` : '',
-          server: user.brokerConnections.mt5.server,
-          status: user.brokerConnections.mt5.status,
-          lastChecked: user.brokerConnections.mt5.lastChecked
+          connected: user.brokerConnections?.mt5?.connected || false,
+          login: user.brokerConnections?.mt5?.login ? `${user.brokerConnections.mt5.login.toString().slice(0, 3)}****` : '',
+          server: user.brokerConnections?.mt5?.server || '',
+          status: user.brokerConnections?.mt5?.status || 'DISCONNECTED',
+          lastChecked: user.brokerConnections?.mt5?.lastChecked || null
         }
       }
     };
