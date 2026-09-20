@@ -144,13 +144,13 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   const finalShortConfidence = Math.max(0, Math.min(100, Math.round(shortScore)));
   const finalLongConfidence = Math.max(0, Math.min(100, Math.round(longScore)));
 
-  // SCALPING STRIKE ZONE GEOMETRY (Calibrated for 500x Zero-Liquidation):
+  // SCALPING STRIKE ZONE GEOMETRY (Calibrated for High Win-Rate Sniper Scalping):
   const leverage = Number(options.defaultLeverage) || 500;
   const customRR = Number(options.targetRiskRewardRatio) || 1.3;
 
-  // Maximum allowed stop distance: 0.12% at 500x leverage (Liquidation is at 0.16%, so SL triggers first!)
-  const stopDistancePct = leverage >= 200 ? 0.0012 : (leverage >= 50 ? 0.0035 : 0.0080);
-  const stopDistance = Math.max(0.0001, Number((currentPrice * stopDistancePct).toFixed(asset.decimals || 4)));
+  // Safe noise floor: min 0.22% or 0.55x ATR (gives trades room to breathe while capping risk)
+  const stopDistancePct = leverage >= 200 ? 0.0022 : (leverage >= 50 ? 0.0035 : 0.0080);
+  const stopDistance = Math.max(Number((minAtr * 0.55).toFixed(asset.decimals || 4)), Number((currentPrice * stopDistancePct).toFixed(asset.decimals || 4)));
   const targetDistance = Number((stopDistance * customRR).toFixed(asset.decimals || 4));
 
   // Require STRICT Confluence (Score >= 85%) for High-Conviction Sniper Entry
@@ -221,12 +221,13 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
 export function evaluatePositionExit(position, technicals, currentPrice) {
   if (!position || !technicals) return { shouldExit: false };
 
-  const { side, entryPrice, stopDistance } = position;
+  const { side, entryPrice, stopDistance, targetDistance } = position;
   const { ema21, rsi, macd } = technicals;
+  const targetDist = targetDistance || stopDistance * 1.3;
 
   if (side === 'SHORT') {
-    // Reversal Exit: Price breaks above EMA 21 with bullish MACD cross
-    if (currentPrice > ema21 + stopDistance * 0.3 && macd && macd.bullishCrossover) {
+    // Reversal Exit: Only invalidate if price moves against entry past EMA 21 with confirmed bullish MACD crossover
+    if (currentPrice > entryPrice && currentPrice > ema21 + stopDistance * 0.4 && macd && macd.bullishCrossover) {
       return {
         shouldExit: true,
         reason: 'SIGNAL_REVERSAL_EXIT',
@@ -234,16 +235,18 @@ export function evaluatePositionExit(position, technicals, currentPrice) {
       };
     }
 
-    // Momentum Exhaustion Lock: Short is in profit and RSI reached oversold (<28)
-    if (currentPrice < entryPrice && rsi && rsi < 28) {
+    // Momentum Exhaustion Lock: Short is in deep profit (>= 75% of target) and RSI reached oversold (< 26)
+    const runDown = entryPrice - currentPrice;
+    if (runDown >= targetDist * 0.75 && rsi && rsi < 26) {
       return {
         shouldExit: true,
         reason: 'MOMENTUM_EXHAUSTION_EXIT',
-        message: 'Scalp Profit Lock: RSI oversold exhaustion reached'
+        message: 'Scalp Profit Banked: RSI oversold exhaustion reached'
       };
     }
   } else if (side === 'LONG') {
-    if (currentPrice < ema21 - stopDistance * 0.3 && macd && macd.bearishCrossover) {
+    // Reversal Exit: Only invalidate if price moves against entry below EMA 21 with confirmed bearish MACD crossover
+    if (currentPrice < entryPrice && currentPrice < ema21 - stopDistance * 0.4 && macd && macd.bearishCrossover) {
       return {
         shouldExit: true,
         reason: 'SIGNAL_REVERSAL_EXIT',
@@ -251,11 +254,13 @@ export function evaluatePositionExit(position, technicals, currentPrice) {
       };
     }
 
-    if (currentPrice > entryPrice && rsi && rsi > 72) {
+    // Momentum Exhaustion Lock: Long is in deep profit (>= 75% of target) and RSI reached overbought (> 74)
+    const runUp = currentPrice - entryPrice;
+    if (runUp >= targetDist * 0.75 && rsi && rsi > 74) {
       return {
         shouldExit: true,
         reason: 'MOMENTUM_EXHAUSTION_EXIT',
-        message: 'Scalp Profit Lock: RSI overbought exhaustion reached'
+        message: 'Scalp Profit Banked: RSI overbought exhaustion reached'
       };
     }
   }
@@ -279,8 +284,8 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
   const currentPrice = asset.price;
   const { ema9, ema21, ema50, ema200, rsi, macd, bollingerBands: bb } = technicals;
 
-  const stopLossPct = Number(spotRiskSettings.stopLossPct) || 1.0;
-  const takeProfitPct = Number(spotRiskSettings.takeProfitPct) || 2.5;
+  const stopLossPct = Math.max(0.8, Number(spotRiskSettings.stopLossPct) || 1.0);
+  const takeProfitPct = Math.max(1.6, Number(spotRiskSettings.takeProfitPct) || 2.2);
   const minThreshold = Number(spotRiskSettings.minConfidenceThreshold) || 82;
 
   let score = 0;
@@ -312,15 +317,15 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
 
   // 3. STRICT CRYPTO RSI VALUE FILTER (Prevents Buying Tops)
   if (rsi !== null && rsi !== undefined) {
-    if (rsi > 58) {
+    if (rsi > 56) {
       score -= 50; // Never buy overbought tops
-    } else if (rsi >= 36 && rsi <= 50) {
+    } else if (rsi >= 35 && rsi <= 48) {
       score += 25;
       factors.push(`Optimal Buy RSI (${rsi.toFixed(1)}): Pullback retest in lower bull zone`);
-    } else if (rsi > 50 && rsi <= 56) {
+    } else if (rsi > 48 && rsi <= 55) {
       score += 15;
       factors.push(`Bullish Flow RSI (${rsi.toFixed(1)}): Upward trajectory with runway`);
-    } else if (rsi < 30) {
+    } else if (rsi < 32) {
       score += 20;
       factors.push(`Oversold Rebound RSI (${rsi.toFixed(1)}): Deep dip buyer interest`);
     }
@@ -344,7 +349,6 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
   }
 
   // 6. CANDLESTICK CONFIRMATION & NOISE-FLOOR MICRO-WICK FILTER
-  // (Solves the -0.2% premature stop-out by ensuring entry is at the bottom of the dip)
   if (asset.candles && asset.candles.length >= 2) {
     const lastCandle = asset.candles[asset.candles.length - 1];
     const prevCandle = asset.candles[asset.candles.length - 2];
@@ -352,21 +356,16 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
     const isGreen = lastCandle.close >= lastCandle.open;
     const bodySize = Math.abs(lastCandle.close - lastCandle.open);
     const lowerWick = Math.min(lastCandle.open, lastCandle.close) - lastCandle.low;
+    const hasWickRejection = lowerWick >= bodySize * 0.35 || (prevCandle.close < prevCandle.open && isGreen);
 
-    const hasWickRejection = lowerWick >= bodySize * 0.4 || (prevCandle.close < prevCandle.open && isGreen);
-
-    if (stopLossPct <= 0.4) {
-      if (hasWickRejection && isGreen) {
-        score += 20;
-        factors.push('Micro-Wick Absorption: Downward tick noise rejected at support; stop safely protected');
-      } else {
-        score -= 25;
-      }
+    if (hasWickRejection && isGreen) {
+      score += 20;
+      factors.push('Bullish Wick Rejection: Downward dip absorbed with strong buyers supporting price');
+    } else if (isGreen) {
+      score += 12;
+      factors.push('Bullish Candle Confirmation: Upward micro-impulse validated');
     } else {
-      if (isGreen) {
-        score += 15;
-        factors.push('Bullish Candle Confirmation: Upward micro-impulse validated');
-      }
+      score -= 20; // Never buy into a red falling candle
     }
   }
 

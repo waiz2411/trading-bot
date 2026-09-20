@@ -11,13 +11,15 @@ import { evaluatePositionExit } from './strategyEngine.js';
  */
 
 export class PaperTradingEngine {
-  constructor(initialBalance = 10000) {
+  constructor(initialBalance = 10000, accountType = 'MARGIN') {
+    this.accountType = accountType; // 'MARGIN' | 'SPOT'
     this.initialBalance = initialBalance;
     this.balance = initialBalance;
     this.activePositions = [];
     this.closedTrades = [];
     this.winCount = 0;
     this.lossCount = 0;
+    this.breakEvenCount = 0;
     this.totalGrossProfit = 0;
     this.totalGrossLoss = 0;
     this.trailingStopsEnabled = true;
@@ -27,7 +29,6 @@ export class PaperTradingEngine {
 
   getPortfolioState() {
     const unrealizedPnL = this.activePositions.reduce((acc, pos) => acc + (pos.unrealizedPnL || 0), 0);
-    const equity = Number((this.balance + unrealizedPnL).toFixed(2));
 
     // Calculate trade performance metrics dynamically from closed trades ledger
     const totalTrades = this.closedTrades.length;
@@ -39,19 +40,23 @@ export class PaperTradingEngine {
 
     for (const trade of this.closedTrades) {
       const pnl = Number(trade.finalPnL || 0);
-      if (pnl > 0) {
+      const isBE = trade.exitReason === 'BREAKEVEN_STOP_TRIGGER' || Math.abs(pnl) <= 0.08;
+      if (isBE) {
+        breakEvenCount++;
+        if (pnl > 0) grossProfit += pnl;
+        else if (pnl < 0) grossLoss += Math.abs(pnl);
+      } else if (pnl > 0.08) {
         winCount++;
         grossProfit += pnl;
-      } else if (pnl < 0) {
+      } else if (pnl < -0.08) {
         lossCount++;
         grossLoss += Math.abs(pnl);
-      } else {
-        breakEvenCount++;
       }
     }
 
     this.winCount = winCount;
     this.lossCount = lossCount;
+    this.breakEvenCount = breakEvenCount;
     this.totalGrossProfit = Number(grossProfit.toFixed(2));
     this.totalGrossLoss = Number(grossLoss.toFixed(2));
 
@@ -61,23 +66,37 @@ export class PaperTradingEngine {
       ? Number((grossProfit / grossLoss).toFixed(2))
       : (grossProfit > 0 ? 99.9 : 0);
 
+    // Cumulative Realized PnL strictly from ledger
+    const cumulativeRealizedPnL = Number((grossProfit - grossLoss).toFixed(2));
+    const equity = Number((this.balance + unrealizedPnL).toFixed(2));
     const totalPnL = Number((equity - this.initialBalance).toFixed(2));
     const totalPnLPct = this.initialBalance > 0 ? Number(((totalPnL / this.initialBalance) * 100).toFixed(2)) : 0;
 
-    // Margin & Leverage Portfolio Analytics
-    const usedMargin = Number(this.activePositions.reduce((acc, pos) => acc + (pos.margin || (pos.notional / (pos.leverage || 1))), 0).toFixed(2));
+    // Spot vs Margin Specific Portfolio Analytics
+    const isSpot = this.accountType === 'SPOT';
+    const usedMargin = isSpot
+      ? Number(this.activePositions.reduce((acc, pos) => acc + (pos.notional || 0), 0).toFixed(2))
+      : Number(this.activePositions.reduce((acc, pos) => acc + (pos.margin || (pos.notional / (pos.leverage || 1))), 0).toFixed(2));
+
     const freeMargin = Number(Math.max(0, equity - usedMargin).toFixed(2));
+    const freeCash = isSpot ? Number(Math.max(0, this.balance - usedMargin).toFixed(2)) : freeMargin;
+    const holdingValue = isSpot
+      ? Number(this.activePositions.reduce((acc, pos) => acc + (pos.notional || 0) + (pos.unrealizedPnL || 0), 0).toFixed(2))
+      : 0;
     const marginLevelPercent = usedMargin > 0 ? Number(((equity / usedMargin) * 100).toFixed(1)) : 999;
 
     return {
+      accountType: this.accountType,
       initialBalance: this.initialBalance,
       balance: Number(this.balance.toFixed(2)),
       equity,
       usedMargin,
       freeMargin,
+      freeCash,
+      holdingValue,
       marginLevelPercent,
       unrealizedPnL: Number(unrealizedPnL.toFixed(2)),
-      realizedPnL: Number((this.balance - this.initialBalance).toFixed(2)),
+      realizedPnL: cumulativeRealizedPnL,
       totalPnL,
       totalPnLPct,
       winCount,
@@ -88,7 +107,7 @@ export class PaperTradingEngine {
       profitFactor,
       scalpModeEnabled: this.scalpModeEnabled,
       activePositions: this.activePositions,
-      closedTrades: this.closedTrades.slice(-100).reverse()
+      closedTrades: this.closedTrades.slice(-200).reverse()
     };
   }
 
@@ -104,6 +123,12 @@ export class PaperTradingEngine {
 
     this.balance = validBalance;
     this.initialBalance = validBalance;
+    this.closedTrades = [];
+    this.winCount = 0;
+    this.lossCount = 0;
+    this.breakEvenCount = 0;
+    this.totalGrossProfit = 0;
+    this.totalGrossLoss = 0;
     return this.getPortfolioState();
   }
 
@@ -219,10 +244,18 @@ export class PaperTradingEngine {
 
     this.balance += pnlRounded;
 
-    if (pnlRounded > 0) {
+    const isBreakEven = exitReason === 'BREAKEVEN_STOP_TRIGGER' || Math.abs(pnlRounded) <= 0.08;
+    const isWin = !isBreakEven && pnlRounded > 0.08;
+    const isLoss = !isBreakEven && pnlRounded < -0.08;
+
+    if (isBreakEven) {
+      this.breakEvenCount++;
+      if (pnlRounded > 0) this.totalGrossProfit += pnlRounded;
+      else if (pnlRounded < 0) this.totalGrossLoss += Math.abs(pnlRounded);
+    } else if (isWin) {
       this.winCount++;
       this.totalGrossProfit += pnlRounded;
-    } else if (pnlRounded < 0) {
+    } else if (isLoss) {
       this.lossCount++;
       this.totalGrossLoss += Math.abs(pnlRounded);
     }
@@ -236,7 +269,9 @@ export class PaperTradingEngine {
       finalPnL: pnlRounded,
       finalPnLPercent: pnlPercent,
       roePercent,
-      isWin: pnlRounded > 0
+      isBreakEven,
+      isWin,
+      isLoss
     };
 
     this.closedTrades.push(closedRecord);
@@ -291,21 +326,21 @@ export class PaperTradingEngine {
       }
 
       // ====================================================
-      // 1. SCALPING DYNAMIC TRAILING STOP & BREAK-EVEN
+      // 1. SCALPING DYNAMIC TRAILING STOP & BREAK-EVEN (65% & 85% Zones)
       // ====================================================
       if (this.trailingStopsEnabled) {
         if (pos.side === 'SHORT') {
           const runDown = pos.entryPrice - pos.lowestPrice;
 
-          // Scalp Break-Even: Price dropped 40% of target distance -> Lock in Break-Even ($0 loss)!
-          if (!pos.breakEvenLocked && runDown >= pos.targetDistance * 0.40) {
-            pos.stopLoss = Number((pos.entryPrice - pos.stopDistance * 0.05).toFixed(4));
+          // Scalp Break-Even: Price dropped 65% of target distance -> Lock in Break-Even ($0 loss)!
+          if (!pos.breakEvenLocked && runDown >= pos.targetDistance * 0.65) {
+            pos.stopLoss = Number((pos.entryPrice - pos.stopDistance * 0.02).toFixed(4));
             pos.breakEvenLocked = true;
           }
 
-          // Scalp Trailing Stop: Price reached 80% of target distance -> Trail closely behind lowest price!
-          if (runDown >= pos.targetDistance * 0.80) {
-            const newTrailStop = Number((pos.lowestPrice + pos.stopDistance * 0.15).toFixed(4));
+          // Scalp Trailing Stop: Price reached 85% of target distance -> Trail closely behind lowest price!
+          if (runDown >= pos.targetDistance * 0.85) {
+            const newTrailStop = Number((pos.lowestPrice + pos.stopDistance * 0.35).toFixed(4));
             if (newTrailStop < pos.stopLoss) {
               pos.stopLoss = newTrailStop;
               pos.trailingStopActive = true;
@@ -314,15 +349,15 @@ export class PaperTradingEngine {
         } else if (pos.side === 'LONG') {
           const runUp = pos.highestPrice - pos.entryPrice;
 
-          // Scalp Break-Even: Price gained 40% of target distance -> Lock in Break-Even ($0 loss)!
-          if (!pos.breakEvenLocked && runUp >= pos.targetDistance * 0.40) {
-            pos.stopLoss = Number((pos.entryPrice + pos.stopDistance * 0.05).toFixed(4));
+          // Scalp Break-Even: Price gained 65% of target distance -> Lock in Break-Even ($0 loss)!
+          if (!pos.breakEvenLocked && runUp >= pos.targetDistance * 0.65) {
+            pos.stopLoss = Number((pos.entryPrice + pos.stopDistance * 0.02).toFixed(4));
             pos.breakEvenLocked = true;
           }
 
-          // Scalp Trailing Stop: Price reached 80% of target distance -> Trail closely behind highest price!
-          if (runUp >= pos.targetDistance * 0.80) {
-            const newTrailStop = Number((pos.highestPrice - pos.stopDistance * 0.15).toFixed(4));
+          // Scalp Trailing Stop: Price reached 85% of target distance -> Trail closely behind highest price!
+          if (runUp >= pos.targetDistance * 0.85) {
+            const newTrailStop = Number((pos.highestPrice - pos.stopDistance * 0.35).toFixed(4));
             if (newTrailStop > pos.stopLoss) {
               pos.stopLoss = newTrailStop;
               pos.trailingStopActive = true;

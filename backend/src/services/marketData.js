@@ -130,6 +130,21 @@ export class MarketDataService {
           cached.low24h = Number(parseFloat(ticker.lowPrice).toFixed(cached.decimals));
           cached.volume = Number(parseFloat(ticker.volume).toFixed(0));
 
+          // Calibrate baseline historical candles to real live price so RSI is natural and balanced
+          if (!cached.isLiveCalibrated) {
+            const firstCandlePrice = cached.candles[0]?.close || livePrice;
+            const ratio = livePrice / firstCandlePrice;
+            if (Math.abs(ratio - 1) > 0.005) {
+              for (const c of cached.candles) {
+                c.open = Number((c.open * ratio).toFixed(cached.decimals));
+                c.close = Number((c.close * ratio).toFixed(cached.decimals));
+                c.high = Number((c.high * ratio).toFixed(cached.decimals));
+                c.low = Number((c.low * ratio).toFixed(cached.decimals));
+              }
+            }
+            cached.isLiveCalibrated = true;
+          }
+
           // Append or update sliding candle
           const candles = cached.candles;
           const lastCandle = candles[candles.length - 1];
@@ -172,6 +187,22 @@ export class MarketDataService {
         if (cached) {
           const newPrice = Number(fx.price.toFixed(cached.decimals));
           cached.price = newPrice;
+
+          // Calibrate baseline historical candles to real live Forex rate so RSI is natural
+          if (!cached.isLiveCalibrated) {
+            const firstCandlePrice = cached.candles[0]?.close || newPrice;
+            const ratio = newPrice / firstCandlePrice;
+            if (Math.abs(ratio - 1) > 0.003) {
+              for (const c of cached.candles) {
+                c.open = Number((c.open * ratio).toFixed(cached.decimals));
+                c.close = Number((c.close * ratio).toFixed(cached.decimals));
+                c.high = Number((c.high * ratio).toFixed(cached.decimals));
+                c.low = Number((c.low * ratio).toFixed(cached.decimals));
+              }
+            }
+            cached.isLiveCalibrated = true;
+          }
+
           const candles = cached.candles;
           const lastCandle = candles[candles.length - 1];
           lastCandle.close = newPrice;

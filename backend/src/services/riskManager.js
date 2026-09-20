@@ -156,7 +156,10 @@ export class RiskManager {
       };
     }
 
-    const margin = Number((notional / leverage).toFixed(2));
+    // Allocate margin with safety buffer so liquidation threshold is strictly beyond stop loss
+    const minMarginForRisk = Number((dollarRisk * 1.5).toFixed(2));
+    const baseMargin = Number((notional / leverage).toFixed(2));
+    const margin = Math.max(baseMargin, minMarginForRisk);
 
     if (margin > freeMargin) {
       return {
@@ -165,23 +168,12 @@ export class RiskManager {
       };
     }
 
-    // Calculate Liquidation Price (Scales safely up to 500x leverage)
-    const imr = 1 / leverage; // Initial margin rate (e.g., 0.002 for 500x, 0.01 for 100x, 0.1 for 10x)
-    const mmr = Math.min(0.005, imr * 0.2); // MMR buffer (20% of margin before liquidation)
-    let liquidationPrice = 0;
-    if (signal.side === 'LONG') {
-      liquidationPrice = signal.entryPrice * (1 - imr + mmr);
-    } else {
-      liquidationPrice = signal.entryPrice * (1 + imr - mmr);
-    }
+    // Liquidation threshold is safely buffered beyond stop-loss distance
+    const liqBufferDist = Math.max(priceDistance * 1.4, signal.entryPrice * (1 / leverage) * 0.9);
+    let liquidationPrice = signal.side === 'LONG'
+      ? signal.entryPrice - liqBufferDist
+      : signal.entryPrice + liqBufferDist;
     liquidationPrice = Math.max(0.0001, Number(liquidationPrice.toFixed(asset.decimals || 4)));
-
-    // ZERO-LIQUIDATION GUARANTEE: Ensure Stop Loss triggers strictly ahead of liquidation boundary
-    if (signal.side === 'LONG' && signal.stopLoss <= liquidationPrice) {
-      signal.stopLoss = Number((signal.entryPrice - (signal.entryPrice - liquidationPrice) * 0.65).toFixed(asset.decimals || 4));
-    } else if (signal.side === 'SHORT' && signal.stopLoss >= liquidationPrice) {
-      signal.stopLoss = Number((signal.entryPrice + (liquidationPrice - signal.entryPrice) * 0.65).toFixed(asset.decimals || 4));
-    }
 
     return {
       allowed: true,

@@ -66,20 +66,31 @@ function tickCandle(asset) {
   return newPrice;
 }
 
-const engine = new PaperTradingEngine(10);
+// 1. MARGIN SCALPER SIMULATION
+const engine = new PaperTradingEngine(100, 'MARGIN');
 const riskManager = new RiskManager({
   riskPerTradePct: 1.5,
   maxConcurrentTrades: 3,
-  minConfidenceThreshold: 82,
+  minConfidenceThreshold: 85,
   tradeDirection: 'BOTH',
   tradingStyle: 'SCALPING',
   defaultLeverage: 500,
   targetRiskRewardRatio: 1.3
 });
 
+// 2. SPOT ENGINE SIMULATION
+import { evaluateSpotConfluence } from './services/strategyEngine.js';
+const spotEngine = new PaperTradingEngine(25, 'SPOT');
+const spotRiskSettings = {
+  stopLossPct: 1.0,
+  takeProfitPct: 2.2,
+  minConfidenceThreshold: 82
+};
+
 const testAssets = [
   { symbol: 'BTC-USD', name: 'Bitcoin', category: 'Crypto', decimals: 2, basePrice: 77000 },
   { symbol: 'ETH-USD', name: 'Ethereum', category: 'Crypto', decimals: 2, basePrice: 2450 },
+  { symbol: 'SOL-USD', name: 'Solana', category: 'Crypto', decimals: 2, basePrice: 105 },
   { symbol: 'GC=F', name: 'Gold', category: 'Commodities', decimals: 2, basePrice: 2635 },
   { symbol: 'EURUSD=X', name: 'Euro/USD', category: 'Forex', decimals: 4, basePrice: 1.155 }
 ];
@@ -95,9 +106,10 @@ let stopLosses = 0;
 let reversalExits = 0;
 
 const cooldowns = {};
+let spotCooldown = 0;
 
-// Simulate 400 ticks
-for (let step = 0; step < 400; step++) {
+// Simulate 800 ticks
+for (let step = 0; step < 800; step++) {
   const pricesMap = {};
   const technicalsMap = {};
 
@@ -113,6 +125,7 @@ for (let step = 0; step < 400; step++) {
       continue;
     }
 
+    // A. MARGIN SCALPER
     const signal = evaluateStrategyConfluence(asset, technicals, riskManager.getSettings());
 
     if (signal.action === 'STRONG_BUY' || signal.action === 'STRONG_SELL') {
@@ -140,33 +153,82 @@ for (let step = 0; step < 400; step++) {
           margin: risk.margin,
           liquidationPrice: risk.liquidationPrice
         });
-        cooldowns[asset.symbol] = 8;
+        cooldowns[asset.symbol] = 12;
+      }
+    }
+
+    // B. PURE SPOT CRYPTO
+    if (asset.category === 'Crypto' && spotCooldown <= 0 && spotEngine.activePositions.length === 0) {
+      const spotSignal = evaluateSpotConfluence(asset, technicals, spotRiskSettings);
+      if (spotSignal.action === 'STRONG_BUY') {
+        const spotCash = spotEngine.balance;
+        if (spotCash >= 5) {
+          const entryPrice = spotSignal.entryPrice;
+          const notional = Number(spotCash.toFixed(2));
+          const rawUnits = notional / entryPrice;
+          const units = Number(rawUnits.toFixed(asset.decimals || 4));
+
+          spotEngine.openPosition({
+            symbol: asset.symbol,
+            name: asset.name,
+            category: 'Crypto',
+            side: 'LONG',
+            entryPrice,
+            stopLoss: spotSignal.stopLoss,
+            takeProfit: spotSignal.takeProfit,
+            stopDistance: spotSignal.stopDistance,
+            targetDistance: spotSignal.targetDistance,
+            units,
+            notional,
+            confidence: spotSignal.confidence,
+            reason: spotSignal.reason,
+            riskRewardRatio: spotSignal.riskRewardRatio,
+            tradingStyle: 'SPOT_BUY',
+            leverage: 1,
+            margin: notional,
+            liquidationPrice: 0
+          });
+          spotCooldown = 15;
+        }
       }
     }
   }
 
+  if (spotCooldown > 0) spotCooldown--;
+
   const closed = engine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
   for (const c of closed) {
-    if (c.exitReason === 'TAKE_PROFIT_TRIGGER' || c.exitReason === 'SCALP_QUICK_BANK') takeProfits++;
+    if (c.exitReason === 'TAKE_PROFIT_TRIGGER') takeProfits++;
     else if (c.exitReason === 'TRAILING_STOP_TRIGGER') trailingStops++;
     else if (c.exitReason === 'BREAKEVEN_STOP_TRIGGER') breakEvens++;
     else if (c.exitReason === 'SIGNAL_REVERSAL_EXIT' || c.exitReason === 'MOMENTUM_EXHAUSTION_EXIT') reversalExits++;
     else if (c.exitReason === 'STOP_LOSS_TRIGGER') stopLosses++;
   }
-}
 
-// Flush remaining
-for (const p of [...engine.activePositions]) {
-  engine.closePosition(p.id, p.currentPrice, 'AUDIT_CLOSE');
+  spotEngine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
 }
 
 const stats = engine.getPortfolioState();
-console.log('\n📊 RESULTS:');
-console.log(`• Total Trades:     ${stats.totalTrades}`);
-console.log(`• Wins:             ${stats.winCount} (${stats.winRate}%)`);
-console.log(`• Losses:           ${stats.lossCount}`);
-console.log(`• Profit Factor:    ${stats.profitFactor}`);
-console.log(`• Exits Breakdown:  TP: ${takeProfits} | Trail: ${trailingStops} | BE: ${breakEvens} | Rev: ${reversalExits} | SL: ${stopLosses}`);
-console.log(`• Final Equity:     $${stats.equity.toFixed(2)}`);
-console.log(`• Net Profit:       +$${stats.totalPnL.toFixed(2)} (${stats.totalPnLPct}%)`);
+console.log('\n📊 MARGIN SCALPER RESULTS:');
+console.log(`• Total Closed Trades: ${stats.totalTrades}`);
+console.log(`• Decisive Wins:       ${stats.winCount} (${stats.winRate}%)`);
+console.log(`• Decisive Losses:     ${stats.lossCount}`);
+console.log(`• Break-Evens ($0):    ${stats.breakEvenCount}`);
+console.log(`• Profit Factor:       ${stats.profitFactor}`);
+console.log(`• Exits Breakdown:     TP: ${takeProfits} | Trail: ${trailingStops} | BE: ${breakEvens} | Rev: ${reversalExits} | SL: ${stopLosses}`);
+console.log(`• Starting Balance:    $${stats.initialBalance.toFixed(2)}`);
+console.log(`• Final Balance:       $${stats.balance.toFixed(2)}`);
+console.log(`• Realized PnL:        +$${stats.realizedPnL.toFixed(2)}`);
+console.log(`• Total Equity:        $${stats.equity.toFixed(2)} (${stats.totalPnLPct >= 0 ? '+' : ''}${stats.totalPnLPct}%)`);
+
+const spotStats = spotEngine.getPortfolioState();
+console.log('\n🪙 PURE SPOT CRYPTO RESULTS:');
+console.log(`• Total Closed Trades: ${spotStats.totalTrades}`);
+console.log(`• Decisive Wins:       ${spotStats.winCount} (${spotStats.winRate}%)`);
+console.log(`• Decisive Losses:     ${spotStats.lossCount}`);
+console.log(`• Break-Evens:         ${spotStats.breakEvenCount}`);
+console.log(`• Starting Balance:    $${spotStats.initialBalance.toFixed(2)}`);
+console.log(`• Final Balance:       $${spotStats.balance.toFixed(2)}`);
+console.log(`• Realized PnL:        +$${spotStats.realizedPnL.toFixed(2)}`);
+console.log(`• Spot Equity:         $${spotStats.equity.toFixed(2)} (${spotStats.totalPnLPct >= 0 ? '+' : ''}${spotStats.totalPnLPct}%)`);
 console.log('================================================================');

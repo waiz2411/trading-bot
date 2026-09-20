@@ -29,15 +29,15 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
 
   const winCount = (portfolio.totalTrades !== undefined && portfolio.totalTrades > 0)
     ? (portfolio.winCount || 0)
-    : tradesList.filter(t => (t.finalPnL || 0) > 0).length;
+    : tradesList.filter(t => (t.finalPnL || 0) > 0.08 && !t.isBreakEven && t.exitReason !== 'BREAKEVEN_STOP_TRIGGER').length;
 
   const lossCount = (portfolio.totalTrades !== undefined && portfolio.totalTrades > 0)
     ? (portfolio.lossCount || 0)
-    : tradesList.filter(t => (t.finalPnL || 0) < 0).length;
+    : tradesList.filter(t => (t.finalPnL || 0) < -0.08 && !t.isBreakEven).length;
 
   const breakEvenCount = portfolio.breakEvenCount !== undefined
     ? portfolio.breakEvenCount
-    : tradesList.filter(t => (t.finalPnL || 0) === 0).length;
+    : tradesList.filter(t => t.isBreakEven || Math.abs(t.finalPnL || 0) <= 0.08 || t.exitReason === 'BREAKEVEN_STOP_TRIGGER').length;
 
   const decisive = winCount + lossCount;
   const winRate = (portfolio.totalTrades !== undefined && portfolio.totalTrades > 0)
@@ -109,7 +109,13 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
               <span>{isNetProfit ? '+' : ''}{totalPnL >= 0 ? `$${totalPnL}` : `-$${Math.abs(totalPnL)}`} ({totalPnLPct}%)</span>
             </div>
             <div className={`text-[10px] font-sans mt-0.5 ${isLive ? 'text-emerald-400' : isSpot ? 'text-emerald-300/80 group-hover:text-emerald-300' : 'text-indigo-300/80 group-hover:text-indigo-300'}`}>
-              {isLive ? `Live Balance: $${(balance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} 🟢` : `Balance: $${(balance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} (Edit ✏️)`}
+              {isLive
+                ? `Live Balance: $${(balance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} 🟢`
+                : isSpot
+                ? activePositions.length > 0
+                  ? `Free Cash: $${(portfolio.freeCash ?? 0).toFixed(2)} • 100% In Coin ✏️`
+                  : `Available Cash: $${(balance ?? 0).toFixed(2)} USDT ✏️`
+                : `Balance: $${(balance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} (Edit ✏️)`}
             </div>
             <div className={`absolute bottom-0 left-0 right-0 h-[2px] ${
               isSpot ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-gradient-to-r from-indigo-500 to-rose-500'
@@ -118,7 +124,7 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
         )}
       </div>
 
-      {/* Card 2: Unrealized PnL */}
+      {/* Card 2: Unrealized PnL / Spot Holding */}
       <div className="bg-terminal-850/80 border border-terminal-border rounded-xl p-3.5 relative overflow-hidden">
         <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
           <span className="font-mono uppercase tracking-wider text-[11px]">
@@ -126,12 +132,31 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
           </span>
           <Activity className="w-3.5 h-3.5 text-slate-400" />
         </div>
-        <div className={`text-xl font-bold font-mono tracking-tight ${isUnrealizedProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
-          {isUnrealizedProfit ? '+' : '-'}${Math.abs(unrealizedPnL).toFixed(2)}
-        </div>
-        <div className="text-[11px] font-mono mt-1 text-slate-400">
-          <span>{activePositions.length} active {isSpot ? 'holding' : 'scalp'}{activePositions.length !== 1 ? 's' : ''}</span>
-        </div>
+        {isSpot ? (
+          <>
+            <div className={`text-xl font-bold font-mono tracking-tight ${activePositions.length > 0 ? 'text-white' : 'text-slate-400'}`}>
+              ${activePositions.length > 0 ? (portfolio.holdingValue || ((activePositions[0]?.notional || 0) + unrealizedPnL)).toFixed(2) : '0.00'}
+            </div>
+            <div className={`text-[11px] font-mono mt-1 ${isUnrealizedProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {activePositions.length > 0 ? (
+                <span>
+                  {isUnrealizedProfit ? '+' : '-'}${Math.abs(unrealizedPnL).toFixed(2)} ({activePositions[0]?.symbol || 'Crypto'})
+                </span>
+              ) : (
+                <span className="text-slate-500">Standing by for setup</span>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className={`text-xl font-bold font-mono tracking-tight ${isUnrealizedProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {isUnrealizedProfit ? '+' : '-'}${Math.abs(unrealizedPnL).toFixed(2)}
+            </div>
+            <div className="text-[11px] font-mono mt-1 text-slate-400">
+              <span>{activePositions.length} active scalp{activePositions.length !== 1 ? 's' : ''}</span>
+            </div>
+          </>
+        )}
         <div className={`absolute bottom-0 left-0 right-0 h-[2px] ${isUnrealizedProfit ? 'bg-emerald-500' : 'bg-rose-500'} opacity-60`} />
       </div>
 
@@ -229,8 +254,10 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
           <div className="text-[11px] font-mono mt-1 text-slate-400 flex items-center justify-between">
             {isLive && !isConnected ? (
               <span className="text-amber-400">Awaiting Binance API</span>
+            ) : activePositions.length > 0 ? (
+              <span className="text-emerald-300 font-mono">${(portfolio.holdingValue || usedMargin).toFixed(2)} in {activePositions[0]?.symbol}</span>
             ) : (
-              <span>{activePositions.length > 0 ? `$${usedMargin.toFixed(2)} active` : 'Standing by'}</span>
+              <span className="text-slate-400 font-mono">${(balance ?? 0).toFixed(2)} USDT free</span>
             )}
             <span className="text-emerald-400 font-semibold">0x Lev (Safe)</span>
           </div>

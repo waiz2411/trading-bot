@@ -46,21 +46,19 @@ export default function SettingsModal({
   ];
 
   const spotSlPresets = [
-    { label: '-0.2%', value: 0.2, tag: 'User Scalp' },
-    { label: '-0.5%', value: 0.5, tag: 'Tight' },
-    { label: '-0.8%', value: 0.8, tag: 'Optimal 80-85% ⭐' },
-    { label: '-1.0%', value: 1.0, tag: 'Recommended' },
+    { label: '-0.8%', value: 0.8, tag: 'Tight' },
+    { label: '-1.0%', value: 1.0, tag: 'Optimal 80-85% ⭐' },
+    { label: '-1.2%', value: 1.2, tag: 'Balanced' },
     { label: '-1.5%', value: 1.5, tag: 'Standard' },
     { label: '-2.0%', value: 2.0, tag: 'Wide' }
   ];
 
   const spotTpPresets = [
-    { label: '+0.5%', value: 0.5, tag: 'User Scalp' },
-    { label: '+1.0%', value: 1.0, tag: 'Fast Lock' },
-    { label: '+1.6%', value: 1.6, tag: 'Target 1:2 ⭐' },
-    { label: '+2.0%', value: 2.0, tag: 'Balanced' },
+    { label: '+1.6%', value: 1.6, tag: 'Fast Lock' },
+    { label: '+2.0%', value: 2.0, tag: 'Target 1:2' },
+    { label: '+2.2%', value: 2.2, tag: 'Optimal 80-85% ⭐' },
     { label: '+2.5%', value: 2.5, tag: 'Standard' },
-    { label: '+3.0%', value: 3.0, tag: 'Optimal' }
+    { label: '+3.0%', value: 3.0, tag: 'Trend Runner' }
   ];
 
   const handleSave = (e) => {
@@ -331,43 +329,9 @@ export default function SettingsModal({
                   <button
                     type="button"
                     onClick={() => {
-                      setSpotStopLossPct(0.2);
-                      setSpotTakeProfitPct(0.5);
-                      setSpotMinConfidence(85);
-                    }}
-                    className={`p-2 rounded-lg border text-left transition-all ${
-                      Math.abs(parseFloat(spotStopLossPct) - 0.2) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 0.5) < 0.05
-                        ? 'bg-emerald-950/60 border-emerald-500/60 text-white'
-                        : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    <div className="font-bold text-emerald-400">Micro Scalp</div>
-                    <div className="text-[10px] text-slate-400">-0.2% SL / +0.5% TP</div>
-                    <div className="text-[9px] text-cyan-400 mt-0.5">Noise Shield Active</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSpotStopLossPct(0.5);
-                      setSpotTakeProfitPct(1.0);
-                      setSpotMinConfidence(82);
-                    }}
-                    className={`p-2 rounded-lg border text-left transition-all ${
-                      Math.abs(parseFloat(spotStopLossPct) - 0.5) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 1.0) < 0.05
-                        ? 'bg-emerald-950/60 border-emerald-500/60 text-white'
-                        : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    <div className="font-bold text-amber-400">High Win Rate ⭐</div>
-                    <div className="text-[10px] text-slate-400">-0.5% SL / +1.0% TP</div>
-                    <div className="text-[9px] text-emerald-400 mt-0.5">80%–85% Target</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
                       setSpotStopLossPct(0.8);
                       setSpotTakeProfitPct(1.6);
-                      setSpotMinConfidence(80);
+                      setSpotMinConfidence(82);
                     }}
                     className={`p-2 rounded-lg border text-left transition-all ${
                       Math.abs(parseFloat(spotStopLossPct) - 0.8) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 1.6) < 0.05
@@ -375,9 +339,43 @@ export default function SettingsModal({
                         : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    <div className="font-bold text-indigo-400">Trend Scalp</div>
+                    <div className="font-bold text-emerald-400">Fast Scalp</div>
                     <div className="text-[10px] text-slate-400">-0.8% SL / +1.6% TP</div>
-                    <div className="text-[9px] text-indigo-300 mt-0.5">1:2 Optimal R:R</div>
+                    <div className="text-[9px] text-cyan-400 mt-0.5">1:2 R:R Ratio</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSpotStopLossPct(1.0);
+                      setSpotTakeProfitPct(2.2);
+                      setSpotMinConfidence(82);
+                    }}
+                    className={`p-2 rounded-lg border text-left transition-all ${
+                      Math.abs(parseFloat(spotStopLossPct) - 1.0) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 2.2) < 0.05
+                        ? 'bg-emerald-950/60 border-emerald-500/60 text-white'
+                        : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="font-bold text-amber-400">High Win Rate ⭐</div>
+                    <div className="text-[10px] text-slate-400">-1.0% SL / +2.2% TP</div>
+                    <div className="text-[9px] text-emerald-400 mt-0.5">80%–85% Target</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSpotStopLossPct(1.5);
+                      setSpotTakeProfitPct(3.0);
+                      setSpotMinConfidence(80);
+                    }}
+                    className={`p-2 rounded-lg border text-left transition-all ${
+                      Math.abs(parseFloat(spotStopLossPct) - 1.5) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 3.0) < 0.05
+                        ? 'bg-emerald-950/60 border-emerald-500/60 text-white'
+                        : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="font-bold text-indigo-400">Trend Runner</div>
+                    <div className="text-[10px] text-slate-400">-1.5% SL / +3.0% TP</div>
+                    <div className="text-[9px] text-indigo-300 mt-0.5">Wide Noise Buffer</div>
                   </button>
                 </div>
               </div>

@@ -106,7 +106,8 @@ export default function TradeHistory({ closedTrades = [] }) {
           </thead>
           <tbody className="divide-y divide-terminal-border/60 text-xs font-mono">
             {closedTrades.map((trade, idx) => {
-              const isWin = trade.finalPnL > 0;
+              const isBE = trade.isBreakEven || trade.exitReason === 'BREAKEVEN_STOP_TRIGGER' || Math.abs(trade.finalPnL || 0) <= 0.08;
+              const isWin = !isBE && (trade.isWin || (trade.finalPnL || 0) > 0.08);
               const isLong = trade.side === 'LONG';
 
               return (
@@ -144,11 +145,13 @@ export default function TradeHistory({ closedTrades = [] }) {
                   {/* Outcome */}
                   <td className="py-3 px-4 text-center">
                     <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                      isWin
+                      isBE
+                        ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                        : isWin
                         ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                         : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                     }`}>
-                      {isWin ? 'PROFIT' : 'LOSS'}
+                      {isBE ? 'BREAK-EVEN' : isWin ? 'PROFIT' : 'LOSS'}
                     </span>
                   </td>
 
@@ -161,15 +164,15 @@ export default function TradeHistory({ closedTrades = [] }) {
 
                   {/* Realized PnL */}
                   <td className="py-3 px-4 text-right">
-                    <div className={`font-bold ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <div className={`font-bold ${isBE ? 'text-indigo-300' : isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
                       {trade.finalPnL >= 0 ? '+' : ''}${trade.finalPnL?.toFixed(2)}
                     </div>
                     <div className="flex items-center justify-end gap-1 text-[10px]">
-                      <span className={isWin ? 'text-emerald-500/80' : 'text-rose-500/80'}>
+                      <span className={isBE ? 'text-indigo-400/80' : isWin ? 'text-emerald-500/80' : 'text-rose-500/80'}>
                         {trade.finalPnLPercent >= 0 ? '+' : ''}{trade.finalPnLPercent?.toFixed(2)}%
                       </span>
                       {trade.roePercent !== undefined && (
-                        <span className={`font-bold ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        <span className={`font-bold ${isBE ? 'text-indigo-300' : isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
                           ({trade.roePercent >= 0 ? '+' : ''}{trade.roePercent?.toFixed(1)}% ROE)
                         </span>
                       )}

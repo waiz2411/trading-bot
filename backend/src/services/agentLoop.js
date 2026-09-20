@@ -23,17 +23,17 @@ export class AutonomousAgentLoop {
       defaultLeverage: 500,
       targetRiskRewardRatio: 1.3
     });
-    this.marginTradingEngine = new PaperTradingEngine(10);
+    this.marginTradingEngine = new PaperTradingEngine(100, 'MARGIN');
 
     // Account 2: Pure Spot Crypto (100% USDT balance allocation, 0x leverage, long only)
     this.spotRiskManager = {
       allocationPct: 100, // 100% of available free USDT
       maxConcurrentTrades: 1, // Pure spot coin focus
-      stopLossPct: 1.0, // 1% Stop Loss default
-      takeProfitPct: 2.5, // 2.5% Take Profit default
+      stopLossPct: 1.0, // 1.0% Stop Loss default (prevents noise stop-outs)
+      takeProfitPct: 2.2, // 2.2% Take Profit default (1:2.2 R:R)
       minConfidenceThreshold: 82
     };
-    this.spotTradingEngine = new PaperTradingEngine(10);
+    this.spotTradingEngine = new PaperTradingEngine(25, 'SPOT');
 
     this.isAutoTradingEnabled = false; // Bot is OFF by default until explicitly turned on
     this.isScanning = false;
@@ -192,10 +192,13 @@ export class AutonomousAgentLoop {
 
   updateSpotSettings(newSettings = {}) {
     if (newSettings.stopLossPct !== undefined) {
-      this.spotRiskManager.stopLossPct = Math.max(0.2, Math.min(10, Number(newSettings.stopLossPct)));
+      this.spotRiskManager.stopLossPct = Math.max(0.8, Math.min(10, Number(newSettings.stopLossPct)));
     }
     if (newSettings.takeProfitPct !== undefined) {
-      this.spotRiskManager.takeProfitPct = Math.max(0.5, Math.min(25, Number(newSettings.takeProfitPct)));
+      this.spotRiskManager.takeProfitPct = Math.max(1.6, Math.min(25, Number(newSettings.takeProfitPct)));
+    }
+    if (newSettings.minConfidenceThreshold !== undefined) {
+      this.spotRiskManager.minConfidenceThreshold = Math.max(70, Math.min(95, Number(newSettings.minConfidenceThreshold)));
     }
     this.log(`⚙️ Spot Strategy updated: SL: -${this.spotRiskManager.stopLossPct}%, TP: +${this.spotRiskManager.takeProfitPct}%`, 'INFO');
     return this.spotRiskManager;
