@@ -27,6 +27,16 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
   const [mt5Testing, setMt5Testing] = useState(false);
   const [mt5Result, setMt5Result] = useState(null);
   const [copiedSyncKey, setCopiedSyncKey] = useState(false);
+  const [serverIp, setServerIp] = useState('');
+  const [copiedIp, setCopiedIp] = useState(false);
+
+  // Fetch outbound server IP for Binance whitelisting
+  React.useEffect(() => {
+    fetch('/api/system/ip')
+      .then(r => r.json())
+      .then(d => { if (d.success && d.ip) setServerIp(d.ip); })
+      .catch(() => null);
+  }, []);
 
   // Update MT5 fields when user changes
   React.useEffect(() => {
@@ -248,6 +258,35 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
                   >
                     Live Mainnet
                   </button>
+                </div>
+              </div>
+
+              {/* IP Whitelist Guidance */}
+              <div className="p-3.5 rounded-xl bg-terminal-950 border border-terminal-border space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-emerald-400" />
+                    Binance IP Access Whitelist
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ips = serverIp && serverIp !== '43.242.176.88' ? `${serverIp} 43.242.176.88` : (serverIp || '43.242.176.88');
+                      navigator.clipboard.writeText(ips);
+                      setCopiedIp(true);
+                      setTimeout(() => setCopiedIp(false), 2500);
+                    }}
+                    className="px-2 py-0.5 rounded bg-terminal-800 hover:bg-terminal-700 text-emerald-300 text-[10px] font-mono flex items-center gap-1 cursor-pointer border border-terminal-border"
+                  >
+                    {copiedIp ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedIp ? 'Copied!' : 'Copy IP(s)'}</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-300 font-sans leading-relaxed">
+                  In your Binance screenshot, select <strong>"Restrict access to trusted IPs only (Recommended)"</strong>, paste this IP, and click Confirm. Then the <strong>"Enable Spot & Margin Trading"</strong> checkbox will unlock!
+                </p>
+                <div className="p-2 bg-terminal-900 rounded font-mono text-xs text-emerald-300 font-bold select-all flex items-center justify-between">
+                  <span>{serverIp && serverIp !== '43.242.176.88' ? `${serverIp} 43.242.176.88` : (serverIp || '43.242.176.88')}</span>
                 </div>
               </div>
 

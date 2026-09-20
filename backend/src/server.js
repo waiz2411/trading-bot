@@ -237,6 +237,17 @@ app.get('/api/broker/mt5/download-ea', (req, res) => {
   }
 });
 
+// Outbound Server IP (for Binance API IP Whitelist)
+app.get('/api/system/ip', async (req, res) => {
+  try {
+    const ipRes = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(3000) });
+    const data = await ipRes.json();
+    res.json({ success: true, ip: data.ip });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
 // API: Get complete dashboard state
 app.get('/api/dashboard', (req, res) => {
   try {
