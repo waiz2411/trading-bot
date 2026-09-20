@@ -350,16 +350,49 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
 
               {/* Binance Result Output */}
               {binanceResult && (
-                <div className={`p-3.5 rounded-xl border ${
+                <div className={`p-4 rounded-xl border ${
                   binanceResult.success
                     ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-200'
+                    : binanceResult.isGeoBlocked
+                    ? 'bg-amber-950/40 border-amber-500/50 text-amber-200'
                     : 'bg-rose-950/40 border-rose-500/50 text-rose-200'
                 }`}>
                   <div className="flex items-center gap-1.5 font-bold mb-1">
-                    {binanceResult.success ? <Check className="w-4 h-4 text-emerald-400" /> : <AlertCircle className="w-4 h-4 text-rose-400" />}
-                    <span>{binanceResult.success ? 'Binance Spot Connected!' : 'Connection Failed'}</span>
+                    {binanceResult.success ? (
+                      <Check className="w-4 h-4 text-emerald-400" />
+                    ) : binanceResult.isGeoBlocked ? (
+                      <Globe className="w-4 h-4 text-amber-400" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-400" />
+                    )}
+                    <span>
+                      {binanceResult.success
+                        ? 'Binance Spot Connected!'
+                        : binanceResult.isGeoBlocked
+                        ? 'Binance Geo-Block Notice (HTTP 451: US Cloud Server)'
+                        : 'Connection Failed'}
+                    </span>
                   </div>
-                  {binanceResult.error && <p className="text-[11px] font-sans">{binanceResult.error}</p>}
+                  {binanceResult.error && <p className="text-[11px] font-sans leading-relaxed">{binanceResult.error}</p>}
+                  {binanceResult.isGeoBlocked && (
+                    <div className="mt-3 p-3 rounded-lg bg-terminal-950 border border-amber-500/40 space-y-2 text-[11px] text-slate-300 font-sans">
+                      <div className="font-bold text-white flex items-center gap-1.5">
+                        <Zap className="w-3.5 h-3.5 text-amber-400" />
+                        <span>How to resolve:</span>
+                      </div>
+                      <p>
+                        Binance Global strictly restricts US IP addresses. Render's default server is hosted in Oregon (US).
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 text-slate-300">
+                        <li>
+                          <strong>Option 1 (Cloud):</strong> In your Render dashboard, create or re-deploy this service in <strong>Frankfurt (Europe)</strong> or <strong>Singapore</strong>. Both regions are 100% permitted by Binance Global!
+                        </li>
+                        <li>
+                          <strong>Option 2 (Local PC):</strong> Run the app on your laptop with <code>npm start</code>, where your local internet connection connects to Binance directly with zero blocks!
+                        </li>
+                      </ul>
+                    </div>
+                  )}
                   {binanceResult.balances && binanceResult.balances.length > 0 && (
                     <div className="mt-2 space-y-1 border-t border-emerald-500/30 pt-2">
                       <span className="text-[10px] uppercase text-slate-400">Live Free Balances:</span>

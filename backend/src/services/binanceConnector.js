@@ -20,6 +20,7 @@ export class BinanceConnector {
     this.lastChecked = null;
     this.cachedBalances = [];
     this.latencyMs = 0;
+    this.timeOffset = 0; // Milliseconds difference with Binance server clock
   }
 
   get baseUrl() {
@@ -61,14 +62,31 @@ export class BinanceConnector {
     return clean;
   }
 
+  async syncTime() {
+    try {
+      const startTime = Date.now();
+      const res = await fetch(`${this.baseUrl}/api/v3/time`);
+      if (res.ok) {
+        const data = await res.json();
+        const roundTrip = Math.round((Date.now() - startTime) / 2);
+        this.timeOffset = (data.serverTime - Date.now()) + roundTrip;
+      }
+    } catch (err) {
+      console.warn('Could not sync Binance server time:', err.message);
+    }
+  }
+
   signQuery(queryString = '') {
-    const timestamp = Date.now();
-    const withTimestamp = queryString ? `${queryString}&timestamp=${timestamp}` : `timestamp=${timestamp}`;
+    const timestamp = Date.now() + (this.timeOffset || 0);
+    const windowParam = 'recvWindow=60000';
+    const base = queryString
+      ? `${queryString}&${windowParam}&timestamp=${timestamp}`
+      : `${windowParam}&timestamp=${timestamp}`;
     const signature = crypto
       .createHmac('sha256', this.apiSecret)
-      .update(withTimestamp)
+      .update(base)
       .digest('hex');
-    return `${withTimestamp}&signature=${signature}`;
+    return `${base}&signature=${signature}`;
   }
 
   async testConnection() {
@@ -87,11 +105,24 @@ export class BinanceConnector {
       // 1. Test latency with ping
       const pingRes = await fetch(`${this.baseUrl}/api/v3/ping`, { method: 'GET' });
       if (!pingRes.ok) {
+        if (pingRes.status === 451) {
+          this.status = 'ERROR';
+          this.connected = false;
+          return {
+            success: false,
+            latencyMs: Date.now() - startTime,
+            isGeoBlocked: true,
+            error: 'Binance Global blocked this cloud server (HTTP 451: US Jurisdiction). Render\'s Oregon server is in the United States where Binance.com is restricted. Fix: (1) Re-deploy your Render app in region "Frankfurt (Europe)" or "Singapore" (both free on Render), OR (2) Run the bot locally on your laptop where Binance connects with zero restrictions.'
+          };
+        }
         throw new Error(`Binance ping failed with HTTP ${pingRes.status}`);
       }
       this.latencyMs = Date.now() - startTime;
 
-      // 2. Test authenticated account query
+      // 2. Synchronize server time to prevent clock drift errors
+      await this.syncTime();
+
+      // 3. Test authenticated account query
       const signedQuery = this.signQuery('');
       const accountRes = await fetch(`${this.baseUrl}/api/v3/account?${signedQuery}`, {
         method: 'GET',
@@ -105,10 +136,14 @@ export class BinanceConnector {
       if (!accountRes.ok) {
         this.status = 'ERROR';
         this.connected = false;
+        let errMsg = accountData.msg || `Binance API error (code ${accountData.code})`;
+        if (accountData.code === -2015) {
+          errMsg = 'Binance Error -2015: Invalid API-key, IP, or permissions. Please check: (1) "Enable Spot & Margin Trading" is checked in your Binance API settings, (2) If IP restriction is enabled, ensure your IP is added to the whitelist, and (3) You saved changes with Binance 2FA verification.';
+        }
         return {
           success: false,
           latencyMs: this.latencyMs,
-          error: accountData.msg || `Binance API error (code ${accountData.code})`
+          error: errMsg
         };
       }
 
