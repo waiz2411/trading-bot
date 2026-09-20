@@ -19,7 +19,9 @@
         "server": "",
         "syncToken": "NQ-SYNC-MO_001"
       }
-    }
+    },
+    "isAutoTradingEnabled": true,
+    "activeAccount": "MARGIN"
   },
   "test@gmail.com": {
     "id": "usr_live_002",
@@ -49,6 +51,8 @@
         "syncToken": "NQ-SYNC-VE_002",
         "lastUpdated": "2026-09-19T17:19:17.112Z"
       }
-    }
+    },
+    "isAutoTradingEnabled": false,
+    "activeAccount": "MARGIN"
   }
 }

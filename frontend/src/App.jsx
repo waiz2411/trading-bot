@@ -132,21 +132,25 @@ export default function App() {
     }
   };
 
+  const getAuthHeaders = useCallback((extra = {}) => {
+    const headers = { ...extra };
+    const storedToken = localStorage.getItem('nexus_auth_token');
+    if (storedToken) {
+      headers['Authorization'] = `Bearer ${storedToken}`;
+    }
+    return headers;
+  }, []);
+
   const fetchDashboard = useCallback(async () => {
     try {
-      const headers = {};
-      const storedToken = localStorage.getItem('nexus_auth_token');
-      if (storedToken) {
-        headers['Authorization'] = `Bearer ${storedToken}`;
-      }
-      const res = await fetch('/api/dashboard', { headers });
+      const res = await fetch('/api/dashboard', { headers: getAuthHeaders() });
       if (!res.ok) return;
       const json = await res.json();
       setData(json);
     } catch (err) {
       console.error('Failed to fetch dashboard data:', err);
     }
-  }, []);
+  }, [getAuthHeaders]);
 
   // Poll state every 2.5 seconds when authenticated
   useEffect(() => {
@@ -160,7 +164,7 @@ export default function App() {
     try {
       const res = await fetch('/api/account/switch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ account })
       });
       const json = await res.json();
@@ -180,12 +184,15 @@ export default function App() {
 
   const handleToggleAutoTrading = async () => {
     try {
-      const res = await fetch('/api/agent/toggle', { method: 'POST' });
+      const res = await fetch('/api/agent/toggle', {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
       const json = await res.json();
       if (json.success) {
         setData(prev => ({ ...prev, isAutoTradingEnabled: json.isAutoTradingEnabled }));
         showNotification(
-          json.isAutoTradingEnabled ? 'Auto-Trading Activated' : 'Auto-Trading Paused (Manual Mode)',
+          json.isAutoTradingEnabled ? 'Auto-Trading Activated (Running 24/7)' : 'Auto-Trading Paused (Manual Mode)',
           json.isAutoTradingEnabled ? 'SUCCESS' : 'WARN'
         );
       } else {
@@ -203,7 +210,7 @@ export default function App() {
     try {
       const res = await fetch('/api/agent/direction', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ direction })
       });
       const json = await res.json();
@@ -228,7 +235,7 @@ export default function App() {
     try {
       const res = await fetch('/api/portfolio/balance', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ balance: newBalance, closeOpenPositions, account: acc })
       });
       const json = await res.json();
@@ -250,7 +257,7 @@ export default function App() {
     try {
       const res = await fetch('/api/portfolio/adjust', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ delta, account: acc })
       });
       const json = await res.json();
@@ -270,7 +277,10 @@ export default function App() {
   const handleCloseTrade = async (id) => {
     setIsClosingId(id);
     try {
-      const res = await fetch(`/api/trades/close/${id}`, { method: 'POST' });
+      const res = await fetch(`/api/trades/close/${id}`, {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
       const json = await res.json();
       if (json.success) {
         showNotification(
@@ -289,7 +299,10 @@ export default function App() {
   const handleCloseAllTrades = async () => {
     if (!window.confirm(`Close all active positions in [${data.activeAccount}] immediately?`)) return;
     try {
-      const res = await fetch('/api/trades/close-all', { method: 'POST' });
+      const res = await fetch('/api/trades/close-all', {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
       const json = await res.json();
       if (json.success) {
         showNotification(`Closed all ${json.closedCount} active positions in [${data.activeAccount}]`, 'SUCCESS');
@@ -304,7 +317,7 @@ export default function App() {
     try {
       const res = await fetch('/api/trades/execute', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ symbol, side })
       });
       const json = await res.json();
@@ -330,7 +343,7 @@ export default function App() {
     try {
       const res = await fetch('/api/agent/settings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(newSettings)
       });
       const json = await res.json();
@@ -349,7 +362,7 @@ export default function App() {
     try {
       const res = await fetch('/api/portfolio/reset', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ account: acc })
       });
       const json = await res.json();

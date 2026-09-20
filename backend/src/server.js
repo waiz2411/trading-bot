@@ -67,7 +67,7 @@ app.post('/api/auth/logout', (req, res) => {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace(/^Bearer\s+/i, '');
     authService.logout(token);
-    agentLoop.setUserMode('demo@gmail.com', 'SIMULATED');
+    // Note: Background auto-trading bot continues running 24/7 autonomously on server
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -240,6 +240,12 @@ app.get('/api/broker/mt5/download-ea', (req, res) => {
 // API: Get complete dashboard state
 app.get('/api/dashboard', (req, res) => {
   try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = authService.validateToken(token);
+    if (user && user.email !== agentLoop.currentUser) {
+      agentLoop.setUserMode(user.email, user.mode);
+    }
     const data = agentLoop.getDashboardData();
     res.json(data);
   } catch (err) {
@@ -250,7 +256,11 @@ app.get('/api/dashboard', (req, res) => {
 // API: Toggle autonomous trading mode
 app.post('/api/agent/toggle', (req, res) => {
   try {
-    const newState = agentLoop.toggleAutoTrading();
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = authService.validateToken(token);
+    const userEmail = user ? user.email : agentLoop.currentUser;
+    const newState = agentLoop.toggleAutoTrading(null, userEmail);
     res.json({ success: true, isAutoTradingEnabled: newState });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
@@ -532,6 +542,7 @@ app.get('*', (req, res) => {
 });
 
 // Start agent loop and web server
+agentLoop.setUserMode('demo@gmail.com', 'SIMULATED');
 agentLoop.start();
 
 app.listen(PORT, '0.0.0.0', () => {

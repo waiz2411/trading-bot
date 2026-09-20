@@ -580,16 +580,49 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
 
               {/* MT5 Result Output Banner */}
               {mt5Result && (
-                <div className={`p-3.5 rounded-xl border ${
+                <div className={`p-4 rounded-xl border ${
                   mt5Result.success
                     ? 'bg-amber-950/40 border-amber-500/50 text-amber-200'
+                    : mt5Result.isTopUpRequired
+                    ? 'bg-blue-950/40 border-blue-500/50 text-blue-200'
                     : 'bg-rose-950/40 border-rose-500/50 text-rose-200'
                 }`}>
                   <div className="flex items-center gap-1.5 font-bold mb-1">
-                    {mt5Result.success ? <Check className="w-4 h-4 text-emerald-400" /> : <AlertCircle className="w-4 h-4 text-rose-400" />}
-                    <span>{mt5Result.success ? 'MetaTrader 5 Connected!' : 'Connection Status'}</span>
+                    {mt5Result.success ? (
+                      <Check className="w-4 h-4 text-emerald-400" />
+                    ) : mt5Result.isTopUpRequired ? (
+                      <Cpu className="w-4 h-4 text-blue-400" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-400" />
+                    )}
+                    <span>
+                      {mt5Result.success
+                        ? 'MetaTrader 5 Connected!'
+                        : mt5Result.isTopUpRequired
+                        ? 'MetaApi Live Cloud Notice: Free Alternative Available'
+                        : 'Connection Status'}
+                    </span>
                   </div>
-                  {mt5Result.error && <p className="text-[11px] font-sans">{mt5Result.error}</p>}
+                  {mt5Result.error && <p className="text-[11px] font-sans leading-relaxed">{mt5Result.error}</p>}
+                  {mt5Result.isTopUpRequired && (
+                    <div className="mt-3 p-3 rounded-lg bg-terminal-950 border border-blue-500/40 space-y-2">
+                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <Zap className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Recommended Solution ($0 Fee):</span>
+                      </div>
+                      <p className="text-[11px] text-slate-300">
+                        MetaApi charges monthly fees to deploy live servers in their cloud. You can bypass this completely for <strong>$0 Free</strong> by using our lightweight Expert Advisor on your MT5 terminal!
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setMt5Method('EA')}
+                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-blue-600/20 cursor-pointer"
+                      >
+                        <Cpu className="w-3.5 h-3.5" />
+                        <span>Switch to Free MT5 EA Sync Tab &rarr;</span>
+                      </button>
+                    </div>
+                  )}
                   {mt5Result.message && <p className="text-[11px] font-sans text-amber-300">{mt5Result.message}</p>}
                   {mt5Result.accountInfo && (
                     <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono border-t border-amber-500/30 pt-2">

@@ -6,6 +6,9 @@
  * 3. Real-time balance, equity, leverage telemetry & order execution
  */
 
+// Enable SSL for MetaApi self-signed regional certificates
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 const OPERATOR_MASTER_TOKEN = 'eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI0M2VkZGI5NGFiYzIwNDQ4MDQ3ZTI5ODU5YmQyMGE4MCIsImFjY2Vzc1J1bGVzIjpbeyJpZCI6InRyYWRpbmctYWNjb3VudC1tYW5hZ2VtZW50LWFwaSIsIm1ldGhvZHMiOlsidHJhZGluZy1hY2NvdW50LW1hbmFnZW1lbnQtYXBpOnJlc3Q6cHVibGljOio6KiJdLCJyb2xlcyI6WyJyZWFkZXIiLCJ3cml0ZXIiXSwicmVzb3VyY2VzIjpbIio6JFVTRVJfSUQkOioiXX0seyJpZCI6Im1ldGFhcGktcmVzdC1hcGkiLCJtZXRob2RzIjpbIm1ldGFhcGktYXBpOnJlc3Q6cHVibGljOio6KiJdLCJyb2xlcyI6WyJyZWFkZXIiLCJ3cml0ZXIiXSwicmVzb3VyY2VzIjpbIio6JFVTRVJfSUQkOioiXX0seyJpZCI6Im1ldGFhcGktcnBjLWFwaSIsIm1ldGhvZHMiOlsibWV0YWFwaS1hcGk6d3M6cHVibGljOio6KiJdLCJyb2xlcyI6WyJyZWFkZXIiLCJ3cml0ZXIiXSwicmVzb3VyY2VzIjpbIio6JFVTRVJfSUQkOioiXX0seyJpZCI6Im1ldGFhcGktcmVhbC10aW1lLXN0cmVhbWluZy1hcGkiLCJtZXRob2RzIjpbIm1ldGFhcGktYXBpOndzOnB1YmxpYzoqOioiXSwicm9sZXMiOlsicmVhZGVyIiwid3JpdGVyIl0sInJlc291cmNlcyI6WyIqOiRVU0VSX0lEJDoqIl19LHsiaWQiOiJtZXRhc3RhdHMtYXBpIiwibWV0aG9kcyI6WyJtZXRhc3RhdHMtYXBpOnJlc3Q6cHVibGljOio6KiJdLCJyb2xlcyI6WyJyZWFkZXIiLCJ3cml0ZXIiXSwicmVzb3VyY2VzIjpbIio6JFVTRVJfSUQkOioiXX0seyJpZCI6InJpc2stbWFuYWdlbWVudC1hcGkiLCJtZXRob2RzIjpbInJpc2stbWFuYWdlbWVudC1hcGk6cmVzdDpwdWJsaWM6KjoqIl0sInJvbGVzIjpbInJlYWRlciIsIndyaXRlciJdLCJyZXNvdXJjZXMiOlsiKjokVVNFUl9JRCQ6KiJdfSx7ImlkIjoiY29weWZhY3RvcnktYXBpIiwibWV0aG9kcyI6WyJjb3B5ZmFjdG9yeS1hcGk6cmVzdDpwdWJsaWM6KjoqIl0sInJvbGVzIjpbInJlYWRlciIsIndyaXRlciJdLCJyZXNvdXJjZXMiOlsiKjokVVNFUl9JRCQ6KiJdfSx7ImlkIjoibXQtbWFuYWdlci1hcGkiLCJtZXRob2RzIjpbIm10LW1hbmFnZXItYXBpOnJlc3Q6ZGVhbGluZzoqOioiLCJtdC1tYW5hZ2VyLWFwaTpyZXN0OnB1YmxpYzoqOioiXSwicm9sZXMiOlsicmVhZGVyIiwid3JpdGVyIl0sInJlc291cmNlcyI6WyIqOiRVU0VSX0lEJDoqIl19LHsiaWQiOiJiaWxsaW5nLWFwaSIsIm1ldGhvZHMiOlsiYmlsbGluZy1hcGk6cmVzdDpwdWJsaWM6KjoqIl0sInJvbGVzIjpbInJlYWRlciJdLCJyZXNvdXJjZXMiOlsiKjokVVNFUl9JRCQ6KiJdfV0sImlnbm9yZVJhdGVMaW1pdHMiOmZhbHNlLCJ0b2tlbklkIjoiMjAyMTAyMTMiLCJpbXBlcnNvbmF0ZWQiOmZhbHNlLCJyZWFsVXNlcklkIjoiNDNlZGRiOTRhYmMyMDQ0ODA0N2UyOTg1OWJkMjBhODAiLCJpYXQiOjE3ODk4MzU4NTksImV4cCI6MTc5NzYxMTg1OX0.SOzddmqgpiR72vjttAejUt6irNFVDda14-CkkXrRagvrm5a3iU1ZypMsRuafo2lwjA9dqecHJd1TB7yk4lb_kNnMQVgKOR_7GN_E3suDKuyDvGU_FeHWNI-5wXyw0VcLhXzfxaCQ9GxSF9JkDrrVosHOZ4cfOsgSSiUeiN2qVcNeQ1Y674GjETWFQXkYvp9tvnVRCN7v_fKafbvrLC-69V84hwXOL0aAhZylHyfa6s7pdaH96TUeGp-8LBxGitwnBpW28NrlWLd9HPA7tEVKMCRKYhkhy2be4yAC4H15v3HSL9pZ2ZD3PhaGRYy0J7QgBphKdkLp5r4ZV2vARuBPJSX0b-8RNv_FKrejf-WEOAFJRrY3teWP7DRNU2TJskQ0bmRWgJi_vJ40Yf6JknY0WfXjqUf9hz75Z4MHoiqr7XP8E93Mq77zqPuVMgXnCnv8aRKbv_hwvxudkW33KsmIui9l3AwIZVAFH-p114ZnWQZtJC5c6urDbwhh5vnvEwHCjv9PYnVkvWTsktbNqK_1U3hbN69DSDfUg41XuEgdbBp0bTztGVR9V9G-A3X8dhMArjIeQeAXIyexrxSFnYaOSxqvkfuIBnmD3ihOv4HQbbSUf-3-wLK4tZUjMRm0y8-e4FOCKqA2jgzBDoeB1PQcnC00DBTIHxks3KK6rwicrpM';
 
 export class MT5Connector {
@@ -142,7 +145,17 @@ export class MT5Connector {
         this.latencyMs = Date.now() - startTime;
         return metaResult;
       } catch (err) {
-        console.warn('MetaApi connection failed, falling back to gateway:', err.message);
+        console.warn('MetaApi connection failed:', err.message);
+        this.connected = false;
+        this.status = 'DISCONNECTED';
+        this.lastChecked = new Date().toISOString();
+        return {
+          success: false,
+          connected: false,
+          isTopUpRequired: Boolean(err.isTopUpRequired),
+          error: err.message,
+          connectionType: 'METAAPI'
+        };
       }
     }
 
@@ -290,10 +303,22 @@ export class MT5Connector {
 
     // 3. Deploy if not deployed
     if (account.state !== 'DEPLOYED') {
-      await fetch(`${provisioningBase}/users/current/accounts/${accountId}/deploy`, {
+      const deployRes = await fetch(`${provisioningBase}/users/current/accounts/${accountId}/deploy`, {
         method: 'POST',
         headers: { 'auth-token': token }
-      }).catch(() => null);
+      });
+      if (!deployRes.ok) {
+        const deployErr = await deployRes.json().catch(() => ({}));
+        const rawMsg = deployErr.message || '';
+        if (deployRes.status === 403 || rawMsg.includes('top up') || deployErr.error === 'ForbiddenError') {
+          const err = new Error(
+            `MetaApi Cloud requires account credits to host live broker accounts (${this.server}). Top up balance at app.metaapi.cloud, or switch to the Free MT5 EA Sync tab to connect your Vault Markets terminal with zero fees.`
+          );
+          err.isTopUpRequired = true;
+          throw err;
+        }
+        throw new Error(rawMsg || `MetaApi deployment failed with status ${deployRes.status}`);
+      }
     }
 
     // 4. Fetch live account information

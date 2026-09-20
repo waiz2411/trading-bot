@@ -52,6 +52,8 @@ class AuthService {
         name: 'Demo Paper Trader',
         role: 'DEMO',
         mode: 'SIMULATED',
+        isAutoTradingEnabled: false,
+        activeAccount: 'MARGIN',
         createdAt: '2026-09-01T00:00:00.000Z',
         brokerConnections: {
           binance: { connected: false, apiKey: '', isTestnet: true },
@@ -68,6 +70,8 @@ class AuthService {
         name: 'Main Live Account',
         role: 'LIVE_BROKER',
         mode: 'LIVE',
+        isAutoTradingEnabled: false,
+        activeAccount: 'MARGIN',
         createdAt: '2026-09-01T00:00:00.000Z',
         brokerConnections: {
           binance: {
@@ -92,8 +96,14 @@ class AuthService {
       };
     }
 
-    // Ensure all existing users have syncToken
+    // Ensure all existing users have syncToken, isAutoTradingEnabled, and activeAccount
     for (const user of Object.values(this.users)) {
+      if (user.isAutoTradingEnabled === undefined) {
+        user.isAutoTradingEnabled = false;
+      }
+      if (!user.activeAccount) {
+        user.activeAccount = 'MARGIN';
+      }
       if (!user.brokerConnections) user.brokerConnections = {};
       if (!user.brokerConnections.mt5) user.brokerConnections.mt5 = {};
       if (!user.brokerConnections.mt5.syncToken) {
@@ -132,6 +142,8 @@ class AuthService {
       name: (name || cleanEmail.split('@')[0]).trim(),
       role: 'CLIENT',
       mode: 'LIVE', // New client accounts are real live accounts ready to connect brokers
+      isAutoTradingEnabled: false,
+      activeAccount: 'MARGIN',
       createdAt: new Date().toISOString(),
       brokerConnections: {
         binance: {
@@ -254,6 +266,28 @@ class AuthService {
     throw new Error('Unknown broker type');
   }
 
+  setUserAutoTrading(email, isEnabled) {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const user = this.users[cleanEmail];
+    if (user) {
+      user.isAutoTradingEnabled = Boolean(isEnabled);
+      this.saveUsers();
+      return user.isAutoTradingEnabled;
+    }
+    return false;
+  }
+
+  setUserActiveAccount(email, activeAccount) {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const user = this.users[cleanEmail];
+    if (user) {
+      user.activeAccount = (activeAccount || 'MARGIN').toUpperCase();
+      this.saveUsers();
+      return user.activeAccount;
+    }
+    return 'MARGIN';
+  }
+
   sanitizeUser(user) {
     return {
       id: user.id,
@@ -261,6 +295,8 @@ class AuthService {
       name: user.name,
       role: user.role,
       mode: user.mode,
+      isAutoTradingEnabled: Boolean(user.isAutoTradingEnabled),
+      activeAccount: user.activeAccount || 'MARGIN',
       brokerConnections: {
         binance: {
           connected: user.brokerConnections?.binance?.connected || false,

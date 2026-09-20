@@ -50,33 +50,40 @@ export class AutonomousAgentLoop {
   setUserMode(userEmail, mode = 'SIMULATED') {
     this.currentUser = userEmail;
     this.currentMode = mode;
-    this.isAutoTradingEnabled = false; // Always start paused on mode/session change
 
-    // Synchronize broker connectors for this specific user session
+    // Synchronize broker connectors and persistent user state
     try {
       const user = authService.getUser(userEmail);
-      if (user && user.brokerConnections) {
-        if (user.brokerConnections.binance) {
-          binanceConnector.configure({
-            apiKey: user.brokerConnections.binance.apiKey || '',
-            apiSecret: user.brokerConnections.binance.apiSecret || '',
-            isTestnet: user.brokerConnections.binance.isTestnet ?? true
-          });
+      if (user) {
+        if (user.isAutoTradingEnabled !== undefined) {
+          this.isAutoTradingEnabled = Boolean(user.isAutoTradingEnabled);
         }
-        if (user.brokerConnections.mt5) {
-          mt5Connector.configure({
-            login: user.brokerConnections.mt5.login || '',
-            password: user.brokerConnections.mt5.password || '',
-            server: user.brokerConnections.mt5.server || '',
-            gatewayUrl: user.brokerConnections.mt5.gatewayUrl || 'http://localhost:5001'
-          });
+        if (user.activeAccount) {
+          this.activeAccount = user.activeAccount;
+        }
+        if (user.brokerConnections) {
+          if (user.brokerConnections.binance) {
+            binanceConnector.configure({
+              apiKey: user.brokerConnections.binance.apiKey || '',
+              apiSecret: user.brokerConnections.binance.apiSecret || '',
+              isTestnet: user.brokerConnections.binance.isTestnet ?? true
+            });
+          }
+          if (user.brokerConnections.mt5) {
+            mt5Connector.configure({
+              login: user.brokerConnections.mt5.login || '',
+              password: user.brokerConnections.mt5.password || '',
+              server: user.brokerConnections.mt5.server || '',
+              gatewayUrl: user.brokerConnections.mt5.gatewayUrl || 'http://localhost:5001'
+            });
+          }
         }
       }
     } catch (err) {
-      console.warn('Could not sync user broker configs:', err.message);
+      console.warn('Could not sync user configs:', err.message);
     }
 
-    this.log(`👤 Active session: ${userEmail} (${mode === 'LIVE' ? '🔴 LIVE BROKER MODE' : '🟢 SIMULATED DEMO'}) - Bot Paused`, 'INFO');
+    this.log(`👤 Active session: ${userEmail} (${mode === 'LIVE' ? '🔴 LIVE BROKER MODE' : '🟢 SIMULATED DEMO'}) - Bot ${this.isAutoTradingEnabled ? 'ACTIVE 24/7' : 'PAUSED'}`, 'INFO');
   }
 
   // Backwards compatibility accessors
@@ -101,6 +108,9 @@ export class AutonomousAgentLoop {
   switchAccount(account) {
     const target = (account || '').toUpperCase() === 'SPOT' ? 'SPOT' : 'MARGIN';
     this.activeAccount = target;
+    if (this.currentUser) {
+      authService.setUserActiveAccount(this.currentUser, target);
+    }
     this.log(`🔄 Switched active view to: [${target}] Account`, 'INFO');
     return this.getDashboardData();
   }
@@ -132,9 +142,13 @@ export class AutonomousAgentLoop {
     }
   }
 
-  toggleAutoTrading() {
-    const targetState = !this.isAutoTradingEnabled;
-    if (targetState && this.currentMode === 'LIVE') {
+  toggleAutoTrading(targetState = null, userEmail = null) {
+    const email = userEmail || this.currentUser;
+    const user = authService.getUser(email);
+    const mode = user ? user.mode : this.currentMode;
+    const target = targetState !== null ? Boolean(targetState) : !this.isAutoTradingEnabled;
+
+    if (target && mode === 'LIVE') {
       if (this.activeAccount === 'SPOT' && !binanceConnector.getStatus().connected) {
         throw new Error('Cannot start auto-trading: Binance Spot API is not connected. Connect Binance in Broker settings first.');
       }
@@ -142,9 +156,13 @@ export class AutonomousAgentLoop {
         throw new Error('Cannot start auto-trading: MetaTrader 5 Margin broker is not connected. Connect MT5 in Broker settings first.');
       }
     }
-    this.isAutoTradingEnabled = targetState;
+
+    this.isAutoTradingEnabled = target;
+    if (email) {
+      authService.setUserAutoTrading(email, target);
+    }
     this.log(
-      `Autonomous execution switched to: ${this.isAutoTradingEnabled ? 'ENABLED (Auto-open & auto-close active)' : 'DISABLED (Manual only)'}`,
+      `Autonomous execution switched to: ${this.isAutoTradingEnabled ? 'ENABLED (Auto-open & auto-close active 24/7)' : 'DISABLED (Manual only)'}`,
       this.isAutoTradingEnabled ? 'SUCCESS' : 'WARN'
     );
     return this.isAutoTradingEnabled;
