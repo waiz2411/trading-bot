@@ -15,7 +15,7 @@ export default function SettingsModal({
   // Margin Settings State
   const initialMargin = marginSettings || settings || {};
   const [riskPerTradePct, setRiskPerTradePct] = useState(initialMargin.riskPerTradePct || 1.5);
-  const [maxConcurrentTrades, setMaxConcurrentTrades] = useState(initialMargin.maxConcurrentTrades || 4);
+  const [maxConcurrentTrades, setMaxConcurrentTrades] = useState(initialMargin.maxConcurrentTrades || 2);
   const [minConfidenceThreshold, setMinConfidenceThreshold] = useState(initialMargin.minConfidenceThreshold || 82);
   const [targetRiskRewardRatio, setTargetRiskRewardRatio] = useState(initialMargin.targetRiskRewardRatio || 1.3);
   const [defaultLeverage, setDefaultLeverage] = useState(initialMargin.defaultLeverage || 500);
@@ -27,6 +27,13 @@ export default function SettingsModal({
   const [spotMinConfidence, setSpotMinConfidence] = useState(initialSpot.minConfidenceThreshold || 82);
 
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  const slotPresets = [
+    { label: '1 Slot', value: 1, tag: 'Sniper Focus' },
+    { label: '2 Slots', value: 2, tag: 'Optimal ⭐' },
+    { label: '3 Slots', value: 3, tag: 'Active' },
+    { label: '4 Slots', value: 4, tag: 'Max Limit' }
+  ];
 
   const rrPresets = [
     { label: '1:1.0', value: 1.0, tag: 'Ultra Fast' },
@@ -263,17 +270,42 @@ export default function SettingsModal({
                   <label className="text-slate-300 font-bold uppercase tracking-wider text-[11px]">
                     Max Concurrent Positions
                   </label>
-                  <span className="text-indigo-400 font-bold text-sm">{maxConcurrentTrades} trades</span>
+                  <span className="text-indigo-400 font-bold text-sm">
+                    {maxConcurrentTrades} {Number(maxConcurrentTrades) === 1 ? 'trade (Sniper)' : 'trades'}
+                  </span>
                 </div>
                 <input
                   type="range"
                   min="1"
-                  max="8"
+                  max="4"
                   step="1"
                   value={maxConcurrentTrades}
-                  onChange={(e) => setMaxConcurrentTrades(e.target.value)}
+                  onChange={(e) => setMaxConcurrentTrades(Number(e.target.value))}
                   className="w-full accent-indigo-500 cursor-pointer"
                 />
+                <div className="grid grid-cols-4 gap-1.5 mt-2">
+                  {slotPresets.map((p) => {
+                    const active = Number(maxConcurrentTrades) === p.value;
+                    return (
+                      <button
+                        key={p.value}
+                        type="button"
+                        onClick={() => setMaxConcurrentTrades(p.value)}
+                        className={`px-2 py-1.5 rounded text-xs font-semibold border transition-all text-center ${
+                          active
+                            ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
+                            : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                        }`}
+                      >
+                        <div className="font-bold">{p.label}</div>
+                        <div className="text-[10px] opacity-75 font-normal truncate">{p.tag}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  Sniper architecture: Focuses leverage on top-ranked setups instead of diluting across correlated pairs.
+                </p>
               </div>
 
               {/* Min Confluence Score */}

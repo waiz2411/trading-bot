@@ -13,10 +13,10 @@ export class AutonomousAgentLoop {
     this.currentUser = 'demo@gmail.com';
     this.currentMode = 'SIMULATED'; // 'SIMULATED' | 'LIVE'
 
-    // Account 1: Margin Scalper (500x leverage, 4 slots, 1.5% risk)
+    // Account 1: Margin Scalper (500x leverage, 2 sniper slots, 1.5% risk)
     this.marginRiskManager = new RiskManager({
       riskPerTradePct: 1.5,
-      maxConcurrentTrades: 4,
+      maxConcurrentTrades: 2,
       minConfidenceThreshold: 82,
       tradeDirection: 'BOTH',
       tradingStyle: 'SCALPING',
@@ -243,6 +243,7 @@ export class AutonomousAgentLoop {
       const marginRiskSettings = this.marginRiskManager.getSettings();
 
       const validSpotBuys = [];
+      const validMarginSignals = [];
 
       for (const asset of markets) {
         const technicals = calculateTechnicalMetrics(asset.candles);
@@ -252,6 +253,10 @@ export class AutonomousAgentLoop {
 
         // 3A. Margin Scalper Confluence
         const signal = evaluateStrategyConfluence(asset, technicals, marginRiskSettings);
+        const isMarginCooldown = (this.assetCooldowns.get(asset.symbol) || 0) > 0;
+        if (!isMarginCooldown && (signal.action === 'STRONG_BUY' || signal.action === 'STRONG_SELL')) {
+          validMarginSignals.push({ asset, signal });
+        }
 
         // 3B. Pure Spot Crypto Confluence (Decoupled, 75%+ Win Rate Edge)
         let spotSignal = null;
@@ -282,21 +287,30 @@ export class AutonomousAgentLoop {
         };
 
         scanResults.push(scanItem);
+      }
 
-        // ==========================================
-        // 4A. MARGIN SCALPER AUTO-OPEN (500x Lev)
-        // ==========================================
-        const isMarginCooldown = (this.assetCooldowns.get(asset.symbol) || 0) > 0;
+      this.latestScanResults = scanResults;
 
-        if (this.isAutoTradingEnabled && !isMarginCooldown && (signal.action === 'STRONG_BUY' || signal.action === 'STRONG_SELL')) {
+      // ==========================================
+      // 4A. MARGIN SCALPER AUTO-OPEN (Sniper Ranking - Quality > Quantity)
+      // ==========================================
+      if (this.isAutoTradingEnabled && validMarginSignals.length > 0) {
+        // Rank all candidate setups across global markets by confidence score!
+        validMarginSignals.sort((a, b) => b.signal.confidence - a.signal.confidence);
+
+        for (const { asset, signal } of validMarginSignals) {
           const portfolioState = this.marginTradingEngine.getPortfolioState();
-          const riskEval = this.marginRiskManager.evaluateTradeRisk(portfolioState, signal, asset);
+          if (portfolioState.activePositions.length >= this.marginRiskManager.maxConcurrentTrades) {
+            break; // Max slots occupied
+          }
 
+          const riskEval = this.marginRiskManager.evaluateTradeRisk(portfolioState, signal, asset);
           if (riskEval.allowed) {
             const pos = this.marginTradingEngine.openPosition({
               symbol: asset.symbol,
               name: asset.name,
               category: asset.category,
+              decimals: asset.decimals !== undefined ? asset.decimals : 4,
               side: signal.side,
               entryPrice: signal.entryPrice,
               stopLoss: signal.stopLoss,
@@ -315,7 +329,7 @@ export class AutonomousAgentLoop {
             });
 
             this.log(
-              `⚡ [MARGIN] SCALP OPEN: ${signal.side} ${asset.symbol} @ $${signal.entryPrice} (${riskEval.leverage}x Lev, Margin: $${riskEval.margin}). Target: $${signal.takeProfit} | Stop: $${signal.stopLoss}`,
+              `⚡ [MARGIN] SCALP OPEN: ${signal.side} ${asset.symbol} @ $${signal.entryPrice} (${riskEval.leverage}x Lev, Margin: $${riskEval.margin}). Target: $${signal.takeProfit} | Stop: $${signal.stopLoss} (Confidence: ${signal.confidence}%)`,
               'SUCCESS'
             );
 
@@ -337,8 +351,6 @@ export class AutonomousAgentLoop {
           }
         }
       }
-
-      this.latestScanResults = scanResults;
 
       // ==========================================
       // 4B. PURE SPOT CRYPTO AUTO-OPEN (100% Capital Allocation)

@@ -7,7 +7,7 @@
 export class RiskManager {
   constructor(options = {}) {
     this.riskPerTradePct = options.riskPerTradePct || 2.0; // Risk 2.0% of total equity per trade
-    this.maxConcurrentTrades = options.maxConcurrentTrades || 4; // Max 4 simultaneous positions
+    this.maxConcurrentTrades = options.maxConcurrentTrades || 2; // Default 2 sniper positions max
     this.maxPositionAllocationPct = options.maxPositionAllocationPct || 25; // Max 25% notional per asset for spot
     this.maxDailyDrawdownPct = options.maxDailyDrawdownPct || 5.0; // Circuit breaker at 5% daily loss
     this.minConfidenceThreshold = options.minConfidenceThreshold || 82; // 82% for sniper scalps

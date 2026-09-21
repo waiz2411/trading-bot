@@ -222,13 +222,15 @@ export class MarketDataService {
 
       // Update micro-trend momentum (persists across ticks to form coherent trending swings)
       if (!item.momentumTicks || item.momentumTicks <= 0) {
-        item.momentumTicks = Math.floor(6 + Math.random() * 8); // 6-14 ticks per micro-swing
-        item.trendDirection = Math.random() > 0.48 ? 1 : -1;
+        item.momentumTicks = Math.floor(25 + Math.random() * 25); // 25-50 ticks per market wave (2-4 minutes)
+        if (!item.macroDirection) item.macroDirection = Math.random() > 0.5 ? 1 : -1;
+        if (Math.random() < 0.18) item.macroDirection *= -1; // Occasional macro trend shift
+        item.trendDirection = Math.random() > 0.28 ? item.macroDirection : -item.macroDirection; // 72% trend impulse, 28% pullback
       }
       item.momentumTicks--;
 
-      const swing = item.trendDirection * vol * item.price * (0.35 + Math.random() * 0.3);
-      const noise = (Math.random() - 0.5) * vol * item.price * 0.3;
+      const swing = item.trendDirection * vol * item.price * (0.35 + Math.random() * 0.25);
+      const noise = (Math.random() - 0.5) * vol * item.price * 0.15;
       const delta = swing + noise;
       const newPrice = Number(Math.max(0.0001, item.price + delta).toFixed(item.decimals));
 

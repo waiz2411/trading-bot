@@ -184,6 +184,7 @@ export class PaperTradingEngine {
       symbol,
       name,
       category,
+      decimals: orderData.decimals !== undefined ? orderData.decimals : 4,
       side, // 'SHORT' or 'LONG'
       entryPrice,
       currentPrice: entryPrice,
@@ -244,9 +245,9 @@ export class PaperTradingEngine {
 
     this.balance += pnlRounded;
 
-    const isBreakEven = exitReason === 'BREAKEVEN_STOP_TRIGGER' || Math.abs(pnlRounded) <= 0.08;
-    const isWin = !isBreakEven && pnlRounded > 0.08;
-    const isLoss = !isBreakEven && pnlRounded < -0.08;
+    const isBreakEven = Math.abs(pnlRounded) <= 0.02;
+    const isWin = pnlRounded > 0.02;
+    const isLoss = pnlRounded < -0.02;
 
     if (isBreakEven) {
       this.breakEvenCount++;
@@ -326,21 +327,22 @@ export class PaperTradingEngine {
       }
 
       // ====================================================
-      // 1. SCALPING DYNAMIC TRAILING STOP & BREAK-EVEN (65% & 85% Zones)
+      // 1. SCALPING DYNAMIC TRAILING STOP & BREAK-EVEN (40% & 65% Zones)
       // ====================================================
       if (this.trailingStopsEnabled) {
+        const dec = pos.decimals !== undefined ? pos.decimals : 4;
         if (pos.side === 'SHORT') {
           const runDown = pos.entryPrice - pos.lowestPrice;
 
-          // Scalp Break-Even: Price dropped 65% of target distance -> Lock in Break-Even ($0 loss)!
-          if (!pos.breakEvenLocked && runDown >= pos.targetDistance * 0.65) {
-            pos.stopLoss = Number((pos.entryPrice - pos.stopDistance * 0.02).toFixed(4));
+          // Scalp Break-Even: Price dropped 40% of target distance -> Lock in Break-Even ($0 loss)!
+          if (!pos.breakEvenLocked && runDown >= pos.targetDistance * 0.40) {
+            pos.stopLoss = Number((pos.entryPrice - pos.stopDistance * 0.05).toFixed(dec));
             pos.breakEvenLocked = true;
           }
 
-          // Scalp Trailing Stop: Price reached 85% of target distance -> Trail closely behind lowest price!
-          if (runDown >= pos.targetDistance * 0.85) {
-            const newTrailStop = Number((pos.lowestPrice + pos.stopDistance * 0.35).toFixed(4));
+          // Scalp Trailing Stop: Price reached 65% of target distance -> Trail closely behind lowest price!
+          if (runDown >= pos.targetDistance * 0.65) {
+            const newTrailStop = Number((pos.lowestPrice + pos.stopDistance * 0.25).toFixed(dec));
             if (newTrailStop < pos.stopLoss) {
               pos.stopLoss = newTrailStop;
               pos.trailingStopActive = true;
@@ -349,15 +351,15 @@ export class PaperTradingEngine {
         } else if (pos.side === 'LONG') {
           const runUp = pos.highestPrice - pos.entryPrice;
 
-          // Scalp Break-Even: Price gained 65% of target distance -> Lock in Break-Even ($0 loss)!
-          if (!pos.breakEvenLocked && runUp >= pos.targetDistance * 0.65) {
-            pos.stopLoss = Number((pos.entryPrice + pos.stopDistance * 0.02).toFixed(4));
+          // Scalp Break-Even: Price gained 40% of target distance -> Lock in Break-Even ($0 loss)!
+          if (!pos.breakEvenLocked && runUp >= pos.targetDistance * 0.40) {
+            pos.stopLoss = Number((pos.entryPrice + pos.stopDistance * 0.05).toFixed(dec));
             pos.breakEvenLocked = true;
           }
 
-          // Scalp Trailing Stop: Price reached 85% of target distance -> Trail closely behind highest price!
-          if (runUp >= pos.targetDistance * 0.85) {
-            const newTrailStop = Number((pos.highestPrice - pos.stopDistance * 0.35).toFixed(4));
+          // Scalp Trailing Stop: Price reached 65% of target distance -> Trail closely behind highest price!
+          if (runUp >= pos.targetDistance * 0.65) {
+            const newTrailStop = Number((pos.highestPrice - pos.stopDistance * 0.25).toFixed(dec));
             if (newTrailStop > pos.stopLoss) {
               pos.stopLoss = newTrailStop;
               pos.trailingStopActive = true;
