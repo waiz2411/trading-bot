@@ -29,20 +29,20 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
 
   const winCount = (portfolio.totalTrades !== undefined && portfolio.totalTrades > 0)
     ? (portfolio.winCount || 0)
-    : tradesList.filter(t => (t.finalPnL || 0) > 0.08 && !t.isBreakEven && t.exitReason !== 'BREAKEVEN_STOP_TRIGGER').length;
+    : tradesList.filter(t => (t.finalPnL || 0) > 0).length;
 
   const lossCount = (portfolio.totalTrades !== undefined && portfolio.totalTrades > 0)
     ? (portfolio.lossCount || 0)
-    : tradesList.filter(t => (t.finalPnL || 0) < -0.08 && !t.isBreakEven).length;
+    : tradesList.filter(t => (t.finalPnL || 0) < 0).length;
 
   const breakEvenCount = portfolio.breakEvenCount !== undefined
     ? portfolio.breakEvenCount
-    : tradesList.filter(t => t.isBreakEven || Math.abs(t.finalPnL || 0) <= 0.08 || t.exitReason === 'BREAKEVEN_STOP_TRIGGER').length;
+    : tradesList.filter(t => t.isBreakEven || (t.finalPnL || 0) === 0).length;
 
   const decisive = winCount + lossCount;
   const winRate = (portfolio.totalTrades !== undefined && portfolio.totalTrades > 0)
-    ? portfolio.winRate
-    : (decisive > 0 ? Number(((winCount / decisive) * 100).toFixed(1)) : 0);
+    ? (totalTrades > 0 && lossCount === 0 ? 100 : portfolio.winRate)
+    : (decisive > 0 ? Number(((winCount / decisive) * 100).toFixed(1)) : (totalTrades > 0 && lossCount === 0 ? 100 : 0));
 
   const isNetProfit = totalPnL >= 0;
   const isUnrealizedProfit = unrealizedPnL >= 0;

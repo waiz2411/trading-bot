@@ -304,6 +304,22 @@ export class AutonomousAgentLoop {
             break; // Max slots occupied
           }
 
+          // Currency & Sector Exposure Limiter:
+          // Prevents stacking all concurrent slots into correlated pairs (e.g. 5 USD pairs)
+          const openPositions = portfolioState.activePositions;
+          const sameCategoryCount = openPositions.filter(p => p.category === asset.category).length;
+          if (asset.category === 'Crypto' && sameCategoryCount >= 2) continue; // Max 2 Crypto
+          if (asset.category === 'Commodities' && sameCategoryCount >= 1) continue; // Max 1 Commodity
+          if (asset.category === 'Indices' && sameCategoryCount >= 1) continue; // Max 1 Index
+
+          if (asset.category === 'Forex') {
+            const usdCount = openPositions.filter(p => p.symbol && p.symbol.includes('USD')).length;
+            if (asset.symbol.includes('USD') && usdCount >= 2) continue; // Max 2 USD pairs
+
+            const jpyCount = openPositions.filter(p => p.symbol && p.symbol.includes('JPY')).length;
+            if (asset.symbol.includes('JPY') && jpyCount >= 2) continue; // Max 2 JPY pairs
+          }
+
           const riskEval = this.marginRiskManager.evaluateTradeRisk(portfolioState, signal, asset);
           if (riskEval.allowed) {
             const pos = this.marginTradingEngine.openPosition({
@@ -353,11 +369,17 @@ export class AutonomousAgentLoop {
       }
 
       // ==========================================
-      // 4B. PURE SPOT CRYPTO AUTO-OPEN (100% Capital Allocation)
+      // 4B. PURE SPOT CRYPTO AUTO-OPEN (100% Capital on Tiny & Volatile Coins)
       // ==========================================
       if (this.isAutoTradingEnabled && this.spotTradingEngine.activePositions.length === 0 && validSpotBuys.length > 0) {
-        // Pick the top confidence sniper crypto setup
-        validSpotBuys.sort((a, b) => b.signal.confidence - a.signal.confidence);
+        // Sort by Volatility-Weighted Confluence: Prioritizes explosive meme & altcoins (PEPE, BONK, DOGE, SUI, etc.)
+        validSpotBuys.sort((a, b) => {
+          const volA = (a.asset.isHighVolatility ? 1.5 : 1.0) * (a.asset.minVolatility || 1.0);
+          const volB = (b.asset.isHighVolatility ? 1.5 : 1.0) * (b.asset.minVolatility || 1.0);
+          const scoreA = a.signal.confidence * volA;
+          const scoreB = b.signal.confidence * volB;
+          return scoreB - scoreA;
+        });
         const topPick = validSpotBuys[0];
         const spotCash = this.spotTradingEngine.balance;
 

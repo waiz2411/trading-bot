@@ -54,30 +54,61 @@ export class MarketDataService {
       else if (item.symbol === 'SOL-USD') { defaultPrice = 100.8; volatility = 0.005; }
       else if (item.symbol === 'BNB-USD') { defaultPrice = 718; volatility = 0.003; }
       else if (item.symbol === 'XRP-USD') { defaultPrice = 1.40; volatility = 0.005; }
-      else if (item.symbol === 'DOGE-USD') { defaultPrice = 0.1650; volatility = 0.005; }
+      else if (item.symbol === 'DOGE-USD') { defaultPrice = 0.1650; volatility = 0.006; }
       else if (item.symbol === 'ADA-USD') { defaultPrice = 0.5850; volatility = 0.004; }
       else if (item.symbol === 'AVAX-USD') { defaultPrice = 24.50; volatility = 0.005; }
       else if (item.symbol === 'LINK-USD') { defaultPrice = 14.80; volatility = 0.004; }
-      else if (item.symbol === 'SUI-USD') { defaultPrice = 2.1500; volatility = 0.006; }
-      else if (item.symbol === 'NEAR-USD') { defaultPrice = 4.350; volatility = 0.005; }
-      else if (item.symbol === 'PEPE-USD') { defaultPrice = 0.000008; volatility = 0.008; }
+      else if (item.symbol === 'SUI-USD') { defaultPrice = 2.1500; volatility = 0.007; }
+      else if (item.symbol === 'NEAR-USD') { defaultPrice = 4.350; volatility = 0.006; }
+      else if (item.symbol === 'PEPE-USD') { defaultPrice = 0.0000085; volatility = 0.009; }
+      else if (item.symbol === 'SHIB-USD') { defaultPrice = 0.0000185; volatility = 0.008; }
+      else if (item.symbol === 'FLOKI-USD') { defaultPrice = 0.000145; volatility = 0.008; }
+      else if (item.symbol === 'BONK-USD') { defaultPrice = 0.0000195; volatility = 0.009; }
+      else if (item.symbol === 'WIF-USD') { defaultPrice = 1.8500; volatility = 0.009; }
+      else if (item.symbol === 'FET-USD') { defaultPrice = 1.2500; volatility = 0.007; }
+      else if (item.symbol === 'RENDER-USD') { defaultPrice = 5.850; volatility = 0.007; }
+      else if (item.symbol === 'INJ-USD') { defaultPrice = 18.50; volatility = 0.007; }
+      else if (item.symbol === 'TIA-USD') { defaultPrice = 4.850; volatility = 0.007; }
+      else if (item.symbol === 'GALA-USD') { defaultPrice = 0.02250; volatility = 0.008; }
+      else if (item.symbol === 'APT-USD') { defaultPrice = 8.450; volatility = 0.006; }
+      else if (item.symbol === 'AR-USD') { defaultPrice = 15.60; volatility = 0.006; }
+      else if (item.symbol === 'OP-USD') { defaultPrice = 1.450; volatility = 0.006; }
+      else if (item.symbol === 'ARB-USD') { defaultPrice = 0.5550; volatility = 0.006; }
+      else if (item.symbol === 'SEI-USD') { defaultPrice = 0.4250; volatility = 0.007; }
+      else if (item.symbol === 'PENDLE-USD') { defaultPrice = 4.150; volatility = 0.007; }
       // Forex defaults
-      else if (item.symbol === 'EURUSD=X') { defaultPrice = 1.1550; volatility = 0.001; }
-      else if (item.symbol === 'GBPUSD=X') { defaultPrice = 1.3490; volatility = 0.0012; }
-      else if (item.symbol === 'USDJPY=X') { defaultPrice = 154.20; volatility = 0.0012; }
-      else if (item.symbol === 'AUDUSD=X') { defaultPrice = 0.7135; volatility = 0.0012; }
-      else if (item.symbol === 'USDCAD=X') { defaultPrice = 1.3900; volatility = 0.0012; }
-      else if (item.symbol === 'USDCHF=X') { defaultPrice = 0.8850; volatility = 0.0011; }
-      else if (item.symbol === 'NZDUSD=X') { defaultPrice = 0.5890; volatility = 0.0013; }
-      else if (item.symbol === 'EURGBP=X') { defaultPrice = 0.8560; volatility = 0.0010; }
-      else if (item.symbol === 'EURJPY=X') { defaultPrice = 178.10; volatility = 0.0014; }
-      else if (item.symbol === 'GBPJPY=X') { defaultPrice = 208.00; volatility = 0.0015; }
-      // Commodities & Indices
-      else if (item.symbol === 'GC=F') { defaultPrice = 2635.00; volatility = 0.002; }
-      else if (item.symbol === 'SI=F') { defaultPrice = 29.80; volatility = 0.003; }
-      else if (item.symbol === 'CL=F') { defaultPrice = 59.80; volatility = 0.0035; }
-      else if (item.symbol === '^GSPC') { defaultPrice = 5640.00; volatility = 0.0015; }
-      else if (item.symbol === '^IXIC') { defaultPrice = 16820.00; volatility = 0.002; }
+      else if (item.symbol === 'EURUSD=X') { defaultPrice = 1.0850; volatility = 0.0010; }
+      else if (item.symbol === 'GBPUSD=X') { defaultPrice = 1.2950; volatility = 0.0012; }
+      else if (item.symbol === 'USDJPY=X') { defaultPrice = 152.40; volatility = 0.0012; }
+      else if (item.symbol === 'AUDUSD=X') { defaultPrice = 0.6550; volatility = 0.0012; }
+      else if (item.symbol === 'USDCAD=X') { defaultPrice = 1.3850; volatility = 0.0012; }
+      else if (item.symbol === 'USDCHF=X') { defaultPrice = 0.8650; volatility = 0.0011; }
+      else if (item.symbol === 'NZDUSD=X') { defaultPrice = 0.5890; volatility = 0.0012; }
+      else if (item.symbol === 'EURGBP=X') { defaultPrice = 0.8380; volatility = 0.0010; }
+      else if (item.symbol === 'EURJPY=X') { defaultPrice = 165.35; volatility = 0.0014; }
+      else if (item.symbol === 'GBPJPY=X') { defaultPrice = 197.35; volatility = 0.0015; }
+      else if (item.symbol === 'AUDJPY=X') { defaultPrice = 99.80; volatility = 0.0014; }
+      else if (item.symbol === 'CADJPY=X') { defaultPrice = 110.05; volatility = 0.0013; }
+      else if (item.symbol === 'CHFJPY=X') { defaultPrice = 176.20; volatility = 0.0013; }
+      else if (item.symbol === 'NZDJPY=X') { defaultPrice = 89.75; volatility = 0.0014; }
+      else if (item.symbol === 'EURAUD=X') { defaultPrice = 1.6565; volatility = 0.0013; }
+      else if (item.symbol === 'EURCAD=X') { defaultPrice = 1.5030; volatility = 0.0012; }
+      else if (item.symbol === 'GBPAUD=X') { defaultPrice = 1.9770; volatility = 0.0014; }
+      else if (item.symbol === 'GBPCAD=X') { defaultPrice = 1.7940; volatility = 0.0013; }
+      else if (item.symbol === 'AUDNZD=X') { defaultPrice = 1.1120; volatility = 0.0011; }
+      // Commodities & Indices defaults
+      else if (item.symbol === 'GC=F') { defaultPrice = 2635.00; volatility = 0.0020; }
+      else if (item.symbol === 'SI=F') { defaultPrice = 31.20; volatility = 0.0030; }
+      else if (item.symbol === 'CL=F') { defaultPrice = 70.50; volatility = 0.0035; }
+      else if (item.symbol === 'BZ=F') { defaultPrice = 74.20; volatility = 0.0035; }
+      else if (item.symbol === 'NG=F') { defaultPrice = 2.850; volatility = 0.0050; }
+      else if (item.symbol === 'HG=F') { defaultPrice = 4.3500; volatility = 0.0030; }
+      else if (item.symbol === '^GSPC') { defaultPrice = 5850.00; volatility = 0.0015; }
+      else if (item.symbol === '^IXIC') { defaultPrice = 18500.00; volatility = 0.0020; }
+      else if (item.symbol === '^DJI') { defaultPrice = 42800.00; volatility = 0.0015; }
+      else if (item.symbol === '^GDAXI') { defaultPrice = 19400.00; volatility = 0.0016; }
+      else if (item.symbol === '^FTSE') { defaultPrice = 8250.00; volatility = 0.0014; }
+      else if (item.symbol === '^N225') { defaultPrice = 38900.00; volatility = 0.0018; }
 
       const candles = generateBalancedCandles(defaultPrice, volatility, 70);
       const latest = candles[candles.length - 1];
@@ -108,7 +139,23 @@ export class MarketDataService {
       'AVAX-USD': 'AVAXUSDT',
       'LINK-USD': 'LINKUSDT',
       'SUI-USD': 'SUIUSDT',
-      'NEAR-USD': 'NEARUSDT'
+      'NEAR-USD': 'NEARUSDT',
+      'PEPE-USD': 'PEPEUSDT',
+      'SHIB-USD': 'SHIBUSDT',
+      'FLOKI-USD': 'FLOKIUSDT',
+      'BONK-USD': 'BONKUSDT',
+      'WIF-USD': 'WIFUSDT',
+      'FET-USD': 'FETUSDT',
+      'RENDER-USD': 'RENDERUSDT',
+      'INJ-USD': 'INJUSDT',
+      'TIA-USD': 'TIAUSDT',
+      'GALA-USD': 'GALAUSDT',
+      'APT-USD': 'APTUSDT',
+      'AR-USD': 'ARUSDT',
+      'OP-USD': 'OPUSDT',
+      'ARB-USD': 'ARBUSDT',
+      'SEI-USD': 'SEIUSDT',
+      'PENDLE-USD': 'PENDLEUSDT'
     };
 
     try {
@@ -168,22 +215,16 @@ export class MarketDataService {
       const rates = data.rates;
       if (!rates) return;
 
-      const forexUpdates = [
-        { symbol: 'EURUSD=X', price: rates.EUR ? 1 / rates.EUR : null },
-        { symbol: 'GBPUSD=X', price: rates.GBP ? 1 / rates.GBP : null },
-        { symbol: 'USDJPY=X', price: rates.JPY ? rates.JPY : null },
-        { symbol: 'AUDUSD=X', price: rates.AUD ? 1 / rates.AUD : null },
-        { symbol: 'USDCAD=X', price: rates.CAD ? rates.CAD : null },
-        { symbol: 'USDCHF=X', price: rates.CHF ? rates.CHF : null },
-        { symbol: 'NZDUSD=X', price: rates.NZD ? 1 / rates.NZD : null },
-        { symbol: 'EURGBP=X', price: rates.EUR && rates.GBP ? rates.GBP / rates.EUR : null },
-        { symbol: 'EURJPY=X', price: rates.EUR && rates.JPY ? rates.JPY / rates.EUR : null },
-        { symbol: 'GBPJPY=X', price: rates.GBP && rates.JPY ? rates.JPY / rates.GBP : null }
-      ];
+      for (const item of WATCHLIST) {
+        if (item.category !== 'Forex') continue;
+        const base = item.baseAsset;
+        const quote = item.quoteAsset;
+        const baseRate = rates[base] || (base === 'USD' ? 1.0 : null);
+        const quoteRate = rates[quote] || (quote === 'USD' ? 1.0 : null);
 
-      for (const fx of forexUpdates) {
-        if (!fx.price) continue;
-        const cached = marketCache.get(fx.symbol);
+        if (!baseRate || !quoteRate) continue;
+        const fxPrice = quoteRate / baseRate;
+        const cached = marketCache.get(item.symbol);
         if (cached) {
           const newPrice = Number(fx.price.toFixed(cached.decimals));
           cached.price = newPrice;

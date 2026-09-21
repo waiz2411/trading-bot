@@ -29,10 +29,10 @@ export default function SettingsModal({
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   const slotPresets = [
-    { label: '1 Slot', value: 1, tag: 'Sniper Focus' },
-    { label: '2 Slots', value: 2, tag: 'Optimal ⭐' },
-    { label: '3 Slots', value: 3, tag: 'Active' },
-    { label: '4 Slots', value: 4, tag: 'Max Limit' }
+    { label: '2 Slots', value: 2, tag: 'Sniper Focus' },
+    { label: '4 Slots', value: 4, tag: 'Multi-Scalp ⭐' },
+    { label: '6 Slots', value: 6, tag: 'Active Scalper' },
+    { label: '8 Slots', value: 8, tag: 'Max 8 Scalps 🔥' }
   ];
 
   const rrPresets = [
@@ -271,13 +271,13 @@ export default function SettingsModal({
                     Max Concurrent Positions
                   </label>
                   <span className="text-indigo-400 font-bold text-sm">
-                    {maxConcurrentTrades} {Number(maxConcurrentTrades) === 1 ? 'trade (Sniper)' : 'trades'}
+                    {maxConcurrentTrades} {Number(maxConcurrentTrades) === 1 ? 'scalp (Sniper)' : 'concurrent scalps'}
                   </span>
                 </div>
                 <input
                   type="range"
                   min="1"
-                  max="4"
+                  max="8"
                   step="1"
                   value={maxConcurrentTrades}
                   onChange={(e) => setMaxConcurrentTrades(Number(e.target.value))}
@@ -304,7 +304,7 @@ export default function SettingsModal({
                   })}
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1.5">
-                  Sniper architecture: Focuses leverage on top-ranked setups instead of diluting across correlated pairs.
+                  Currency & Sector Diversification Limiter protects multi-slot scalping by spreading positions across non-correlated markets.
                 </p>
               </div>
 

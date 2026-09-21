@@ -28,8 +28,9 @@ function createRealisticCandles(basePrice, count = 70) {
   return candles;
 }
 
-// Realistic price initialization for assets
+// Realistic price initialization for assets across all categories
 const DEFAULT_PRICES = {
+  // Crypto (27 assets)
   'BTC-USD': 77000,
   'ETH-USD': 2460,
   'SOL-USD': 105,
@@ -39,35 +40,73 @@ const DEFAULT_PRICES = {
   'ADA-USD': 0.585,
   'AVAX-USD': 24.5,
   'LINK-USD': 14.8,
-  'SUI-USD': 3.15,
+  'SUI-USD': 2.15,
+  'NEAR-USD': 4.35,
+  'PEPE-USD': 0.0000085,
+  'SHIB-USD': 0.0000185,
+  'FLOKI-USD': 0.000145,
+  'BONK-USD': 0.0000195,
+  'WIF-USD': 1.85,
+  'FET-USD': 1.25,
+  'RENDER-USD': 5.85,
+  'INJ-USD': 18.5,
+  'TIA-USD': 4.85,
+  'GALA-USD': 0.0225,
+  'APT-USD': 8.45,
+  'AR-USD': 15.6,
+  'OP-USD': 1.45,
+  'ARB-USD': 0.555,
+  'SEI-USD': 0.425,
+  'PENDLE-USD': 4.15,
+  // Forex (19 assets)
   'EURUSD=X': 1.0850,
   'GBPUSD=X': 1.2950,
   'USDJPY=X': 152.40,
   'AUDUSD=X': 0.6550,
   'USDCAD=X': 1.3850,
   'USDCHF=X': 0.8650,
+  'NZDUSD=X': 0.5890,
+  'EURGBP=X': 0.8380,
+  'EURJPY=X': 165.35,
+  'GBPJPY=X': 197.35,
+  'AUDJPY=X': 99.80,
+  'CADJPY=X': 110.05,
+  'CHFJPY=X': 176.20,
+  'NZDJPY=X': 89.75,
+  'EURAUD=X': 1.6565,
+  'EURCAD=X': 1.5030,
+  'GBPAUD=X': 1.9770,
+  'GBPCAD=X': 1.7940,
+  'AUDNZD=X': 1.1120,
+  // Commodities (6 assets)
   'GC=F': 2635.0,
   'SI=F': 31.20,
   'CL=F': 70.50,
+  'BZ=F': 74.20,
   'NG=F': 2.85,
+  'HG=F': 4.35,
+  // Indices (6 assets)
   '^GSPC': 5850.0,
   '^IXIC': 18500.0,
-  '^DJI': 42800.0
+  '^DJI': 42800.0,
+  '^GDAXI': 19400.0,
+  '^FTSE': 8250.0,
+  '^N225': 38900.0
 };
 
-// 1. MARGIN SCALPER SIMULATION
+// 1. MARGIN SCALPER SIMULATION (Multi-Slot Scalper with Currency Diversification Guard)
 const engine = new PaperTradingEngine(100, 'MARGIN');
 const riskManager = new RiskManager({
   riskPerTradePct: 1.5,
-  maxConcurrentTrades: 2, // Strict 2-slot sniper discipline
-  minConfidenceThreshold: 85,
+  maxConcurrentTrades: 4, // Multi-slot scalper
+  minConfidenceThreshold: 82,
   tradeDirection: 'BOTH',
   tradingStyle: 'SCALPING',
   defaultLeverage: 500,
   targetRiskRewardRatio: 1.3
 });
 
-// 2. SPOT ENGINE SIMULATION
+// 2. SPOT ENGINE SIMULATION (Tiny & Volatile Crypto Focus)
 const spotEngine = new PaperTradingEngine(25, 'SPOT');
 const spotRiskSettings = {
   stopLossPct: 1.0,
@@ -75,10 +114,10 @@ const spotRiskSettings = {
   minConfidenceThreshold: 82
 };
 
-// Select a representative multi-asset portfolio across Crypto, Forex, Commodities, Indices
-const testAssets = WATCHLIST.slice(0, 15).map(item => ({
+// Load full 58-asset universe
+const testAssets = WATCHLIST.map(item => ({
   ...item,
-  basePrice: DEFAULT_PRICES[item.symbol] || 100,
+  basePrice: DEFAULT_PRICES[item.symbol] || 10,
   candles: []
 }));
 
@@ -184,7 +223,22 @@ for (let step = 0; step < 2500; step++) {
     for (const { asset, signal } of marginCandidates) {
       const portfolio = engine.getPortfolioState();
       if (portfolio.activePositions.length >= riskManager.getSettings().maxConcurrentTrades) {
-        break; // Sniper slot limit reached
+        break; // Slot limit reached
+      }
+
+      // Currency & Sector Exposure Limiter
+      const openPositions = portfolio.activePositions;
+      const sameCategoryCount = openPositions.filter(p => p.category === asset.category).length;
+      if (asset.category === 'Crypto' && sameCategoryCount >= 2) continue;
+      if (asset.category === 'Commodities' && sameCategoryCount >= 1) continue;
+      if (asset.category === 'Indices' && sameCategoryCount >= 1) continue;
+
+      if (asset.category === 'Forex') {
+        const usdCount = openPositions.filter(p => p.symbol && p.symbol.includes('USD')).length;
+        if (asset.symbol.includes('USD') && usdCount >= 2) continue;
+
+        const jpyCount = openPositions.filter(p => p.symbol && p.symbol.includes('JPY')).length;
+        if (asset.symbol.includes('JPY') && jpyCount >= 2) continue;
       }
 
       const risk = riskManager.evaluateTradeRisk(portfolio, signal, asset);
@@ -215,9 +269,13 @@ for (let step = 0; step < 2500; step++) {
     }
   }
 
-  // PURE SPOT SNIPER SELECTION (100% Capital on #1 Best Setup)
+  // PURE SPOT SNIPER SELECTION (100% Capital on Tiny & Volatile Alt/Meme Coins)
   if (spotCooldown <= 0 && spotEngine.activePositions.length === 0 && spotCandidates.length > 0) {
-    spotCandidates.sort((a, b) => b.signal.confidence - a.signal.confidence);
+    spotCandidates.sort((a, b) => {
+      const volA = (a.asset.isHighVolatility ? 1.5 : 1.0) * (a.asset.minVolatility || 1.0);
+      const volB = (b.asset.isHighVolatility ? 1.5 : 1.0) * (b.asset.minVolatility || 1.0);
+      return (b.signal.confidence * volB) - (a.signal.confidence * volA);
+    });
     const topSpot = spotCandidates[0];
     const spotCash = spotEngine.balance;
 

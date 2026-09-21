@@ -161,20 +161,20 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   const finalShortConfidence = Math.max(0, Math.min(100, Math.round(shortScore)));
   const finalLongConfidence = Math.max(0, Math.min(100, Math.round(longScore)));
 
-  // SCALPING STRIKE ZONE GEOMETRY (Noise-Safe Scalping to Eliminate Micro-Noise Whipsaws):
-  let stopPct = 0.0065; // 0.65% baseline
+  // SCALPING STRIKE ZONE GEOMETRY (Tight Micro-Scalp Targets for Rapid Small Profits):
+  let stopPct = 0.0035; // 0.35% baseline
   const targetRR = Math.max(1.15, Number(options.targetRiskRewardRatio) || 1.30);
 
   if (asset.category === 'Crypto') {
-    stopPct = 0.0080; // 0.80% for crypto noise floor
+    stopPct = 0.0050; // 0.50% for fast crypto micro-scalps
   } else if (asset.category === 'Forex') {
-    stopPct = 0.0035; // 0.35% for forex (35-45 pips)
+    stopPct = 0.0020; // 0.20% for forex (20-25 pips)
   } else if (asset.category === 'Commodities' || asset.category === 'Indices') {
-    stopPct = 0.0050; // 0.50% for commodities & indices
+    stopPct = 0.0030; // 0.30% for commodities & indices
   }
 
   const baseStopDist = Number((currentPrice * stopPct).toFixed(asset.decimals || 4));
-  const atrStopDist = atr ? Number((atr * 1.05).toFixed(asset.decimals || 4)) : baseStopDist;
+  const atrStopDist = atr ? Number((atr * 0.95).toFixed(asset.decimals || 4)) : baseStopDist;
   const stopDistance = Math.max(baseStopDist, atrStopDist);
   const targetDistance = Number((stopDistance * targetRR).toFixed(asset.decimals || 4));
   const effectiveRR = Number((targetDistance / stopDistance).toFixed(2));
@@ -293,9 +293,15 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
   const currentPrice = asset.price || technicals.currentPrice;
   const { ema9, ema21, ema50, ema200, rsi, macd, bollingerBands: bb } = technicals;
 
-  const stopLossPct = Math.max(0.8, Number(spotRiskSettings.stopLossPct) || 1.0);
-  const takeProfitPct = Math.max(1.6, Number(spotRiskSettings.takeProfitPct) || 2.2);
+  const baseStopLossPct = Math.max(0.8, Number(spotRiskSettings.stopLossPct) || 1.0);
+  const baseTakeProfitPct = Math.max(1.6, Number(spotRiskSettings.takeProfitPct) || 2.2);
   const minThreshold = Number(spotRiskSettings.minConfidenceThreshold) || 82;
+
+  // Adapt geometry to coin's volatility: high-beta altcoins get noise-cushioned stops with explosive targets
+  const isVolatileCoin = asset.isHighVolatility || (asset.minVolatility && asset.minVolatility >= 1.4);
+  const volFactor = isVolatileCoin ? Math.min(1.35, (asset.minVolatility || 1.5) / 1.3) : 1.0;
+  const stopLossPct = Number((baseStopLossPct * volFactor).toFixed(2));
+  const takeProfitPct = Number((baseTakeProfitPct * volFactor).toFixed(2));
 
   let score = 0;
   const factors = [];
@@ -378,6 +384,14 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
     }
   }
 
+  // 7. VOLATILITY ALPHA BONUS FOR TINY & HIGH-BETA COINS (Targeting high profit swings)
+  if (isVolatileCoin) {
+    score += 18;
+    factors.push(`High-Volatility Alpha (${asset.symbol}): Explosive momentum potential for high-yield scalp`);
+  } else if (asset.symbol === 'BTC-USD' || asset.symbol === 'ETH-USD') {
+    score -= 15; // Relegate slow mega-caps in Spot so explosive small-caps get priority
+  }
+
   const finalConfidence = Math.max(0, Math.min(100, Math.round(score)));
 
   // Calculate Geometry
@@ -392,6 +406,8 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
       action: 'STRONG_BUY',
       side: 'LONG',
       confidence: finalConfidence,
+      volatilityMultiplier: asset.minVolatility || 1.0,
+      isHighVolatility: Boolean(isVolatileCoin),
       entryPrice: currentPrice,
       stopLoss,
       takeProfit,

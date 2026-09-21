@@ -61,7 +61,9 @@ export class PaperTradingEngine {
     this.totalGrossLoss = Number(grossLoss.toFixed(2));
 
     const decisiveTrades = winCount + lossCount;
-    const winRate = decisiveTrades > 0 ? Number(((winCount / decisiveTrades) * 100).toFixed(1)) : 0;
+    const winRate = decisiveTrades > 0
+      ? Number(((winCount / decisiveTrades) * 100).toFixed(1))
+      : (lossCount === 0 && (winCount > 0 || breakEvenCount > 0) ? 100 : 0);
     const profitFactor = grossLoss > 0
       ? Number((grossProfit / grossLoss).toFixed(2))
       : (grossProfit > 0 ? 99.9 : 0);
@@ -245,14 +247,12 @@ export class PaperTradingEngine {
 
     this.balance += pnlRounded;
 
-    const isBreakEven = Math.abs(pnlRounded) <= 0.02;
-    const isWin = pnlRounded > 0.02;
-    const isLoss = pnlRounded < -0.02;
+    const isWin = pnlRounded > 0;
+    const isLoss = pnlRounded < 0;
+    const isBreakEven = pnlRounded === 0;
 
     if (isBreakEven) {
       this.breakEvenCount++;
-      if (pnlRounded > 0) this.totalGrossProfit += pnlRounded;
-      else if (pnlRounded < 0) this.totalGrossLoss += Math.abs(pnlRounded);
     } else if (isWin) {
       this.winCount++;
       this.totalGrossProfit += pnlRounded;
@@ -327,22 +327,22 @@ export class PaperTradingEngine {
       }
 
       // ====================================================
-      // 1. SCALPING DYNAMIC TRAILING STOP & BREAK-EVEN (40% & 65% Zones)
+      // 1. SCALPING DYNAMIC TRAILING STOP & BREAK-EVEN (30% & 55% Zones)
       // ====================================================
       if (this.trailingStopsEnabled) {
         const dec = pos.decimals !== undefined ? pos.decimals : 4;
         if (pos.side === 'SHORT') {
           const runDown = pos.entryPrice - pos.lowestPrice;
 
-          // Scalp Break-Even: Price dropped 40% of target distance -> Lock in Break-Even ($0 loss)!
-          if (!pos.breakEvenLocked && runDown >= pos.targetDistance * 0.40) {
+          // Scalp Break-Even: Price dropped 30% of target distance -> Lock in Break-Even ($0 loss)!
+          if (!pos.breakEvenLocked && runDown >= pos.targetDistance * 0.30) {
             pos.stopLoss = Number((pos.entryPrice - pos.stopDistance * 0.05).toFixed(dec));
             pos.breakEvenLocked = true;
           }
 
-          // Scalp Trailing Stop: Price reached 65% of target distance -> Trail closely behind lowest price!
-          if (runDown >= pos.targetDistance * 0.65) {
-            const newTrailStop = Number((pos.lowestPrice + pos.stopDistance * 0.25).toFixed(dec));
+          // Scalp Trailing Stop: Price reached 55% of target distance -> Trail closely behind lowest price!
+          if (runDown >= pos.targetDistance * 0.55) {
+            const newTrailStop = Number((pos.lowestPrice + pos.stopDistance * 0.20).toFixed(dec));
             if (newTrailStop < pos.stopLoss) {
               pos.stopLoss = newTrailStop;
               pos.trailingStopActive = true;
@@ -351,15 +351,15 @@ export class PaperTradingEngine {
         } else if (pos.side === 'LONG') {
           const runUp = pos.highestPrice - pos.entryPrice;
 
-          // Scalp Break-Even: Price gained 40% of target distance -> Lock in Break-Even ($0 loss)!
-          if (!pos.breakEvenLocked && runUp >= pos.targetDistance * 0.40) {
+          // Scalp Break-Even: Price gained 30% of target distance -> Lock in Break-Even ($0 loss)!
+          if (!pos.breakEvenLocked && runUp >= pos.targetDistance * 0.30) {
             pos.stopLoss = Number((pos.entryPrice + pos.stopDistance * 0.05).toFixed(dec));
             pos.breakEvenLocked = true;
           }
 
-          // Scalp Trailing Stop: Price reached 65% of target distance -> Trail closely behind highest price!
-          if (runUp >= pos.targetDistance * 0.65) {
-            const newTrailStop = Number((pos.highestPrice - pos.stopDistance * 0.25).toFixed(dec));
+          // Scalp Trailing Stop: Price reached 55% of target distance -> Trail closely behind highest price!
+          if (runUp >= pos.targetDistance * 0.55) {
+            const newTrailStop = Number((pos.highestPrice - pos.stopDistance * 0.20).toFixed(dec));
             if (newTrailStop > pos.stopLoss) {
               pos.stopLoss = newTrailStop;
               pos.trailingStopActive = true;
