@@ -123,30 +123,25 @@ export class RiskManager {
     const usedMargin = activePositions.reduce((acc, p) => acc + (p.margin || (p.notional / (p.leverage || 1))), 0);
     const freeMargin = Math.max(0, equity - usedMargin);
 
-    // Dynamic Sizing for High-Leverage (500x) Buying Power:
-    // When leverage > 1, allocate clean margin (e.g. 2.0% - 3.0% of equity per trade)
-    // so notional command power is truly margin * leverage (e.g. $2.50 * 500 = $1,250).
-    const dollarRisk = equity * (this.riskPerTradePct / 100);
+    // Strict Hard Risk Cap: Potential loss at Stop Loss must NEVER exceed riskPerTradePct (e.g. exactly 1.5%)
+    const maxAllowedLoss = Number((equity * (this.riskPerTradePct / 100)).toFixed(2));
+    const dollarRisk = maxAllowedLoss;
 
     let notional = 0;
     let rawUnits = 0;
 
     if (leverage > 1) {
-      // Allocate margin per slot (capped at 5% of equity and 35% of available free margin)
-      const targetSlotMargin = Math.max(1.5, Math.min(equity * (this.riskPerTradePct / 100) * 1.25, freeMargin * 0.35));
-      let targetNotional = targetSlotMargin * leverage;
+      // Sizing strictly by Risk Parity: units = maxAllowedLoss / priceDistance
+      // This mathematically guarantees: units * priceDistance <= maxAllowedLoss (<= 1.5% loss)
+      rawUnits = maxAllowedLoss / priceDistance;
 
-      // Risk Safeguard: Ensure potential loss at Stop Loss doesn't exceed 2.2% of equity
-      const maxAllowedLoss = equity * ((this.riskPerTradePct * 1.1) / 100);
-      if (priceDistance > 0) {
-        const impliedLoss = (targetNotional / signal.entryPrice) * priceDistance;
-        if (impliedLoss > maxAllowedLoss) {
-          targetNotional = (maxAllowedLoss / priceDistance) * signal.entryPrice;
-        }
+      // Free Margin Safety Buffer: Cap notional so margin required never strains account
+      const maxNotionalByFreeMargin = freeMargin * 0.40 * leverage;
+      if (rawUnits * signal.entryPrice > maxNotionalByFreeMargin) {
+        rawUnits = maxNotionalByFreeMargin / signal.entryPrice;
       }
 
-      rawUnits = targetNotional / signal.entryPrice;
-      notional = targetNotional;
+      notional = rawUnits * signal.entryPrice;
     } else {
       // 1x Spot Cash Allocation
       const maxSpotNotional = Math.min(equity * (this.maxPositionAllocationPct / 100), freeMargin);
@@ -158,9 +153,10 @@ export class RiskManager {
       }
     }
 
-    // Round units according to asset decimals (supports micro-lots)
+    // Floor units to precision to strictly guarantee loss never rounds above 1.5%
     const unitDecimals = asset.category === 'Crypto' ? 4 : (rawUnits < 1 ? 4 : 2);
-    const units = Number(rawUnits.toFixed(unitDecimals));
+    const roundFactor = Math.pow(10, unitDecimals);
+    const units = Math.floor(rawUnits * roundFactor) / roundFactor;
     notional = Number((units * signal.entryPrice).toFixed(2));
 
     if (units <= 0 || notional < 0.5) {
