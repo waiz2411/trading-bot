@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                            NexusQuant_Sync.mq5  |
 //|                       Copyright 2026, NexusQuant SaaS Automated  |
 //|                                https://trading-bot-lm51.onrender.com |
@@ -95,6 +95,24 @@ void ExecutePendingOrders(string json)
       int sEnd = StringFind(json, "\"", sStart);
       if(sEnd > sStart) sym = StringSubstr(json, sStart, sEnd - sStart);
    }
+
+   // Auto-resolve broker suffixes (e.g. Exness Standard 'm', Cent 'c', Raw '.raw')
+   string targetSym = sym;
+   StringReplace(targetSym, "=X", "");
+   StringReplace(targetSym, "-USD", "USD");
+   StringReplace(targetSym, "=F", "");
+   if(targetSym == "GC") targetSym = "XAUUSD";
+   if(targetSym == "CL") targetSym = "USOIL";
+
+   if(!SymbolInfoInteger(targetSym, SYMBOL_EXIST)) {
+      if(SymbolInfoInteger(targetSym + "m", SYMBOL_EXIST)) targetSym = targetSym + "m"; // Exness Standard/Mini
+      else if(SymbolInfoInteger(targetSym + "c", SYMBOL_EXIST)) targetSym = targetSym + "c"; // Exness Cent
+      else if(SymbolInfoInteger(targetSym + ".raw", SYMBOL_EXIST)) targetSym = targetSym + ".raw"; // Raw Spread
+      else if(SymbolInfoInteger(targetSym + "_i", SYMBOL_EXIST)) targetSym = targetSym + "_i";
+      else if(SymbolInfoInteger(targetSym + ".r", SYMBOL_EXIST)) targetSym = targetSym + ".r";
+   }
+   SymbolSelect(targetSym, true);
+
    double vol = 0.01;
    int volPos = StringFind(json, "volume");
    if(volPos > 0) {
@@ -119,7 +137,7 @@ void ExecutePendingOrders(string json)
       if(tpEnd < 0) tpEnd = StringFind(json, "}", tpStart);
       if(tpEnd > tpStart) tp = StringToDouble(StringSubstr(json, tpStart, tpEnd - tpStart));
    }
-   PrintFormat("[NexusQuant] Scalp Order: %s %s %.2f lots (SL: %.5f, TP: %.5f)", action, sym, vol, sl, tp);
-   if(action == "BUY") trade.Buy(vol, sym, 0, sl, tp, "NexusQuant Scalp");
-   else if(action == "SELL") trade.Sell(vol, sym, 0, sl, tp, "NexusQuant Scalp");
+   PrintFormat("[NexusQuant] Scalp Order: %s %s (using %s) %.2f lots (SL: %.5f, TP: %.5f)", action, sym, targetSym, vol, sl, tp);
+   if(action == "BUY") trade.Buy(vol, targetSym, 0, sl, tp, "NexusQuant Scalp");
+   else if(action == "SELL") trade.Sell(vol, targetSym, 0, sl, tp, "NexusQuant Scalp");
 }

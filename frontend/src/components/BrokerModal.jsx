@@ -61,13 +61,14 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
   };
 
   const POPULAR_SERVERS = [
-    'VaultMarkets-Live',
-    'VaultMarkets-Demo',
     'Exness-Real',
+    'Exness-Real2',
+    'Exness-Real3',
+    'Exness-Trial',
+    'VaultMarkets-Live',
     'ICMarketsSC-Demo',
     'Pepperstone-Edge',
     'Deriv-Demo',
-    'FTMO-Server',
     'XMGlobal-Real'
   ];
 
