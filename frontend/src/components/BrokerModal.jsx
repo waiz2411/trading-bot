@@ -697,32 +697,34 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
               )}
 
               {/* MT5 Result Output Banner */}
-              {mt5Result && (
-                <div className={`p-4 rounded-xl border ${
-                  mt5Result.success
-                    ? 'bg-amber-950/40 border-amber-500/50 text-amber-200'
-                    : mt5Result.isTopUpRequired
-                    ? 'bg-blue-950/40 border-blue-500/50 text-blue-200'
-                    : 'bg-rose-950/40 border-rose-500/50 text-rose-200'
-                }`}>
-                  <div className="flex items-center gap-1.5 font-bold mb-1">
-                    {mt5Result.success ? (
-                      <Check className="w-4 h-4 text-emerald-400" />
-                    ) : mt5Result.isTopUpRequired ? (
-                      <Cpu className="w-4 h-4 text-blue-400" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 text-rose-400" />
-                    )}
-                    <span>
-                      {mt5Result.success
-                        ? 'MetaTrader 5 Connected!'
-                        : mt5Result.isTopUpRequired
-                        ? 'MetaApi Live Cloud Notice: Free Alternative Available'
-                        : 'Connection Status'}
-                    </span>
-                  </div>
-                  {mt5Result.error && <p className="text-[11px] font-sans leading-relaxed">{mt5Result.error}</p>}
-                  {mt5Result.isTopUpRequired && (
+              {mt5Result && (() => {
+                const isTopUp = mt5Result.isTopUpRequired || (typeof mt5Result.error === 'string' && mt5Result.error.toLowerCase().includes('top up'));
+                return (
+                  <div className={`p-4 rounded-xl border ${
+                    mt5Result.success
+                      ? 'bg-amber-950/40 border-amber-500/50 text-amber-200'
+                      : isTopUp
+                      ? 'bg-blue-950/40 border-blue-500/50 text-blue-200'
+                      : 'bg-rose-950/40 border-rose-500/50 text-rose-200'
+                  }`}>
+                    <div className="flex items-center gap-1.5 font-bold mb-1">
+                      {mt5Result.success ? (
+                        <Check className="w-4 h-4 text-emerald-400" />
+                      ) : isTopUp ? (
+                        <Cpu className="w-4 h-4 text-blue-400" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-rose-400" />
+                      )}
+                      <span>
+                        {mt5Result.success
+                          ? 'MetaTrader 5 Connected!'
+                          : isTopUp
+                          ? 'MetaApi Cloud Notice: Free Alternative Available'
+                          : 'Connection Status'}
+                      </span>
+                    </div>
+                    {mt5Result.error && <p className="text-[11px] font-sans leading-relaxed">{mt5Result.error}</p>}
+                    {isTopUp && (
                     <div className="mt-3 p-3 rounded-lg bg-terminal-950 border border-blue-500/40 space-y-2">
                       <div className="text-xs font-bold text-white flex items-center gap-1.5">
                         <Zap className="w-3.5 h-3.5 text-amber-400" />
@@ -779,7 +781,8 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
                     </div>
                   )}
                 </div>
-              )}
+              );
+            })()}
             </div>
           )}
         </div>

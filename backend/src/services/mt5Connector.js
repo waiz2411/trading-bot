@@ -295,7 +295,13 @@ export class MT5Connector {
 
       if (!createRes.ok) {
         const errData = await createRes.json().catch(() => ({}));
-        throw new Error(errData.message || `MetaApi account creation failed (${createRes.status})`);
+        const rawMsg = errData.message || '';
+        if (createRes.status === 403 || rawMsg.toLowerCase().includes('top up') || errData.error === 'ForbiddenError') {
+          const err = new Error(rawMsg || 'MetaApi Cloud requires account credits to host live broker accounts.');
+          err.isTopUpRequired = true;
+          throw err;
+        }
+        throw new Error(rawMsg || `MetaApi account creation failed (${createRes.status})`);
       }
       account = await createRes.json();
     } else if (this.password) {
