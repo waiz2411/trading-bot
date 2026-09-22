@@ -77,6 +77,34 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   }
 
   // ==========================================
+  // 2B. BOLLINGER BAND EXHAUSTION & OVEREXTENSION FILTERS (Anti-Chasing)
+  // ==========================================
+  // Never buy into the extreme ceiling (+2 std dev) or short into the extreme floor (-2 std dev)
+  if (bb) {
+    if (currentPrice >= bb.upper) {
+      longScore -= 45; // Heavy penalty: Buying at Upper BB ceiling guarantees immediate pullback loss!
+      longReasons.push('Overbought Ceiling: Price piercing Upper Bollinger Band (+2 Std Dev), high pullback risk');
+    } else if (currentPrice <= bb.lower) {
+      shortScore -= 45; // Heavy penalty: Shorting at Lower BB floor guarantees immediate bounce loss!
+      shortReasons.push('Oversold Floor: Price piercing Lower Bollinger Band (-2 Std Dev), high bounce risk');
+    }
+  }
+
+  // Overextension filter: Protect against entries after price has already run > 1.2% away from EMA 21
+  if (ema21) {
+    const distAbovePct = (currentPrice - ema21) / currentPrice;
+    const distBelowPct = (ema21 - currentPrice) / currentPrice;
+    if (distAbovePct > 0.012) {
+      longScore -= 35;
+      longReasons.push('Overextended Warning: Price stretched >1.2% above EMA 21, mean-reversion risk');
+    }
+    if (distBelowPct > 0.012) {
+      shortScore -= 35;
+      shortReasons.push('Overextended Warning: Price stretched >1.2% below EMA 21, mean-reversion risk');
+    }
+  }
+
+  // ==========================================
   // 3. STRICT RSI MOMENTUM FILTER (Anti-Chasing: Buy Dips, Short Rallies)
   // ==========================================
   if (rsi !== null && rsi !== undefined) {
@@ -104,7 +132,7 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   }
 
   // ==========================================
-  // 4. CANDLESTICK CONFIRMATION & WICK ABSORPTION (Anti-Counter-Impulse)
+  // 4. CANDLESTICK CONFIRMATION & WICK REJECTION (Anti-Counter-Impulse)
   // ==========================================
   if (asset.candles && asset.candles.length >= 2) {
     const lastCandle = asset.candles[asset.candles.length - 1];
@@ -114,7 +142,11 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
     const upperWick = lastCandle.high - Math.max(lastCandle.open, lastCandle.close);
 
     if (isGreen) {
-      if (lowerWick >= body * 0.25) {
+      // Inverted Hammer / Shooting Star: If upper wick is long, sellers rejected the top!
+      if (upperWick >= body * 0.40) {
+        longScore -= 40;
+        longReasons.push('Exhaustion Wick: Long upper wick indicates sellers aggressively rejecting the top');
+      } else if (lowerWick >= body * 0.25) {
         longScore += 25;
         longReasons.push('Bullish Wick Rejection: Downward dip absorbed by aggressive buyers');
       } else {
@@ -123,7 +155,11 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
       }
       shortScore -= 35; // Heavy penalty: Never short into an expanding green candle!
     } else {
-      if (upperWick >= body * 0.25) {
+      // Hammer Candle: If lower wick is long, buyers absorbed the dump!
+      if (lowerWick >= body * 0.40) {
+        shortScore -= 40;
+        shortReasons.push('Absorption Wick: Long lower wick indicates buyers aggressively absorbing the dump');
+      } else if (upperWick >= body * 0.25) {
         shortScore += 25;
         shortReasons.push('Bearish Wick Rejection: Upward rally rejected by aggressive sellers');
       } else {
@@ -344,6 +380,11 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
       score += 25;
       factors.push('Key Value Entry: Pullback bouncing directly off dynamic EMA 21 support');
     }
+    // Overextended check: Prevent buying after price has already stretched far above EMA 21
+    if ((currentPrice - ema21) / currentPrice > 0.015) {
+      score -= 35;
+      factors.push('Overextended Warning: Price stretched >1.5% above EMA 21, mean-reversion risk');
+    }
   }
 
   // 3. STRICT CRYPTO RSI VALUE FILTER (Prevents Buying Tops)
@@ -355,7 +396,7 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
       factors.push(`Optimal Buy RSI (${rsi.toFixed(1)}): Pullback retest in lower bull zone`);
     } else if (rsi > 48 && rsi <= 55) {
       score += 15;
-      factors.push(`Bullish Flow RSI (${rsi.toFixed(1)}): Upward trajectory with runway`);
+      factors.push(`Bullish Flow RSI (${rsi.toFixed(1)}): Upward runway intact`);
     } else if (rsi < 32) {
       score += 20;
       factors.push(`Oversold Rebound RSI (${rsi.toFixed(1)}): Deep dip buyer interest`);
@@ -373,10 +414,15 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
     }
   }
 
-  // 5. LOWER BOLLINGER BAND SUPPORT
-  if (bb && currentPrice <= bb.middle) {
-    score += 10;
-    factors.push('Lower Bollinger Band: Buying near value floor of standard deviation channel');
+  // 5. BOLLINGER BAND EXTREME VALUE & CEILING FILTER
+  if (bb) {
+    if (currentPrice >= bb.upper) {
+      score -= 45; // Never buy into the extreme upper ceiling (+2 std dev)!
+      factors.push('Overbought Ceiling: Price piercing Upper Bollinger Band (+2 Std Dev), high pullback risk');
+    } else if (currentPrice <= bb.middle) {
+      score += 10;
+      factors.push('Lower Bollinger Band: Buying near value floor of standard deviation channel');
+    }
   }
 
   // 6. CANDLESTICK CONFIRMATION & NOISE-FLOOR MICRO-WICK FILTER
@@ -387,16 +433,23 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
     const isGreen = lastCandle.close >= lastCandle.open;
     const bodySize = Math.abs(lastCandle.close - lastCandle.open);
     const lowerWick = Math.min(lastCandle.open, lastCandle.close) - lastCandle.low;
+    const upperWick = lastCandle.high - Math.max(lastCandle.open, lastCandle.close);
     const hasWickRejection = lowerWick >= bodySize * 0.35 || (prevCandle.close < prevCandle.open && isGreen);
 
-    if (hasWickRejection && isGreen) {
-      score += 20;
-      factors.push('Bullish Wick Rejection: Downward dip absorbed with strong buyers supporting price');
-    } else if (isGreen) {
-      score += 12;
-      factors.push('Bullish Candle Confirmation: Upward micro-impulse validated');
+    if (isGreen) {
+      // Inverted Hammer Rejection: If upper wick is long, sellers rejected the top!
+      if (upperWick >= bodySize * 0.40) {
+        score -= 40;
+        factors.push('Exhaustion Wick: Long upper wick indicates sellers capping the top');
+      } else if (hasWickRejection) {
+        score += 20;
+        factors.push('Bullish Wick Rejection: Downward dip absorbed with strong buyers supporting price');
+      } else {
+        score += 12;
+        factors.push('Bullish Candle Confirmation: Upward micro-impulse validated');
+      }
     } else {
-      score -= 20; // Never buy into a red falling candle
+      score -= 25; // Never buy into a red falling candle
     }
   }
 

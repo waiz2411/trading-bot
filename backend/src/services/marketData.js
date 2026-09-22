@@ -176,6 +176,8 @@ export class MarketDataService {
           cached.high24h = Number(parseFloat(ticker.highPrice).toFixed(cached.decimals));
           cached.low24h = Number(parseFloat(ticker.lowPrice).toFixed(cached.decimals));
           cached.volume = Number(parseFloat(ticker.volume).toFixed(0));
+          cached.isLiveFeed = true;
+          cached.lastLiveTime = Date.now();
 
           // Calibrate baseline historical candles to real live price so RSI is natural and balanced
           if (!cached.isLiveCalibrated) {
@@ -192,12 +194,28 @@ export class MarketDataService {
             cached.isLiveCalibrated = true;
           }
 
-          // Append or update sliding candle
+          // Maintain real-time sliding 1-minute candles cleanly
           const candles = cached.candles;
-          const lastCandle = candles[candles.length - 1];
-          lastCandle.close = livePrice;
-          lastCandle.high = Math.max(lastCandle.high, livePrice);
-          lastCandle.low = Math.min(lastCandle.low, livePrice);
+          const now = Date.now();
+          if (!cached.candleStartTime) cached.candleStartTime = now;
+
+          if (now - cached.candleStartTime >= 60000) {
+            cached.candleStartTime = now;
+            candles.push({
+              time: new Date(now).toISOString(),
+              open: livePrice,
+              high: livePrice,
+              low: livePrice,
+              close: livePrice,
+              volume: Math.round(5000 + Math.random() * 15000)
+            });
+            if (candles.length > 70) candles.shift();
+          } else {
+            const lastCandle = candles[candles.length - 1];
+            lastCandle.close = livePrice;
+            lastCandle.high = Math.max(lastCandle.high, livePrice);
+            lastCandle.low = Math.min(lastCandle.low, livePrice);
+          }
         }
       }
     } catch (err) {
@@ -226,8 +244,10 @@ export class MarketDataService {
         const fxPrice = quoteRate / baseRate;
         const cached = marketCache.get(item.symbol);
         if (cached) {
-          const newPrice = Number(fx.price.toFixed(cached.decimals));
+          const newPrice = Number(fxPrice.toFixed(cached.decimals));
           cached.price = newPrice;
+          cached.isLiveFeed = true;
+          cached.lastLiveTime = Date.now();
 
           // Calibrate baseline historical candles to real live Forex rate so RSI is natural
           if (!cached.isLiveCalibrated) {
@@ -245,10 +265,26 @@ export class MarketDataService {
           }
 
           const candles = cached.candles;
-          const lastCandle = candles[candles.length - 1];
-          lastCandle.close = newPrice;
-          lastCandle.high = Math.max(lastCandle.high, newPrice);
-          lastCandle.low = Math.min(lastCandle.low, newPrice);
+          const now = Date.now();
+          if (!cached.candleStartTime) cached.candleStartTime = now;
+
+          if (now - cached.candleStartTime >= 60000) {
+            cached.candleStartTime = now;
+            candles.push({
+              time: new Date(now).toISOString(),
+              open: newPrice,
+              high: newPrice,
+              low: newPrice,
+              close: newPrice,
+              volume: 10000
+            });
+            if (candles.length > 70) candles.shift();
+          } else {
+            const lastCandle = candles[candles.length - 1];
+            lastCandle.close = newPrice;
+            lastCandle.high = Math.max(lastCandle.high, newPrice);
+            lastCandle.low = Math.min(lastCandle.low, newPrice);
+          }
         }
       }
     } catch (err) {
@@ -257,8 +293,15 @@ export class MarketDataService {
   }
 
   // Realistic natural 2-way micro ticks (mean-reverting, oscillating between up and down)
+  // Only applies to simulated non-API assets (Commodities, Indices) or when live feeds are unavailable
   simulateMicroTicks() {
+    const now = Date.now();
     for (const [symbol, item] of marketCache.entries()) {
+      // Skip assets actively receiving real-time live data to prevent price jitter & immediate entry loss
+      if (item.isLiveFeed && item.lastLiveTime && (now - item.lastLiveTime < 15000)) {
+        continue;
+      }
+
       const vol = item.category === 'Crypto' ? 0.0003 : 0.00015;
 
       // Update micro-trend momentum (persists across ticks to form coherent trending swings)
