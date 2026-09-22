@@ -207,6 +207,7 @@ export class PaperTradingEngine {
       confidence,
       reason,
       riskRewardRatio: riskRewardRatio || 1.3,
+      maxHoldMinutes: orderData.maxHoldMinutes || 5,
       openTime: new Date().toISOString(),
       cycleCount: 0,
       unrealizedPnL: 0,
@@ -363,6 +364,44 @@ export class PaperTradingEngine {
             if (newTrailStop > pos.stopLoss) {
               pos.stopLoss = newTrailStop;
               pos.trailingStopActive = true;
+            }
+          }
+        }
+      }
+
+      // ====================================================
+      // 2. SPOT FAST SCALP TIME-LIMIT (At most 5 minutes per trade)
+      // ====================================================
+      const isSpot = this.accountType === 'SPOT' || pos.tradingStyle === 'SPOT_BUY';
+      if (isSpot) {
+        const openTimeMs = pos.openTime ? new Date(pos.openTime).getTime() : 0;
+        const ageMs = openTimeMs > 0 ? (Date.now() - openTimeMs) : ((pos.cycleCount || 0) * 5000);
+        const cyclesElapsed = pos.cycleCount || 0;
+        const maxHoldMinutes = pos.maxHoldMinutes || 5;
+        const maxHoldMs = maxHoldMinutes * 60 * 1000; // default 5m = 300,000ms
+        const maxHoldCycles = maxHoldMinutes * 12; // 12 cycles/min * 5 min = 60 cycles
+
+        // A. Hard 5-Minute Cap: Exit at market price to free cash slot
+        if (ageMs >= maxHoldMs || cyclesElapsed >= maxHoldCycles) {
+          const isProfitable = pos.unrealizedPnL >= 0;
+          const exitNote = isProfitable
+            ? `5m Scalp Expiry: Banked profit at 5m cap (+${pos.pnlPercent}%)`
+            : `5m Scalp Expiry: Stalled position exited at 5m cap (${pos.pnlPercent}%)`;
+          const closed = this.closePosition(pos.id, livePrice, 'TIME_LIMIT_EXIT', exitNote);
+          if (closed) {
+            closedTriggers.push(closed);
+            continue;
+          }
+        }
+
+        // B. Stalled Momentum Soft Exit (After 3.5m / 42 cycles)
+        // If scalp reached profit (>= +0.25%) but starts pulling back from micro peak, lock it in!
+        if ((ageMs >= 210000 || cyclesElapsed >= 42) && pos.unrealizedPnL > 0 && pos.pnlPercent >= 0.25) {
+          if (livePrice < pos.highestPrice * 0.998) {
+            const closed = this.closePosition(pos.id, livePrice, 'MOMENTUM_EXHAUSTION_EXIT', `Fast Scalp Lock: Secured +${pos.pnlPercent}% gain before 5m cap`);
+            if (closed) {
+              closedTriggers.push(closed);
+              continue;
             }
           }
         }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, ShieldAlert, Sliders, RotateCcw, Check, Target, Zap, Coins, TrendingUp, ShieldCheck, Sparkles, Layers } from 'lucide-react';
+import { X, ShieldAlert, Sliders, RotateCcw, Check, Target, Zap, Coins, TrendingUp, ShieldCheck, Sparkles, Layers, Timer } from 'lucide-react';
 
 export default function SettingsModal({
   settings,
@@ -21,13 +21,14 @@ export default function SettingsModal({
   const [defaultLeverage, setDefaultLeverage] = useState(initialMargin.defaultLeverage || 500);
   const [maxTradesPerPair, setMaxTradesPerPair] = useState(initialMargin.maxTradesPerPair || 2);
 
-  // Spot Settings State
+  // Spot Settings State (Fast 5-Minute Scalping)
   const initialSpot = spotSettings || {};
-  const [spotStopLossPct, setSpotStopLossPct] = useState(initialSpot.stopLossPct || 1.0);
-  const [spotTakeProfitPct, setSpotTakeProfitPct] = useState(initialSpot.takeProfitPct || 2.5);
-  const [spotMinConfidence, setSpotMinConfidence] = useState(initialSpot.minConfidenceThreshold || 82);
+  const [spotStopLossPct, setSpotStopLossPct] = useState(initialSpot.stopLossPct || 0.6);
+  const [spotTakeProfitPct, setSpotTakeProfitPct] = useState(initialSpot.takeProfitPct || 1.0);
+  const [spotMinConfidence, setSpotMinConfidence] = useState(initialSpot.minConfidenceThreshold || 80);
   const [spotMaxSlots, setSpotMaxSlots] = useState(initialSpot.maxSlots || 4);
   const [spotMaxTradesPerPair, setSpotMaxTradesPerPair] = useState(initialSpot.maxTradesPerPair || 2);
+  const [spotMaxHoldMinutes, setSpotMaxHoldMinutes] = useState(initialSpot.maxHoldMinutes || 5);
 
   const [savedSuccess, setSavedSuccess] = useState(false);
 
@@ -41,6 +42,13 @@ export default function SettingsModal({
     { label: '1 Portion', value: 1, tag: 'Max Diversify' },
     { label: '2 Portions ⭐', value: 2, tag: 'Dip Ladder' },
     { label: '3 Portions 🔥', value: 3, tag: 'Multi-Entry' }
+  ];
+
+  const spotMaxHoldPresets = [
+    { label: '3 Mins', value: 3, tag: 'Hyper Scalp' },
+    { label: '5 Mins ⭐', value: 5, tag: 'Optimal Cap' },
+    { label: '8 Mins', value: 8, tag: 'Balanced' },
+    { label: '10 Mins', value: 10, tag: 'Extended' }
   ];
 
   const spotPortionPresets = [
@@ -76,19 +84,19 @@ export default function SettingsModal({
   ];
 
   const spotSlPresets = [
+    { label: '-0.4%', value: 0.4, tag: 'Ultra Tight' },
+    { label: '-0.6%', value: 0.6, tag: 'Fast Scalp ⭐' },
     { label: '-0.8%', value: 0.8, tag: 'Tight' },
-    { label: '-1.0%', value: 1.0, tag: 'Optimal 80-85% ⭐' },
-    { label: '-1.2%', value: 1.2, tag: 'Balanced' },
-    { label: '-1.5%', value: 1.5, tag: 'Standard' },
-    { label: '-2.0%', value: 2.0, tag: 'Wide' }
+    { label: '-1.0%', value: 1.0, tag: 'Standard' },
+    { label: '-1.5%', value: 1.5, tag: 'Wide' }
   ];
 
   const spotTpPresets = [
-    { label: '+1.6%', value: 1.6, tag: 'Fast Lock' },
-    { label: '+2.0%', value: 2.0, tag: 'Target 1:2' },
-    { label: '+2.2%', value: 2.2, tag: 'Optimal 80-85% ⭐' },
-    { label: '+2.5%', value: 2.5, tag: 'Standard' },
-    { label: '+3.0%', value: 3.0, tag: 'Trend Runner' }
+    { label: '+0.8%', value: 0.8, tag: 'Quick Lock' },
+    { label: '+1.0%', value: 1.0, tag: 'Fast Scalp ⭐' },
+    { label: '+1.2%', value: 1.2, tag: 'Target 1:2' },
+    { label: '+1.6%', value: 1.6, tag: 'Impulse' },
+    { label: '+2.2%', value: 2.2, tag: 'Runner' }
   ];
 
   const handleSave = (e) => {
@@ -100,7 +108,8 @@ export default function SettingsModal({
         takeProfitPct: parseFloat(spotTakeProfitPct),
         minConfidenceThreshold: parseInt(spotMinConfidence, 10),
         maxSlots: parseInt(spotMaxSlots, 10),
-        maxTradesPerPair: parseInt(spotMaxTradesPerPair, 10)
+        maxTradesPerPair: parseInt(spotMaxTradesPerPair, 10),
+        maxHoldMinutes: parseInt(spotMaxHoldMinutes, 10)
       });
     } else {
       onSaveSettings({
@@ -483,19 +492,92 @@ export default function SettingsModal({
                 </div>
               </div>
 
+              {/* Max Hold Duration (Fast 5m Scalp Hard Cap) */}
+              <div className="p-3.5 rounded-xl bg-cyan-950/25 border border-cyan-500/40">
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="text-cyan-300 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <Timer className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Max Hold Time Per Trade (Auto-Exit)</span>
+                  </label>
+                  <span className="text-cyan-400 font-bold text-sm bg-terminal-950 px-2.5 py-0.5 rounded border border-cyan-500/40 font-mono">
+                    {spotMaxHoldMinutes} Min{spotMaxHoldMinutes > 1 ? 's' : ''} Max
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 font-sans mb-2">
+                  Guarantees fast turnover: Trades held for {spotMaxHoldMinutes} minutes are auto-closed at market price to bank micro-profits and recycle cash into new high-conviction setups.
+                </p>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {spotMaxHoldPresets.map((p) => {
+                    const active = Number(spotMaxHoldMinutes) === p.value;
+                    return (
+                      <button
+                        key={p.value}
+                        type="button"
+                        onClick={() => setSpotMaxHoldMinutes(p.value)}
+                        className={`px-2 py-1.5 rounded text-xs font-semibold border transition-all text-center ${
+                          active
+                            ? 'bg-cyan-600/30 border-cyan-500 text-white shadow-sm'
+                            : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                        }`}
+                      >
+                        <div className="font-bold">{p.label}</div>
+                        <div className="text-[10px] opacity-75 font-normal truncate">{p.tag}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Quick Strategy Combo Presets */}
               <div className="p-3 rounded-xl bg-terminal-950 border border-terminal-border space-y-2">
                 <div className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  <span>High Win-Rate Spot Presets</span>
+                  <span>High Win-Rate Fast Scalp Presets</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => {
+                      setSpotStopLossPct(0.5);
+                      setSpotTakeProfitPct(0.9);
+                      setSpotMinConfidence(80);
+                      setSpotMaxHoldMinutes(5);
+                    }}
+                    className={`p-2 rounded-lg border text-left transition-all ${
+                      Math.abs(parseFloat(spotStopLossPct) - 0.5) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 0.9) < 0.05
+                        ? 'bg-emerald-950/60 border-emerald-500/60 text-white'
+                        : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="font-bold text-emerald-400">Ultra-Fast 5m ⚡</div>
+                    <div className="text-[10px] text-slate-400">-0.5% SL / +0.9% TP</div>
+                    <div className="text-[9px] text-cyan-400 mt-0.5">1-5 Min Micro-Burst</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSpotStopLossPct(0.6);
+                      setSpotTakeProfitPct(1.1);
+                      setSpotMinConfidence(80);
+                      setSpotMaxHoldMinutes(5);
+                    }}
+                    className={`p-2 rounded-lg border text-left transition-all ${
+                      Math.abs(parseFloat(spotStopLossPct) - 0.6) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 1.1) < 0.05
+                        ? 'bg-emerald-950/60 border-emerald-500/60 text-white'
+                        : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="font-bold text-amber-400">Sniper Scalp ⭐</div>
+                    <div className="text-[10px] text-slate-400">-0.6% SL / +1.1% TP</div>
+                    <div className="text-[9px] text-emerald-400 mt-0.5">80%–85% Target</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
                       setSpotStopLossPct(0.8);
                       setSpotTakeProfitPct(1.6);
-                      setSpotMinConfidence(82);
+                      setSpotMinConfidence(80);
+                      setSpotMaxHoldMinutes(5);
                     }}
                     className={`p-2 rounded-lg border text-left transition-all ${
                       Math.abs(parseFloat(spotStopLossPct) - 0.8) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 1.6) < 0.05
@@ -503,43 +585,9 @@ export default function SettingsModal({
                         : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    <div className="font-bold text-emerald-400">Fast Scalp</div>
+                    <div className="font-bold text-indigo-400">Momentum Runner</div>
                     <div className="text-[10px] text-slate-400">-0.8% SL / +1.6% TP</div>
-                    <div className="text-[9px] text-cyan-400 mt-0.5">1:2 R:R Ratio</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSpotStopLossPct(1.0);
-                      setSpotTakeProfitPct(2.2);
-                      setSpotMinConfidence(82);
-                    }}
-                    className={`p-2 rounded-lg border text-left transition-all ${
-                      Math.abs(parseFloat(spotStopLossPct) - 1.0) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 2.2) < 0.05
-                        ? 'bg-emerald-950/60 border-emerald-500/60 text-white'
-                        : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    <div className="font-bold text-amber-400">High Win Rate ⭐</div>
-                    <div className="text-[10px] text-slate-400">-1.0% SL / +2.2% TP</div>
-                    <div className="text-[9px] text-emerald-400 mt-0.5">80%–85% Target</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSpotStopLossPct(1.5);
-                      setSpotTakeProfitPct(3.0);
-                      setSpotMinConfidence(80);
-                    }}
-                    className={`p-2 rounded-lg border text-left transition-all ${
-                      Math.abs(parseFloat(spotStopLossPct) - 1.5) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 3.0) < 0.05
-                        ? 'bg-emerald-950/60 border-emerald-500/60 text-white'
-                        : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    <div className="font-bold text-indigo-400">Trend Runner</div>
-                    <div className="text-[10px] text-slate-400">-1.5% SL / +3.0% TP</div>
-                    <div className="text-[9px] text-indigo-300 mt-0.5">Wide Noise Buffer</div>
+                    <div className="text-[9px] text-indigo-300 mt-0.5">1:2 R:R Ratio</div>
                   </button>
                 </div>
               </div>

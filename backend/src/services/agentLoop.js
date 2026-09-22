@@ -25,14 +25,15 @@ export class AutonomousAgentLoop {
     });
     this.marginTradingEngine = new PaperTradingEngine(100, 'MARGIN');
 
-    // Account 2: Pure Spot Crypto (Multi-Portion 1-8 Slots, 0x leverage, long only)
+    // Account 2: Pure Spot Crypto (Multi-Portion 1-8 Slots, 0x leverage, fast 5-minute scalps)
     this.spotRiskManager = {
       maxSlots: 4, // 1, 2, 4, 6, 8 portions (default 4 = 25% balance each)
       allocationPct: 25, // 25% of balance per portion
       maxTradesPerPair: 2, // Up to 2 concurrent portions per coin (dip laddering & multi-entry)
-      stopLossPct: 1.0, // 1.0% Stop Loss default (prevents noise stop-outs)
-      takeProfitPct: 2.2, // 2.2% Take Profit default (1:2.2 R:R)
-      minConfidenceThreshold: 82
+      stopLossPct: 0.6, // 0.6% Stop Loss default (tight fast scalp risk)
+      takeProfitPct: 1.0, // 1.0% Take Profit default (quick 1-5m burst target)
+      maxHoldMinutes: 5, // Strict 5-minute maximum holding cap
+      minConfidenceThreshold: 80
     };
     this.spotTradingEngine = new PaperTradingEngine(25, 'SPOT');
 
@@ -193,10 +194,13 @@ export class AutonomousAgentLoop {
 
   updateSpotSettings(newSettings = {}) {
     if (newSettings.stopLossPct !== undefined) {
-      this.spotRiskManager.stopLossPct = Math.max(0.8, Math.min(10, Number(newSettings.stopLossPct)));
+      this.spotRiskManager.stopLossPct = Math.max(0.3, Math.min(10, Number(newSettings.stopLossPct)));
     }
     if (newSettings.takeProfitPct !== undefined) {
-      this.spotRiskManager.takeProfitPct = Math.max(1.6, Math.min(25, Number(newSettings.takeProfitPct)));
+      this.spotRiskManager.takeProfitPct = Math.max(0.5, Math.min(25, Number(newSettings.takeProfitPct)));
+    }
+    if (newSettings.maxHoldMinutes !== undefined) {
+      this.spotRiskManager.maxHoldMinutes = Math.max(1, Math.min(60, parseInt(newSettings.maxHoldMinutes, 10)));
     }
     if (newSettings.minConfidenceThreshold !== undefined) {
       this.spotRiskManager.minConfidenceThreshold = Math.max(70, Math.min(95, Number(newSettings.minConfidenceThreshold)));
@@ -209,7 +213,7 @@ export class AutonomousAgentLoop {
     if (newSettings.maxTradesPerPair !== undefined) {
       this.spotRiskManager.maxTradesPerPair = Math.max(1, Math.min(4, parseInt(newSettings.maxTradesPerPair, 10)));
     }
-    this.log(`⚙️ Spot Strategy updated: ${this.spotRiskManager.maxSlots} Portions (${this.spotRiskManager.allocationPct}% each, max ${this.spotRiskManager.maxTradesPerPair}/coin), SL: -${this.spotRiskManager.stopLossPct}%, TP: +${this.spotRiskManager.takeProfitPct}%`, 'INFO');
+    this.log(`⚙️ Spot Strategy updated: ${this.spotRiskManager.maxSlots} Portions (${this.spotRiskManager.allocationPct}% each, max ${this.spotRiskManager.maxTradesPerPair}/coin, max ${this.spotRiskManager.maxHoldMinutes || 5}m hold), SL: -${this.spotRiskManager.stopLossPct}%, TP: +${this.spotRiskManager.takeProfitPct}%`, 'INFO');
     return this.spotRiskManager;
   }
 
@@ -457,6 +461,7 @@ export class AutonomousAgentLoop {
             confidence: candidate.signal.confidence,
             reason: `Spot Scalp Slot ${this.spotTradingEngine.activePositions.length + 1}/${spotSlots}${scaleLabel} (${candidate.signal.reason})`,
             riskRewardRatio: Number((this.spotRiskManager.takeProfitPct / this.spotRiskManager.stopLossPct).toFixed(1)),
+            maxHoldMinutes: this.spotRiskManager.maxHoldMinutes || 5,
             tradingStyle: 'SPOT_BUY',
             leverage: 1, // 1x Spot Cash
             margin: notional, // cash allocated
@@ -464,7 +469,7 @@ export class AutonomousAgentLoop {
           });
 
           this.log(
-            `🪙 [SPOT] SCALP OPEN${scaleLabel}: Bought ${candidate.asset.symbol} with $${notional} (Portion ${this.spotTradingEngine.activePositions.length}/${spotSlots}) @ $${entryPrice} (Confidence: ${candidate.signal.confidence}%). Target: +${this.spotRiskManager.takeProfitPct}% ($${takeProfit}) | Stop: -${this.spotRiskManager.stopLossPct}% ($${stopLoss})`,
+            `🪙 [SPOT] SCALP OPEN${scaleLabel}: Bought ${candidate.asset.symbol} with $${notional} (Portion ${this.spotTradingEngine.activePositions.length}/${spotSlots}) @ $${entryPrice} (Confidence: ${candidate.signal.confidence}%). Target: +${this.spotRiskManager.takeProfitPct}% ($${takeProfit}) | Stop: -${this.spotRiskManager.stopLossPct}% ($${stopLoss}) | Cap: ${this.spotRiskManager.maxHoldMinutes || 5}m`,
             'SUCCESS'
           );
 
@@ -506,13 +511,17 @@ export class AutonomousAgentLoop {
       // B. Spot Engine Trigger Checks
       const spotClosed = this.spotTradingEngine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
       for (const closed of spotClosed) {
-        this.spotCooldowns.set(closed.symbol, 6);
+        // Fast 3-cycle (15s) cooldown on profit/time exit to allow rapid rotation into new setups; 6 cycles on stop loss
+        const spotCd = closed.exitReason === 'STOP_LOSS_TRIGGER' ? 6 : 3;
+        this.spotCooldowns.set(closed.symbol, spotCd);
         if (closed.exitReason === 'TAKE_PROFIT_TRIGGER') {
           this.log(`🪙 [SPOT] TARGET HIT: ${closed.symbol}! Sold 100% holding for +$${closed.finalPnL} (+${closed.finalPnLPercent}%)!`, 'SUCCESS');
+        } else if (closed.exitReason === 'TIME_LIMIT_EXIT') {
+          this.log(`⏱️ [SPOT] 5M SCALP EXPIRY: ${closed.symbol} auto-closed at 5m cap. Realized: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL} (${closed.finalPnLPercent}%)`, closed.finalPnL >= 0 ? 'SUCCESS' : 'INFO');
         } else if (closed.exitReason === 'STOP_LOSS_TRIGGER') {
           this.log(`🪙 [SPOT] STOP TRIGGERED: ${closed.symbol} sold at stop. Loss: -$${Math.abs(closed.finalPnL)} (${closed.finalPnLPercent}%)`, 'WARN');
         } else {
-          this.log(`🪙 [SPOT] EXIT: ${closed.symbol} closed. Realized: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'WARN');
+          this.log(`🪙 [SPOT] EXIT: ${closed.symbol} closed (${closed.exitReason}). Realized: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'WARN');
         }
 
         // Live Binance Exit Sell

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpRight, ArrowDownRight, XCircle, Shield, Target, ShieldCheck, Lock, Activity } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, XCircle, Shield, Target, ShieldCheck, Lock, Activity, Timer } from 'lucide-react';
 
 export default function ActivePositions({ positions = [], onCloseTrade, isClosingId }) {
   if (!positions || positions.length === 0) {
@@ -60,7 +60,12 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
               const sameSymbolPositions = positions.filter(p => p.symbol === pos.symbol);
               const isHedged = sameSymbolPositions.some(p => p.side !== pos.side);
               const isMultiTrade = sameSymbolPositions.length > 1;
-              const tradeIndex = sameSymbolPositions.findIndex(p => p.id === pos.id) + 1;
+              const isSpot = pos.tradingStyle === 'SPOT_BUY' || leverage === 1;
+              const maxHoldMins = pos.maxHoldMinutes || 5;
+              const elapsedSec = pos.openTime ? Math.max(0, Math.floor((Date.now() - new Date(pos.openTime).getTime()) / 1000)) : ((pos.cycleCount || 0) * 5);
+              const remainSec = Math.max(0, (maxHoldMins * 60) - elapsedSec);
+              const elapsedStr = `${Math.floor(elapsedSec / 60)}m ${elapsedSec % 60}s`;
+              const isExpiringSoon = remainSec <= 60;
 
               return (
                 <tr key={pos.id} className="hover:bg-terminal-800/30 transition-colors">
@@ -96,6 +101,15 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
                           </span>
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
+                          {isSpot && (
+                            <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold flex items-center gap-0.5 ${
+                              isExpiringSoon
+                                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
+                                : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                            }`}>
+                              <Timer className="w-2.5 h-2.5" /> {elapsedStr} / {maxHoldMins}m cap
+                            </span>
+                          )}
                           {pos.trailingStopActive && (
                             <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-0.5">
                               <ShieldCheck className="w-2.5 h-2.5" /> Trailing Locked

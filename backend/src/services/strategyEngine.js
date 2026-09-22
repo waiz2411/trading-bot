@@ -345,13 +345,14 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
   const currentPrice = asset.price || technicals.currentPrice;
   const { ema9, ema21, ema50, ema200, rsi, macd, bollingerBands: bb } = technicals;
 
-  const baseStopLossPct = Math.max(0.8, Number(spotRiskSettings.stopLossPct) || 1.0);
-  const baseTakeProfitPct = Math.max(1.6, Number(spotRiskSettings.takeProfitPct) || 2.2);
-  const minThreshold = Number(spotRiskSettings.minConfidenceThreshold) || 82;
+  const baseStopLossPct = Math.max(0.3, Number(spotRiskSettings.stopLossPct) || 0.6);
+  const baseTakeProfitPct = Math.max(0.6, Number(spotRiskSettings.takeProfitPct) || 1.0);
+  const minThreshold = Number(spotRiskSettings.minConfidenceThreshold) || 80;
+  const maxHoldMinutes = Number(spotRiskSettings.maxHoldMinutes) || 5;
 
-  // Adapt geometry to coin's volatility: high-beta altcoins get noise-cushioned stops with explosive targets
+  // Adapt geometry to coin's volatility for fast 1m-5m micro-scalps
   const isVolatileCoin = asset.isHighVolatility || (asset.minVolatility && asset.minVolatility >= 1.4);
-  const volFactor = isVolatileCoin ? Math.min(1.35, (asset.minVolatility || 1.5) / 1.3) : 1.0;
+  const volFactor = isVolatileCoin ? Math.min(1.25, (asset.minVolatility || 1.3) / 1.2) : 1.0;
   const stopLossPct = Number((baseStopLossPct * volFactor).toFixed(2));
   const takeProfitPct = Number((baseTakeProfitPct * volFactor).toFixed(2));
 
@@ -483,6 +484,7 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
       stopDistance: stopDist,
       targetDistance: targetDist,
       riskRewardRatio: effectiveRR,
+      maxHoldMinutes,
       tradingStyle: 'SPOT_BUY',
       tradeDirection: 'LONG_ONLY',
       reason: factors.slice(0, 3).join('. '),

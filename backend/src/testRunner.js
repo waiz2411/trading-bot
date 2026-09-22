@@ -107,14 +107,15 @@ const riskManager = new RiskManager({
   targetRiskRewardRatio: 1.3
 });
 
-// 2. SPOT ENGINE SIMULATION (Multi-Portion Volatile Crypto Scalping)
+// 2. SPOT ENGINE SIMULATION (Fast 5-Minute Micro-Scalps)
 const spotEngine = new PaperTradingEngine(100, 'SPOT');
 const spotRiskSettings = {
   maxSlots: 4,
   maxTradesPerPair: 2, // Up to 2 portions per coin (dip laddering)
-  stopLossPct: 1.0,
-  takeProfitPct: 2.2,
-  minConfidenceThreshold: 82
+  stopLossPct: 0.6, // Fast scalp risk
+  takeProfitPct: 1.0, // Quick micro-burst target
+  maxHoldMinutes: 5, // Strict 5-minute holding limit
+  minConfidenceThreshold: 80
 };
 
 // Load full 58-asset universe
@@ -181,6 +182,8 @@ let reversalExits = 0;
 let spotTP = 0;
 let spotTrail = 0;
 let spotBE = 0;
+let spotTimeCap = 0;
+let spotEarlyLock = 0;
 let spotSL = 0;
 
 const marginCooldowns = {};
@@ -334,6 +337,7 @@ for (let step = 0; step < 2500; step++) {
         confidence: topSpot.signal.confidence,
         reason: topSpot.signal.reason,
         riskRewardRatio: topSpot.signal.riskRewardRatio,
+        maxHoldMinutes: topSpot.signal.maxHoldMinutes || 5,
         tradingStyle: 'SPOT_BUY',
         leverage: 1,
         margin: notional,
@@ -354,10 +358,12 @@ for (let step = 0; step < 2500; step++) {
 
   const spotClosed = spotEngine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
   for (const c of spotClosed) {
-    spotCooldowns[c.symbol] = c.exitReason === 'STOP_LOSS_TRIGGER' ? 12 : 6;
+    spotCooldowns[c.symbol] = c.exitReason === 'STOP_LOSS_TRIGGER' ? 6 : 2;
     if (c.exitReason === 'TAKE_PROFIT_TRIGGER') spotTP++;
     else if (c.exitReason === 'TRAILING_STOP_TRIGGER') spotTrail++;
     else if (c.exitReason === 'BREAKEVEN_STOP_TRIGGER') spotBE++;
+    else if (c.exitReason === 'TIME_LIMIT_EXIT') spotTimeCap++;
+    else if (c.exitReason === 'MOMENTUM_EXHAUSTION_EXIT') spotEarlyLock++;
     else if (c.exitReason === 'STOP_LOSS_TRIGGER') spotSL++;
   }
 }
@@ -376,13 +382,13 @@ console.log(`• Realized PnL:        +$${stats.realizedPnL.toFixed(2)}`);
 console.log(`• Total Equity:        $${stats.equity.toFixed(2)} (${stats.totalPnLPct >= 0 ? '+' : ''}${stats.totalPnLPct}%)`);
 
 const spotStats = spotEngine.getPortfolioState();
-console.log('\n🪙 PURE SPOT CRYPTO RESULTS (Multi-Portion Scalping):');
+console.log('\n🪙 PURE SPOT CRYPTO RESULTS (Fast 5-Minute Micro-Scalps):');
 console.log(`• Total Closed Trades: ${spotStats.totalTrades} (Active: ${spotEngine.activePositions.length})`);
 console.log(`• Decisive Wins:       ${spotStats.winCount} (${spotStats.winRate}%)`);
 console.log(`• Decisive Losses:     ${spotStats.lossCount}`);
 console.log(`• Break-Evens:         ${spotStats.breakEvenCount}`);
 console.log(`• Profit Factor:       ${spotStats.profitFactor}`);
-console.log(`• Exits Breakdown:     TP: ${spotTP} | Trail: ${spotTrail} | BE: ${spotBE} | SL: ${spotSL}`);
+console.log(`• Exits Breakdown:     TP: ${spotTP} | Trail: ${spotTrail} | BE: ${spotBE} | 5m Cap: ${spotTimeCap} | Soft Lock: ${spotEarlyLock} | SL: ${spotSL}`);
 console.log(`• Starting Balance:    $${spotStats.initialBalance.toFixed(2)}`);
 console.log(`• Final Balance:       $${spotStats.balance.toFixed(2)}`);
 console.log(`• Realized PnL:        +$${spotStats.realizedPnL.toFixed(2)}`);
