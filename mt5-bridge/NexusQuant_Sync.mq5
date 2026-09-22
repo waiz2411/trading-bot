@@ -140,4 +140,16 @@ void ExecutePendingOrders(string json)
    PrintFormat("[NexusQuant] Scalp Order: %s %s (using %s) %.2f lots (SL: %.5f, TP: %.5f)", action, sym, targetSym, vol, sl, tp);
    if(action == "BUY") trade.Buy(vol, targetSym, 0, sl, tp, "NexusQuant Scalp");
    else if(action == "SELL") trade.Sell(vol, targetSym, 0, sl, tp, "NexusQuant Scalp");
+   else if(action == "CLOSE")
+   {
+      for(int i = PositionsTotal() - 1; i >= 0; i--)
+      {
+         ulong ticket = PositionGetTicket(i);
+         if(ticket > 0 && PositionGetString(POSITION_SYMBOL) == targetSym)
+         {
+            trade.PositionClose(ticket);
+            PrintFormat("[NexusQuant] Scalp Close: Closed position #%I64u on %s", ticket, targetSym);
+         }
+      }
+   }
 }
