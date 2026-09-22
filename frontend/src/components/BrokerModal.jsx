@@ -21,8 +21,10 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
   const [mt5Method, setMt5Method] = useState('CLOUD'); // 'CLOUD' | 'EA'
   const [mt5Login, setMt5Login] = useState(user?.brokerConnections?.mt5?.login?.replace(/\*+/g, '') || '');
   const [mt5Password, setMt5Password] = useState('');
-  const [mt5Server, setMt5Server] = useState(user?.brokerConnections?.mt5?.server || 'VaultMarkets-Live');
+  const [mt5Server, setMt5Server] = useState(user?.brokerConnections?.mt5?.server || 'Exness-MT5Trial16');
   const [mt5Gateway, setMt5Gateway] = useState('http://localhost:5001');
+  const [metaApiToken, setMetaApiToken] = useState(user?.brokerConnections?.mt5?.metaApiToken || '');
+  const [showMetaApiToken, setShowMetaApiToken] = useState(false);
   const [showMt5Password, setShowMt5Password] = useState(false);
   const [mt5Testing, setMt5Testing] = useState(false);
   const [mt5Result, setMt5Result] = useState(null);
@@ -47,6 +49,9 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
       if (user.brokerConnections.mt5.server && !mt5Server) {
         setMt5Server(user.brokerConnections.mt5.server);
       }
+      if (user.brokerConnections.mt5.metaApiToken && !metaApiToken) {
+        setMetaApiToken(user.brokerConnections.mt5.metaApiToken);
+      }
     }
   }, [user]);
 
@@ -61,10 +66,11 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
   };
 
   const POPULAR_SERVERS = [
+    'Exness-MT5Trial16',
+    'Exness-Trial',
     'Exness-Real',
     'Exness-Real2',
     'Exness-Real3',
-    'Exness-Trial',
     'VaultMarkets-Live',
     'ICMarketsSC-Demo',
     'Pepperstone-Edge',
@@ -128,7 +134,8 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
           login: mt5Login,
           password: mt5Password,
           server: mt5Server,
-          gatewayUrl: mt5Gateway || 'http://localhost:5001'
+          gatewayUrl: mt5Gateway || 'http://localhost:5001',
+          metaApiToken: metaApiToken.trim()
         })
       });
 
@@ -141,7 +148,8 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
           login: mt5Login,
           password: mt5Password,
           server: mt5Server,
-          gatewayUrl: mt5Gateway || 'http://localhost:5001'
+          gatewayUrl: mt5Gateway || 'http://localhost:5001',
+          metaApiToken: metaApiToken.trim()
         })
       });
       const data = await res.json();
@@ -533,6 +541,43 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
                     </div>
                   </div>
 
+                  {/* Personal MetaApi Token (Optional for Pure Cloud Connection without Local PC) */}
+                  <div className="p-3 rounded-xl bg-terminal-950/80 border border-terminal-border/80 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-slate-300 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                        <Key className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Personal MetaApi Token (Optional - 100% Cloud / No PC)</span>
+                      </label>
+                      <a
+                        href="https://app.metaapi.cloud"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] text-amber-400 hover:underline flex items-center gap-1"
+                      >
+                        <span>Get Free Token</span> &rarr;
+                      </a>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showMetaApiToken ? 'text' : 'password'}
+                        value={metaApiToken}
+                        onChange={(e) => setMetaApiToken(e.target.value)}
+                        placeholder="Optional: Free token from app.metaapi.cloud for 24/7 cloud connection"
+                        className="w-full pl-3 pr-10 py-1.5 bg-terminal-900 border border-terminal-border rounded-lg text-white font-mono text-xs focus:outline-none focus:border-amber-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowMetaApiToken(!showMetaApiToken)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                      >
+                        {showMetaApiToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-400">
+                      Leave empty to use shared gateway, or paste your free personal token from <span className="text-amber-400">app.metaapi.cloud</span> to run fully hosted in the cloud with zero software on your laptop!
+                    </p>
+                  </div>
+
                   {/* Action Button */}
                   <div className="flex items-center justify-between pt-1">
                     <button
@@ -681,19 +726,35 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
                     <div className="mt-3 p-3 rounded-lg bg-terminal-950 border border-blue-500/40 space-y-2">
                       <div className="text-xs font-bold text-white flex items-center gap-1.5">
                         <Zap className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Recommended Solution ($0 Fee):</span>
+                        <span>Two 100% Free Solutions ($0 Cost):</span>
                       </div>
-                      <p className="text-[11px] text-slate-300">
-                        MetaApi charges monthly fees to deploy live servers in their cloud. You can bypass this completely for <strong>$0 Free</strong> by using our lightweight Expert Advisor on your MT5 terminal!
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setMt5Method('EA')}
-                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-blue-600/20 cursor-pointer"
-                      >
-                        <Cpu className="w-3.5 h-3.5" />
-                        <span>Switch to Free MT5 EA Sync Tab &rarr;</span>
-                      </button>
+                      <div className="text-[11px] text-slate-300 space-y-1.5">
+                        <p>
+                          <strong>Option 1 (100% Cloud - No PC Needed):</strong> Sign up for free at{' '}
+                          <a
+                            href="https://app.metaapi.cloud"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-amber-400 underline font-semibold"
+                          >
+                            app.metaapi.cloud
+                          </a>
+                          , copy your free personal API token, and paste it into the <em>Personal MetaApi Token</em> field above. This runs 24/7 in the cloud without keeping any PC on!
+                        </p>
+                        <p>
+                          <strong>Option 2 (Direct MT5 Terminal):</strong> Run our lightweight Expert Advisor on your MT5 terminal (on PC or an Exness Free VPS) with zero 3rd-party accounts.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setMt5Method('EA')}
+                          className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-blue-600/20 cursor-pointer"
+                        >
+                          <Cpu className="w-3.5 h-3.5" />
+                          <span>Switch to Free MT5 EA Sync Tab &rarr;</span>
+                        </button>
+                      </div>
                     </div>
                   )}
                   {mt5Result.message && <p className="text-[11px] font-sans text-amber-300">{mt5Result.message}</p>}
