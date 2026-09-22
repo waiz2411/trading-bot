@@ -106,9 +106,10 @@ const riskManager = new RiskManager({
   targetRiskRewardRatio: 1.3
 });
 
-// 2. SPOT ENGINE SIMULATION (Tiny & Volatile Crypto Focus)
-const spotEngine = new PaperTradingEngine(25, 'SPOT');
+// 2. SPOT ENGINE SIMULATION (Multi-Portion Volatile Crypto Scalping)
+const spotEngine = new PaperTradingEngine(100, 'SPOT');
 const spotRiskSettings = {
+  maxSlots: 4,
   stopLossPct: 1.0,
   takeProfitPct: 2.2,
   minConfidenceThreshold: 82
@@ -128,7 +129,9 @@ testAssets.forEach(a => {
 function tickCandle(asset) {
   const candles = asset.candles;
   const last = candles[candles.length - 1];
-  const vol = asset.category === 'Crypto' ? 0.0003 : 0.00012;
+  const vol = asset.category === 'Crypto'
+    ? (asset.isHighVolatility ? 0.0012 : 0.0005)
+    : 0.00012;
 
   // Coherent wave momentum: 25 to 50 ticks of directional bias (72% trend, 28% pullback)
   if (!asset.momentumTicks || asset.momentumTicks <= 0) {
@@ -178,11 +181,18 @@ let spotTrail = 0;
 let spotBE = 0;
 let spotSL = 0;
 
-const cooldowns = {};
-let spotCooldown = 0;
+const marginCooldowns = {};
+const spotCooldowns = {};
 
 // Simulate 2500 ticks for statistically robust evaluation
 for (let step = 0; step < 2500; step++) {
+  for (const sym in marginCooldowns) {
+    if (marginCooldowns[sym] > 0) marginCooldowns[sym]--;
+  }
+  for (const sym in spotCooldowns) {
+    if (spotCooldowns[sym] > 0) spotCooldowns[sym]--;
+  }
+
   const pricesMap = {};
   const technicalsMap = {};
   const marginCandidates = [];
@@ -196,19 +206,16 @@ for (let step = 0; step < 2500; step++) {
     const technicals = calculateTechnicalMetrics(asset.candles);
     if (technicals) technicalsMap[asset.symbol] = technicals;
 
-    if (cooldowns[asset.symbol] > 0) {
-      cooldowns[asset.symbol]--;
-      continue;
-    }
-
     // A. MARGIN SCALPER CANDIDATE EVALUATION
-    const signal = evaluateStrategyConfluence(asset, technicals, riskManager.getSettings());
-    if (signal.action === 'STRONG_BUY' || signal.action === 'STRONG_SELL') {
-      marginCandidates.push({ asset, signal });
+    if (!marginCooldowns[asset.symbol] || marginCooldowns[asset.symbol] <= 0) {
+      const signal = evaluateStrategyConfluence(asset, technicals, riskManager.getSettings());
+      if (signal.action === 'STRONG_BUY' || signal.action === 'STRONG_SELL') {
+        marginCandidates.push({ asset, signal });
+      }
     }
 
     // B. SPOT CRYPTO CANDIDATE EVALUATION
-    if (asset.category === 'Crypto') {
+    if (asset.category === 'Crypto' && (!spotCooldowns[asset.symbol] || spotCooldowns[asset.symbol] <= 0)) {
       const spotSignal = evaluateSpotConfluence(asset, technicals, spotRiskSettings);
       if (spotSignal.action === 'STRONG_BUY') {
         spotCandidates.push({ asset, signal: spotSignal });
@@ -270,24 +277,34 @@ for (let step = 0; step < 2500; step++) {
           margin: risk.margin,
           liquidationPrice: risk.liquidationPrice
         });
-        cooldowns[asset.symbol] = 8;
+        marginCooldowns[asset.symbol] = 8;
       }
     }
   }
 
-  // PURE SPOT SNIPER SELECTION (100% Capital on Tiny & Volatile Alt/Meme Coins)
-  if (spotCooldown <= 0 && spotEngine.activePositions.length === 0 && spotCandidates.length > 0) {
+  // PURE SPOT CRYPTO SELECTION (Multi-Portion 4 Slots on Tiny & Volatile Alt/Meme Coins)
+  const spotSlots = spotRiskSettings.maxSlots || 4;
+  if (spotEngine.activePositions.length < spotSlots && spotCandidates.length > 0) {
     spotCandidates.sort((a, b) => {
       const volA = (a.asset.isHighVolatility ? 1.5 : 1.0) * (a.asset.minVolatility || 1.0);
       const volB = (b.asset.isHighVolatility ? 1.5 : 1.0) * (b.asset.minVolatility || 1.0);
       return (b.signal.confidence * volB) - (a.signal.confidence * volA);
     });
-    const topSpot = spotCandidates[0];
-    const spotCash = spotEngine.balance;
 
-    if (spotCash >= 5) {
+    const totalSpotCash = spotEngine.balance;
+    const spotPortionSize = Number((totalSpotCash / spotSlots).toFixed(2));
+
+    for (const topSpot of spotCandidates) {
+      if (spotEngine.activePositions.length >= spotSlots) break;
+      if (spotEngine.activePositions.some(p => p.symbol === topSpot.asset.symbol)) continue;
+
+      const currentUsed = spotEngine.activePositions.reduce((acc, p) => acc + (p.notional || 0), 0);
+      const availableCash = Math.max(0, totalSpotCash - currentUsed);
+      const notional = Math.min(spotPortionSize, availableCash);
+
+      if (notional < 0.5) break;
+
       const entryPrice = topSpot.signal.entryPrice;
-      const notional = Number(spotCash.toFixed(2));
       const rawUnits = notional / entryPrice;
       const units = Number(rawUnits.toFixed(topSpot.asset.decimals || 4));
 
@@ -312,15 +329,13 @@ for (let step = 0; step < 2500; step++) {
         margin: notional,
         liquidationPrice: 0
       });
-      spotCooldown = 15;
+      spotCooldowns[topSpot.asset.symbol] = 6;
     }
   }
 
-  if (spotCooldown > 0) spotCooldown--;
-
   const closed = engine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
   for (const c of closed) {
-    cooldowns[c.symbol] = c.exitReason === 'STOP_LOSS_TRIGGER' ? 20 : 6;
+    marginCooldowns[c.symbol] = c.exitReason === 'STOP_LOSS_TRIGGER' ? 20 : 6;
     if (c.exitReason === 'TAKE_PROFIT_TRIGGER') takeProfits++;
     else if (c.exitReason === 'TRAILING_STOP_TRIGGER') trailingStops++;
     else if (c.exitReason === 'BREAKEVEN_STOP_TRIGGER') breakEvens++;
@@ -330,6 +345,7 @@ for (let step = 0; step < 2500; step++) {
 
   const spotClosed = spotEngine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
   for (const c of spotClosed) {
+    spotCooldowns[c.symbol] = c.exitReason === 'STOP_LOSS_TRIGGER' ? 12 : 6;
     if (c.exitReason === 'TAKE_PROFIT_TRIGGER') spotTP++;
     else if (c.exitReason === 'TRAILING_STOP_TRIGGER') spotTrail++;
     else if (c.exitReason === 'BREAKEVEN_STOP_TRIGGER') spotBE++;
@@ -351,7 +367,7 @@ console.log(`• Realized PnL:        +$${stats.realizedPnL.toFixed(2)}`);
 console.log(`• Total Equity:        $${stats.equity.toFixed(2)} (${stats.totalPnLPct >= 0 ? '+' : ''}${stats.totalPnLPct}%)`);
 
 const spotStats = spotEngine.getPortfolioState();
-console.log('\n🪙 PURE SPOT CRYPTO RESULTS:');
+console.log('\n🪙 PURE SPOT CRYPTO RESULTS (Multi-Portion Scalping):');
 console.log(`• Total Closed Trades: ${spotStats.totalTrades} (Active: ${spotEngine.activePositions.length})`);
 console.log(`• Decisive Wins:       ${spotStats.winCount} (${spotStats.winRate}%)`);
 console.log(`• Decisive Losses:     ${spotStats.lossCount}`);
@@ -367,5 +383,10 @@ console.log('\n🔎 SAMPLE MARGIN TRADES (Verifying 500x Leverage & Margin Math)
 stats.closedTrades.slice(0, 8).forEach(t => {
   const actualLev = (t.notional / t.margin).toFixed(1);
   console.log(`  ${t.side.padEnd(5)} ${t.symbol.padEnd(10)} | Size: $${t.notional} | Margin: $${t.margin} | Leverage: ${actualLev}x | PnL: ${t.finalPnL >= 0 ? '+' : ''}$${t.finalPnL} | ROE: ${t.roePercent >= 0 ? '+' : ''}${t.roePercent}% | Reason: ${t.exitReason}`);
+});
+
+console.log('\n🔎 SAMPLE SPOT MULTI-PORTION TRADES (Cash-Only 0x Leverage Scalping):');
+spotStats.closedTrades.slice(0, 8).forEach(t => {
+  console.log(`  BUY   ${t.symbol.padEnd(10)} | Portion: $${t.notional} | PnL: ${t.finalPnL >= 0 ? '+' : ''}$${t.finalPnL} (${t.roePercent >= 0 ? '+' : ''}${t.roePercent}%) | Reason: ${t.exitReason}`);
 });
 console.log('================================================================');

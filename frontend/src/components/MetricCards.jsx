@@ -135,12 +135,12 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
         {isSpot ? (
           <>
             <div className={`text-xl font-bold font-mono tracking-tight ${activePositions.length > 0 ? 'text-white' : 'text-slate-400'}`}>
-              ${activePositions.length > 0 ? (portfolio.holdingValue || ((activePositions[0]?.notional || 0) + unrealizedPnL)).toFixed(2) : '0.00'}
+              ${activePositions.length > 0 ? (portfolio.holdingValue || ((portfolio.usedMargin || 0) + unrealizedPnL)).toFixed(2) : '0.00'}
             </div>
             <div className={`text-[11px] font-mono mt-1 ${isUnrealizedProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
               {activePositions.length > 0 ? (
                 <span>
-                  {isUnrealizedProfit ? '+' : '-'}${Math.abs(unrealizedPnL).toFixed(2)} ({activePositions[0]?.symbol || 'Crypto'})
+                  {isUnrealizedProfit ? '+' : '-'}${Math.abs(unrealizedPnL).toFixed(2)} ({activePositions.length} active coin{activePositions.length > 1 ? 's' : ''})
                 </span>
               ) : (
                 <span className="text-slate-500">Standing by for setup</span>
@@ -181,42 +181,36 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
           <span className="font-mono uppercase tracking-wider text-[11px]">Win Rate</span>
           <Award className="w-3.5 h-3.5 text-amber-400" />
         </div>
-        <div className="text-xl font-bold font-mono text-white tracking-tight flex items-baseline gap-1">
-          <span>{winRate}%</span>
-          <span className="text-xs text-slate-400 font-normal">({totalTrades} trades)</span>
+        <div className="text-xl font-bold font-mono text-white tracking-tight flex items-center justify-between">
+          <span>{displayWinRate.toFixed(1)}%</span>
+          <span className="text-xs text-slate-400 font-mono font-normal">({totalTrades} trades)</span>
         </div>
-        <div className="text-[11px] font-mono mt-1 flex items-center gap-1.5 text-slate-300">
+        <div className="text-[11px] font-mono mt-1 text-slate-400 flex items-center gap-1.5">
           <span className="text-emerald-400 font-semibold">{winCount}W</span>
-          <span className="text-slate-600">/</span>
+          <span>/</span>
           <span className="text-rose-400 font-semibold">{lossCount}L</span>
-          {breakEvenCount > 0 && (
-            <>
-              <span className="text-slate-600">/</span>
-              <span className="text-indigo-400 font-semibold">{breakEvenCount}BE</span>
-            </>
-          )}
+          <span>/</span>
+          <span className="text-indigo-300 font-semibold">{breakEvenCount}BE</span>
         </div>
         <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-500 opacity-60" />
       </div>
 
-      {/* Card 5: Execution Style & Leverage */}
+      {/* Card 5: Execution Style / Risk-to-Reward Ratio */}
       {isSpot ? (
         <div className="bg-terminal-850/80 border border-terminal-border rounded-xl p-3.5 relative overflow-hidden">
           <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-            <span className="font-mono uppercase tracking-wider text-[11px]">Execution Style</span>
-            <Zap className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="font-mono uppercase tracking-wider text-[11px]">Target R:R Ratio</span>
+            <Target className="w-3.5 h-3.5 text-emerald-400" />
           </div>
           <div className="text-base font-bold font-mono text-emerald-300 tracking-tight flex items-center justify-between">
-            <span>PURE SPOT</span>
+            <span>1:{riskSettings?.targetRiskRewardRatio || '2.2'}</span>
             <span className="text-xs px-2 py-0.5 rounded bg-terminal-950 border border-emerald-500/40 text-emerald-300 font-mono font-bold">
-              1x CASH
+              SPOT
             </span>
           </div>
-          <div className="text-[11px] font-mono mt-1 text-cyan-300 font-semibold flex items-center justify-between">
+          <div className="text-[11px] font-mono mt-1 text-emerald-400 font-semibold flex items-center justify-between">
             <span>▲ LONG ONLY</span>
-            <span className="text-slate-400 font-normal">
-              -{riskSettings?.stopLossPct || 1.0}% / +{riskSettings?.takeProfitPct || 2.5}%
-            </span>
+            <span className="text-slate-400 font-normal">SL -{riskSettings?.stopLossPct || '1.0'}% | TP +{riskSettings?.takeProfitPct || '2.2'}%</span>
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-emerald-500 opacity-60" />
         </div>
@@ -248,18 +242,20 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
             <ShieldAlert className="w-3.5 h-3.5 text-emerald-400" />
           </div>
           <div className="text-base font-bold font-mono text-white tracking-tight flex items-center justify-between">
-            <span className="text-emerald-400">100% PER TRADE</span>
-            <span className="text-xs text-slate-400 font-mono font-normal">1 Slot</span>
+            <span className="text-emerald-400">
+              {riskSettings?.allocationPct || (100 / (riskSettings?.maxConcurrentTrades || 4)).toFixed(0)}% PER TRADE
+            </span>
+            <span className="text-xs text-slate-300 font-mono font-normal">
+              {activePositions.length}/{riskSettings?.maxConcurrentTrades || 4} Portions
+            </span>
           </div>
           <div className="text-[11px] font-mono mt-1 text-slate-400 flex items-center justify-between">
             {isLive && !isConnected ? (
               <span className="text-amber-400">Awaiting Binance API</span>
-            ) : activePositions.length > 0 ? (
-              <span className="text-emerald-300 font-mono">${(portfolio.holdingValue || usedMargin).toFixed(2)} in {activePositions[0]?.symbol}</span>
             ) : (
-              <span className="text-slate-400 font-mono">${(balance ?? 0).toFixed(2)} USDT free</span>
+              <span className="text-slate-300 font-mono">${(portfolio.freeCash ?? Math.max(0, balance - usedMargin)).toFixed(2)} free cash</span>
             )}
-            <span className="text-emerald-400 font-semibold">0x Lev (Safe)</span>
+            <span className="text-emerald-400 font-semibold">0x Lev (Cash)</span>
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-emerald-500 opacity-60" />
         </div>

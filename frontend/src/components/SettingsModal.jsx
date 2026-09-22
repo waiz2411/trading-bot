@@ -25,8 +25,17 @@ export default function SettingsModal({
   const [spotStopLossPct, setSpotStopLossPct] = useState(initialSpot.stopLossPct || 1.0);
   const [spotTakeProfitPct, setSpotTakeProfitPct] = useState(initialSpot.takeProfitPct || 2.5);
   const [spotMinConfidence, setSpotMinConfidence] = useState(initialSpot.minConfidenceThreshold || 82);
+  const [spotMaxSlots, setSpotMaxSlots] = useState(initialSpot.maxSlots || 4);
 
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  const spotPortionPresets = [
+    { label: '1 Portion (100%)', value: 1, tag: 'All-in' },
+    { label: '2 Portions (50%)', value: 2, tag: 'Dual Setup' },
+    { label: '4 Portions (25%)', value: 4, tag: 'Multi-Scalp ⭐' },
+    { label: '6 Portions (16.7%)', value: 6, tag: 'Active' },
+    { label: '8 Portions (12.5%)', value: 8, tag: 'Max 8 Scalps 🔥' }
+  ];
 
   const slotPresets = [
     { label: '2 Slots', value: 2, tag: 'Sniper Focus' },
@@ -75,7 +84,8 @@ export default function SettingsModal({
         account: 'SPOT',
         stopLossPct: parseFloat(spotStopLossPct),
         takeProfitPct: parseFloat(spotTakeProfitPct),
-        minConfidenceThreshold: parseInt(spotMinConfidence, 10)
+        minConfidenceThreshold: parseInt(spotMinConfidence, 10),
+        maxSlots: parseInt(spotMaxSlots, 10)
       });
     } else {
       onSaveSettings({
@@ -349,6 +359,40 @@ export default function SettingsModal({
                   Every spot trade buys the coin using <strong>100% of your current Spot Balance</strong> (e.g. $10 balance buys $10 of coin, $50 buys $50). 
                   <strong> 0x Leverage</strong> means zero liquidation risk — you own the underlying asset directly.
                 </p>
+              </div>
+
+              {/* Spot Balance Partitioning & Portions */}
+              <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/40">
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="text-emerald-300 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <Coins className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Balance Partitioning & Concurrent Scalps</span>
+                  </label>
+                  <span className="text-emerald-400 font-bold text-sm bg-terminal-950 px-2.5 py-0.5 rounded border border-emerald-500/40 font-mono">
+                    {spotMaxSlots} Portion{spotMaxSlots > 1 ? 's' : ''} ({(100 / spotMaxSlots).toFixed(1)}% each)
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-slate-300 font-sans mb-2.5">
+                  Splits your cash balance into equal portions so multiple volatile altcoins and memecoins can be scalped simultaneously.
+                </p>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {spotPortionPresets.map(preset => (
+                    <button
+                      key={preset.value}
+                      type="button"
+                      onClick={() => setSpotMaxSlots(preset.value)}
+                      className={`px-2.5 py-1.5 rounded text-[11px] font-mono transition-all border ${
+                        parseInt(spotMaxSlots, 10) === preset.value
+                          ? 'bg-emerald-600 text-white border-emerald-400 font-bold shadow-sm shadow-emerald-500/30'
+                          : 'bg-terminal-950 text-slate-400 border-terminal-border hover:text-white hover:border-slate-500'
+                      }`}
+                    >
+                      {preset.label} <span className="opacity-75">({preset.tag})</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Quick Strategy Combo Presets */}

@@ -25,10 +25,10 @@ export class AutonomousAgentLoop {
     });
     this.marginTradingEngine = new PaperTradingEngine(100, 'MARGIN');
 
-    // Account 2: Pure Spot Crypto (100% USDT balance allocation, 0x leverage, long only)
+    // Account 2: Pure Spot Crypto (Multi-Portion 1-8 Slots, 0x leverage, long only)
     this.spotRiskManager = {
-      allocationPct: 100, // 100% of available free USDT
-      maxConcurrentTrades: 1, // Pure spot coin focus
+      maxSlots: 4, // 1, 2, 4, 6, 8 portions (default 4 = 25% balance each)
+      allocationPct: 25, // 25% of balance per portion
       stopLossPct: 1.0, // 1.0% Stop Loss default (prevents noise stop-outs)
       takeProfitPct: 2.2, // 2.2% Take Profit default (1:2.2 R:R)
       minConfidenceThreshold: 82
@@ -200,7 +200,12 @@ export class AutonomousAgentLoop {
     if (newSettings.minConfidenceThreshold !== undefined) {
       this.spotRiskManager.minConfidenceThreshold = Math.max(70, Math.min(95, Number(newSettings.minConfidenceThreshold)));
     }
-    this.log(`⚙️ Spot Strategy updated: SL: -${this.spotRiskManager.stopLossPct}%, TP: +${this.spotRiskManager.takeProfitPct}%`, 'INFO');
+    if (newSettings.maxSlots !== undefined) {
+      const slots = Math.max(1, Math.min(8, parseInt(newSettings.maxSlots, 10)));
+      this.spotRiskManager.maxSlots = slots;
+      this.spotRiskManager.allocationPct = Number((100 / slots).toFixed(1));
+    }
+    this.log(`⚙️ Spot Strategy updated: ${this.spotRiskManager.maxSlots} Portions (${this.spotRiskManager.allocationPct}% each), SL: -${this.spotRiskManager.stopLossPct}%, TP: +${this.spotRiskManager.takeProfitPct}%`, 'INFO');
     return this.spotRiskManager;
   }
 
@@ -377,9 +382,12 @@ export class AutonomousAgentLoop {
       }
 
       // ==========================================
-      // 4B. PURE SPOT CRYPTO AUTO-OPEN (100% Capital on Tiny & Volatile Coins)
+      // 4B. PURE SPOT CRYPTO AUTO-OPEN (Multi-Portion 1-8 Scalps)
       // ==========================================
-      if (this.isAutoTradingEnabled && this.spotTradingEngine.activePositions.length === 0 && validSpotBuys.length > 0) {
+      const spotSlots = this.spotRiskManager.maxSlots || 4;
+      const spotOpen = this.spotTradingEngine.activePositions;
+
+      if (this.isAutoTradingEnabled && spotOpen.length < spotSlots && validSpotBuys.length > 0) {
         // Sort by Volatility-Weighted Confluence: Prioritizes explosive meme & altcoins (PEPE, BONK, DOGE, SUI, etc.)
         validSpotBuys.sort((a, b) => {
           const volA = (a.asset.isHighVolatility ? 1.5 : 1.0) * (a.asset.minVolatility || 1.0);
@@ -388,23 +396,36 @@ export class AutonomousAgentLoop {
           const scoreB = b.signal.confidence * volB;
           return scoreB - scoreA;
         });
-        const topPick = validSpotBuys[0];
-        const spotCash = this.spotTradingEngine.balance;
 
-        if (spotCash >= 0.5) {
-          const entryPrice = topPick.signal.entryPrice;
-          const notional = Number(spotCash.toFixed(2));
+        const totalCash = this.spotTradingEngine.balance;
+        const portionSize = Number((totalCash / spotSlots).toFixed(2));
+
+        for (const candidate of validSpotBuys) {
+          if (this.spotTradingEngine.activePositions.length >= spotSlots) break;
+
+          // Prevent opening duplicate position on the same coin
+          const alreadyOpen = this.spotTradingEngine.activePositions.some(p => p.symbol === candidate.asset.symbol);
+          if (alreadyOpen) continue;
+
+          // Calculate current available cash
+          const currentUsed = this.spotTradingEngine.activePositions.reduce((acc, p) => acc + (p.notional || 0), 0);
+          const availableCash = Math.max(0, totalCash - currentUsed);
+          const notional = Math.min(portionSize, availableCash);
+
+          if (notional < 0.5) break; // Insufficient remaining cash for another portion
+
+          const entryPrice = candidate.signal.entryPrice;
           const rawUnits = notional / entryPrice;
-          const units = Number(rawUnits.toFixed(topPick.asset.decimals || 4));
+          const units = Number(rawUnits.toFixed(candidate.asset.decimals || 4));
 
-          const stopDist = topPick.signal.stopDistance;
-          const targetDist = topPick.signal.targetDistance;
-          const stopLoss = topPick.signal.stopLoss;
-          const takeProfit = topPick.signal.takeProfit;
+          const stopDist = candidate.signal.stopDistance;
+          const targetDist = candidate.signal.targetDistance;
+          const stopLoss = candidate.signal.stopLoss;
+          const takeProfit = candidate.signal.takeProfit;
 
           const spotPos = this.spotTradingEngine.openPosition({
-            symbol: topPick.asset.symbol,
-            name: topPick.asset.name,
+            symbol: candidate.asset.symbol,
+            name: candidate.asset.name,
             category: 'Crypto',
             side: 'LONG',
             entryPrice,
@@ -414,24 +435,24 @@ export class AutonomousAgentLoop {
             targetDistance: targetDist,
             units,
             notional,
-            confidence: topPick.signal.confidence,
-            reason: `Pure Spot 100% Allocation (${topPick.signal.reason})`,
+            confidence: candidate.signal.confidence,
+            reason: `Spot Scalp Slot ${this.spotTradingEngine.activePositions.length + 1}/${spotSlots} (${candidate.signal.reason})`,
             riskRewardRatio: Number((this.spotRiskManager.takeProfitPct / this.spotRiskManager.stopLossPct).toFixed(1)),
             tradingStyle: 'SPOT_BUY',
             leverage: 1, // 1x Spot Cash
-            margin: notional, // 100% full balance allocated
+            margin: notional, // cash allocated
             liquidationPrice: 0 // No liquidation in spot
           });
 
           this.log(
-            `🪙 [SPOT] 100% CAPITAL BUY: Bought ${topPick.asset.symbol} with $${notional} (100% Balance) @ $${entryPrice} (Confidence: ${topPick.signal.confidence}%). Target: +${this.spotRiskManager.takeProfitPct}% ($${takeProfit}) | Stop: -${this.spotRiskManager.stopLossPct}% ($${stopLoss})`,
+            `🪙 [SPOT] SCALP OPEN: Bought ${candidate.asset.symbol} with $${notional} (Portion ${this.spotTradingEngine.activePositions.length}/${spotSlots}) @ $${entryPrice} (Confidence: ${candidate.signal.confidence}%). Target: +${this.spotRiskManager.takeProfitPct}% ($${takeProfit}) | Stop: -${this.spotRiskManager.stopLossPct}% ($${stopLoss})`,
             'SUCCESS'
           );
 
           // Live Binance API Dispatcher (when logged into Live Account)
           if (this.currentMode === 'LIVE' && binanceConnector.connected) {
             binanceConnector.placeSpotMarketOrder({
-              symbol: topPick.asset.symbol,
+              symbol: candidate.asset.symbol,
               side: 'BUY',
               quoteOrderQty: notional
             }).then(liveOrder => {
@@ -637,6 +658,7 @@ export class AutonomousAgentLoop {
     const marginRisk = this.marginRiskManager.getSettings();
     const spotRisk = {
       ...this.spotRiskManager,
+      maxConcurrentTrades: this.spotRiskManager.maxSlots || 4,
       tradingStyle: 'SPOT_BUY',
       defaultLeverage: 1,
       tradeDirection: 'LONG_ONLY',
