@@ -43,6 +43,7 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
   const winRate = (portfolio.totalTrades !== undefined && portfolio.totalTrades > 0)
     ? (totalTrades > 0 && lossCount === 0 ? 100 : portfolio.winRate)
     : (decisive > 0 ? Number(((winCount / decisive) * 100).toFixed(1)) : (totalTrades > 0 && lossCount === 0 ? 100 : 0));
+  const displayWinRate = !isNaN(Number(winRate)) ? Number(winRate) : 0;
 
   const isNetProfit = totalPnL >= 0;
   const isUnrealizedProfit = unrealizedPnL >= 0;
