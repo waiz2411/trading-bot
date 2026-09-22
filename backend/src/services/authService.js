@@ -106,6 +106,16 @@ class AuthService {
       }
       if (!user.brokerConnections) user.brokerConnections = {};
       if (!user.brokerConnections.mt5) user.brokerConnections.mt5 = {};
+      if (!user.brokerConnections.mexc) {
+        user.brokerConnections.mexc = {
+          connected: false,
+          apiKey: '',
+          apiSecret: '',
+          defaultLeverage: 50,
+          status: 'DISCONNECTED',
+          lastChecked: null
+        };
+      }
       if (!user.brokerConnections.mt5.syncToken) {
         user.brokerConnections.mt5.syncToken = `NQ-SYNC-${(user.id || 'usr').slice(-6).toUpperCase()}`;
       }
@@ -262,6 +272,14 @@ class AuthService {
       };
       this.saveUsers();
       return user.brokerConnections.mt5;
+    } else if (broker === 'mexc') {
+      user.brokerConnections.mexc = {
+        ...user.brokerConnections.mexc,
+        ...config,
+        lastUpdated: new Date().toISOString()
+      };
+      this.saveUsers();
+      return user.brokerConnections.mexc;
     }
     throw new Error('Unknown broker type');
   }
@@ -312,6 +330,13 @@ class AuthService {
           syncToken: user.brokerConnections?.mt5?.syncToken || `NQ-SYNC-${(user.id || 'usr').slice(-6).toUpperCase()}`,
           status: user.brokerConnections?.mt5?.status || 'DISCONNECTED',
           lastChecked: user.brokerConnections?.mt5?.lastChecked || null
+        },
+        mexc: {
+          connected: user.brokerConnections?.mexc?.connected || false,
+          apiKey: user.brokerConnections?.mexc?.apiKey ? `${user.brokerConnections.mexc.apiKey.slice(0, 6)}...` : '',
+          defaultLeverage: user.brokerConnections?.mexc?.defaultLeverage || 50,
+          status: user.brokerConnections?.mexc?.status || 'DISCONNECTED',
+          lastChecked: user.brokerConnections?.mexc?.lastChecked || null
         }
       }
     };

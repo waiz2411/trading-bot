@@ -9,6 +9,7 @@ import { marketDataService } from './services/marketData.js';
 import { authService } from './services/authService.js';
 import { binanceConnector } from './services/binanceConnector.js';
 import { mt5Connector } from './services/mt5Connector.js';
+import { mexcConnector } from './services/mexcConnector.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -234,6 +235,60 @@ app.get('/api/broker/mt5/download-ea', (req, res) => {
     } else {
       res.status(404).json({ error: 'EA source file not found.' });
     }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ====================================================
+// MEXC GLOBAL ROUTES (Spot & 200x Futures Margin)
+// ====================================================
+app.post('/api/broker/mexc/config', (req, res) => {
+  try {
+    const { email, apiKey, apiSecret, defaultLeverage } = req.body;
+    const status = mexcConnector.configure({ apiKey, apiSecret, defaultLeverage });
+    if (email) {
+      authService.updateBrokerConfig(email, 'mexc', {
+        apiKey,
+        apiSecret,
+        defaultLeverage: defaultLeverage || 50,
+        connected: false,
+        status: apiKey ? 'STANDBY' : 'DISCONNECTED'
+      });
+    }
+    res.json({ success: true, mexc: status });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/broker/mexc/test', async (req, res) => {
+  try {
+    const { email, apiKey, apiSecret, defaultLeverage } = req.body;
+    if (apiKey || apiSecret) {
+      mexcConnector.configure({ apiKey, apiSecret, defaultLeverage });
+    }
+    const result = await mexcConnector.testConnection();
+    if (result.connected && email) {
+      authService.updateBrokerConfig(email, 'mexc', {
+        apiKey,
+        apiSecret,
+        defaultLeverage: defaultLeverage || 50,
+        connected: true,
+        status: 'CONNECTED',
+        lastChecked: new Date().toISOString()
+      });
+    }
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/broker/mexc/balances', async (req, res) => {
+  try {
+    const balances = await mexcConnector.getBalances();
+    res.json({ success: true, balances });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

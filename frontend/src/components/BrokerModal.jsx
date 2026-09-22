@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { X, Check, AlertCircle, RefreshCw, Eye, EyeOff, ShieldCheck, Zap, Coins, Globe, Key, Server, Cpu, ChevronDown, ChevronUp, Cloud, Copy, Download, KeyRound, Radio } from 'lucide-react';
+import { X, Check, AlertCircle, RefreshCw, Eye, EyeOff, ShieldCheck, Zap, Coins, Globe, Key, Server, Cpu, ChevronDown, ChevronUp, Cloud, Copy, Download, KeyRound, Radio, Flame } from 'lucide-react';
 
 export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab = 'BINANCE' }) {
-  const [activeTab, setActiveTab] = useState(initialTab || 'BINANCE'); // 'BINANCE' | 'MT5'
+  const [activeTab, setActiveTab] = useState(initialTab || 'BINANCE'); // 'BINANCE' | 'MEXC' | 'MT5'
 
   // Update activeTab if initialTab changes
   React.useEffect(() => {
@@ -16,6 +16,14 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
   const [showBinanceSecret, setShowBinanceSecret] = useState(false);
   const [binanceTesting, setBinanceTesting] = useState(false);
   const [binanceResult, setBinanceResult] = useState(null);
+
+  // MEXC State
+  const [mexcKey, setMexcKey] = useState(user?.brokerConnections?.mexc?.apiKey?.replace(/\*+/g, '') || '');
+  const [mexcSecret, setMexcSecret] = useState('');
+  const [mexcLeverage, setMexcLeverage] = useState(user?.brokerConnections?.mexc?.defaultLeverage || 50);
+  const [showMexcSecret, setShowMexcSecret] = useState(false);
+  const [mexcTesting, setMexcTesting] = useState(false);
+  const [mexcResult, setMexcResult] = useState(null);
 
   // MT5 State
   const [mt5Method, setMt5Method] = useState('CLOUD'); // 'CLOUD' | 'EA'
@@ -40,17 +48,27 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
       .catch(() => null);
   }, []);
 
-  // Update MT5 fields when user changes
+  // Update MT5 and MEXC fields when user changes
   React.useEffect(() => {
-    if (user?.brokerConnections?.mt5) {
-      if (user.brokerConnections.mt5.login && !mt5Login) {
-        setMt5Login(user.brokerConnections.mt5.login.replace(/\*+/g, ''));
+    if (user?.brokerConnections) {
+      if (user.brokerConnections.mt5) {
+        if (user.brokerConnections.mt5.login && !mt5Login) {
+          setMt5Login(user.brokerConnections.mt5.login.replace(/\*+/g, ''));
+        }
+        if (user.brokerConnections.mt5.server && !mt5Server) {
+          setMt5Server(user.brokerConnections.mt5.server);
+        }
+        if (user.brokerConnections.mt5.metaApiToken && !metaApiToken) {
+          setMetaApiToken(user.brokerConnections.mt5.metaApiToken);
+        }
       }
-      if (user.brokerConnections.mt5.server && !mt5Server) {
-        setMt5Server(user.brokerConnections.mt5.server);
-      }
-      if (user.brokerConnections.mt5.metaApiToken && !metaApiToken) {
-        setMetaApiToken(user.brokerConnections.mt5.metaApiToken);
+      if (user.brokerConnections.mexc) {
+        if (user.brokerConnections.mexc.apiKey && !mexcKey) {
+          setMexcKey(user.brokerConnections.mexc.apiKey.replace(/\*+/g, ''));
+        }
+        if (user.brokerConnections.mexc.defaultLeverage && !mexcLeverage) {
+          setMexcLeverage(user.brokerConnections.mexc.defaultLeverage);
+        }
       }
     }
   }, [user]);
@@ -115,6 +133,46 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
       setBinanceResult({ success: false, error: err.message });
     } finally {
       setBinanceTesting(false);
+    }
+  };
+
+  // Handle MEXC Test
+  const handleTestMexc = async (e) => {
+    e?.preventDefault();
+    setMexcTesting(true);
+    setMexcResult(null);
+
+    try {
+      // First save config
+      await fetch('/api/broker/mexc/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user?.email,
+          apiKey: mexcKey,
+          apiSecret: mexcSecret,
+          defaultLeverage: mexcLeverage
+        })
+      });
+
+      // Then test connection with credentials in body
+      const res = await fetch('/api/broker/mexc/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user?.email,
+          apiKey: mexcKey,
+          apiSecret: mexcSecret,
+          defaultLeverage: mexcLeverage
+        })
+      });
+      const data = await res.json();
+      setMexcResult(data);
+      if (onUpdateBrokers) onUpdateBrokers();
+    } catch (err) {
+      setMexcResult({ success: false, error: err.message });
+    } finally {
+      setMexcTesting(false);
     }
   };
 
@@ -205,6 +263,19 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
             <Coins className="w-4 h-4 text-emerald-400" />
             <span>Binance (Spot Trading ONLY)</span>
             <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">100% Capital</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('MEXC')}
+            className={`flex items-center gap-2 pb-2.5 px-3 border-b-2 font-mono text-xs font-bold transition-all ${
+              activeTab === 'MEXC'
+                ? 'border-cyan-400 text-cyan-300'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Flame className="w-4 h-4 text-cyan-400" />
+            <span>MEXC (Spot & 200x Margin)</span>
+            <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">200x Leverage</span>
           </button>
           <button
             type="button"
@@ -420,7 +491,163 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
           )}
 
           {/* ==================================================== */}
-          {/* TAB 2: METATRADER 5 (MT5) INTEGRATION                */}
+          {/* TAB 2: MEXC GLOBAL INTEGRATION (Spot & 200x Margin)  */}
+          {/* ==================================================== */}
+          {activeTab === 'MEXC' && (
+            <div className="space-y-4">
+              <div className="p-3.5 rounded-xl bg-cyan-950/20 border border-cyan-500/30 flex items-start gap-3">
+                <Cloud className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
+                <div className="text-[11px] text-slate-300 font-sans leading-relaxed">
+                  <strong>Cloud-Native MEXC Global Automation.</strong> Direct REST execution with 0% maker fees on spot and up to <strong>200x leverage</strong> on futures contracts.
+                  Runs 24/7 on your cloud server with zero software, zero local PC, and zero IP blocks.
+                </div>
+              </div>
+
+              {/* Leverage Selector Card */}
+              <div className="p-3.5 rounded-xl bg-terminal-950 border border-terminal-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-white font-bold text-xs block">Default Futures Margin Leverage</span>
+                  <span className="text-[10px] text-slate-400">Target leverage for automated 1m-5m margin scalps</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {[20, 50, 100, 200].map(lev => (
+                    <button
+                      key={lev}
+                      type="button"
+                      onClick={() => setMexcLeverage(lev)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        mexcLeverage === lev
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 shadow-sm'
+                          : 'bg-terminal-900 text-slate-400 border border-terminal-border hover:text-slate-200'
+                      }`}
+                    >
+                      {lev}x {lev === 200 ? '🚀' : ''}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* MEXC Access Key */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-slate-300 font-bold uppercase tracking-wider text-[10px]">
+                    MEXC Access Key (API Key)
+                  </label>
+                  <a
+                    href="https://www.mexc.com/user/openapi"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] text-cyan-400 hover:underline flex items-center gap-1"
+                  >
+                    <span>Create MEXC API Key</span> &rarr;
+                  </a>
+                </div>
+                <input
+                  type="text"
+                  value={mexcKey}
+                  onChange={(e) => setMexcKey(e.target.value)}
+                  placeholder="Enter MEXC Access Key..."
+                  className="w-full px-3.5 py-2.5 bg-terminal-950 border border-terminal-border rounded-xl text-white font-mono text-xs focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              {/* MEXC Secret Key */}
+              <div>
+                <label className="block text-slate-300 font-bold mb-1.5 uppercase tracking-wider text-[10px]">
+                  MEXC Secret Key
+                </label>
+                <div className="relative">
+                  <input
+                    type={showMexcSecret ? 'text' : 'password'}
+                    value={mexcSecret}
+                    onChange={(e) => setMexcSecret(e.target.value)}
+                    placeholder="Enter MEXC Secret Key..."
+                    className="w-full pl-3.5 pr-10 py-2.5 bg-terminal-950 border border-terminal-border rounded-xl text-white font-mono text-xs focus:outline-none focus:border-cyan-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowMexcSecret(!showMexcSecret)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                  >
+                    {showMexcSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Action Button */}
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={handleTestMexc}
+                  disabled={mexcTesting || !mexcKey || !mexcSecret}
+                  className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-md shadow-cyan-600/20 disabled:opacity-50 cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${mexcTesting ? 'animate-spin' : ''}`} />
+                  <span>{mexcTesting ? 'Connecting MEXC Cloud...' : 'Connect & Verify MEXC Cloud'}</span>
+                </button>
+                {mexcResult?.latencyMs && (
+                  <span className="text-[11px] text-cyan-400 font-mono">
+                    Ping: {mexcResult.latencyMs}ms
+                  </span>
+                )}
+              </div>
+
+              {/* MEXC Result Output Banner */}
+              {mexcResult && (
+                <div className={`p-4 rounded-xl border ${
+                  mexcResult.success
+                    ? 'bg-cyan-950/40 border-cyan-500/50 text-cyan-200'
+                    : 'bg-rose-950/40 border-rose-500/50 text-rose-200'
+                }`}>
+                  <div className="flex items-center gap-1.5 font-bold mb-1">
+                    {mexcResult.success ? (
+                      <Check className="w-4 h-4 text-emerald-400" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-400" />
+                    )}
+                    <span>{mexcResult.success ? 'MEXC Global Connected & Verified!' : 'MEXC Connection Error'}</span>
+                  </div>
+                  {mexcResult.error && <p className="text-[11px] font-sans leading-relaxed">{mexcResult.error}</p>}
+                  {mexcResult.message && <p className="text-[11px] font-sans text-cyan-300">{mexcResult.message}</p>}
+
+                  {mexcResult.balances && (
+                    <div className="mt-3 space-y-2 border-t border-cyan-500/30 pt-2">
+                      <div className="p-2 bg-terminal-950 rounded-lg border border-terminal-border flex items-center justify-between">
+                        <div>
+                          <span className="text-[9px] uppercase text-slate-400 block">Futures Margin Equity</span>
+                          <span className="text-xs font-bold text-white font-mono">
+                            ${Number(mexcResult.balances.futures?.equity || 0).toFixed(2)} USDT
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[9px] uppercase text-slate-400 block">Configured Leverage</span>
+                          <span className="text-xs font-bold text-cyan-300 font-mono">
+                            {mexcLeverage}x Max
+                          </span>
+                        </div>
+                      </div>
+
+                      {mexcResult.balances.spot && mexcResult.balances.spot.length > 0 && (
+                        <div>
+                          <span className="text-[10px] uppercase text-slate-400 block mb-1">Spot Assets:</span>
+                          <div className="grid grid-cols-3 gap-1 text-[11px] font-mono">
+                            {mexcResult.balances.spot.map(b => (
+                              <div key={b.asset} className="bg-terminal-950 p-1.5 rounded border border-terminal-border">
+                                <span className="font-bold text-white">{b.asset}:</span> {Number(b.free).toFixed(4)}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ==================================================== */}
+          {/* TAB 3: METATRADER 5 (MT5) INTEGRATION                */}
           {/* ==================================================== */}
           {activeTab === 'MT5' && (
             <div className="space-y-4">
