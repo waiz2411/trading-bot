@@ -123,31 +123,45 @@ export class RiskManager {
     const usedMargin = activePositions.reduce((acc, p) => acc + (p.margin || (p.notional / (p.leverage || 1))), 0);
     const freeMargin = Math.max(0, equity - usedMargin);
 
-    // Risk Dollar Amount: e.g. 2.0% of equity
+    // Dynamic Sizing for High-Leverage (500x) Buying Power:
+    // When leverage > 1, allocate clean margin (e.g. 2.0% - 3.0% of equity per trade)
+    // so notional command power is truly margin * leverage (e.g. $2.50 * 500 = $1,250).
     const dollarRisk = equity * (this.riskPerTradePct / 100);
 
-    // Position Size Units = DollarRisk / (Price - StopLoss)
-    let rawUnits = dollarRisk / priceDistance;
+    let notional = 0;
+    let rawUnits = 0;
 
-    // Dollar Notional Value of Position
-    let notional = rawUnits * signal.entryPrice;
+    if (leverage > 1) {
+      // Allocate margin per slot (capped at 5% of equity and 35% of available free margin)
+      const targetSlotMargin = Math.max(1.5, Math.min(equity * (this.riskPerTradePct / 100) * 1.25, freeMargin * 0.35));
+      let targetNotional = targetSlotMargin * leverage;
 
-    // Leveraged Position Sizing:
-    // When leverage > 1x, allow notional exposure to scale with leverage so 500x has real buying power.
-    // Cap allocated margin to at most 10% of equity (e.g. $50 on $500) and at most 60% of free margin.
-    const maxMarginAllowed = leverage > 1
-      ? Math.min(equity * 0.10, freeMargin * 0.6)
-      : equity * (this.maxPositionAllocationPct / 100);
+      // Risk Safeguard: Ensure potential loss at Stop Loss doesn't exceed 2.2% of equity
+      const maxAllowedLoss = equity * ((this.riskPerTradePct * 1.1) / 100);
+      if (priceDistance > 0) {
+        const impliedLoss = (targetNotional / signal.entryPrice) * priceDistance;
+        if (impliedLoss > maxAllowedLoss) {
+          targetNotional = (maxAllowedLoss / priceDistance) * signal.entryPrice;
+        }
+      }
 
-    const maxNotional = maxMarginAllowed * leverage;
-    if (notional > maxNotional) {
-      rawUnits = maxNotional / signal.entryPrice;
-      notional = maxNotional;
+      rawUnits = targetNotional / signal.entryPrice;
+      notional = targetNotional;
+    } else {
+      // 1x Spot Cash Allocation
+      const maxSpotNotional = Math.min(equity * (this.maxPositionAllocationPct / 100), freeMargin);
+      rawUnits = dollarRisk / priceDistance;
+      notional = rawUnits * signal.entryPrice;
+      if (notional > maxSpotNotional) {
+        rawUnits = maxSpotNotional / signal.entryPrice;
+        notional = maxSpotNotional;
+      }
     }
 
-    // Round units according to asset decimals (supports micro-lots for $5 - $10 accounts)
+    // Round units according to asset decimals (supports micro-lots)
     const unitDecimals = asset.category === 'Crypto' ? 4 : (rawUnits < 1 ? 4 : 2);
     const units = Number(rawUnits.toFixed(unitDecimals));
+    notional = Number((units * signal.entryPrice).toFixed(2));
 
     if (units <= 0 || notional < 0.5) {
       return {
@@ -156,10 +170,8 @@ export class RiskManager {
       };
     }
 
-    // Allocate margin with safety buffer so liquidation threshold is strictly beyond stop loss
-    const minMarginForRisk = Number((dollarRisk * 1.5).toFixed(2));
-    const baseMargin = Number((notional / leverage).toFixed(2));
-    const margin = Math.max(baseMargin, minMarginForRisk);
+    // True Mathematical Margin: Margin is strictly Notional / Leverage
+    const margin = Number((notional / leverage).toFixed(2));
 
     if (margin > freeMargin) {
       return {
@@ -168,8 +180,8 @@ export class RiskManager {
       };
     }
 
-    // Liquidation threshold is safely buffered beyond stop-loss distance
-    const liqBufferDist = Math.max(priceDistance * 1.4, signal.entryPrice * (1 / leverage) * 0.9);
+    // Liquidation threshold is safely buffered by stop distance and free equity cushion
+    const liqBufferDist = Math.max(priceDistance * 1.5, signal.entryPrice * (1 / leverage) * 1.2);
     let liquidationPrice = signal.side === 'LONG'
       ? signal.entryPrice - liqBufferDist
       : signal.entryPrice + liqBufferDist;
@@ -178,7 +190,7 @@ export class RiskManager {
     return {
       allowed: true,
       units,
-      notional: Number(notional.toFixed(2)),
+      notional,
       dollarRisk: Number(dollarRisk.toFixed(2)),
       riskPerTradePct: this.riskPerTradePct,
       leverage,

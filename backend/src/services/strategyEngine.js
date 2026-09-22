@@ -151,6 +151,20 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
     if (macd.histogram < 0) shortScore += 10;
   }
 
+  // ==========================================
+  // 6. PRIME SCALP ASSET PRIORITIZATION & COMMODITY DAMPENER
+  // ==========================================
+  const PRIME_SCALP_SYMBOLS = ['GC=F', 'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'GBPJPY=X', 'EURJPY=X', 'AUDUSD=X', 'SOL-USD', 'WIF-USD', 'DOGE-USD', 'PEPE-USD', 'SUI-USD'];
+  const SLUGGISH_COMMODITY_SYMBOLS = ['NG=F', 'HG=F'];
+
+  if (PRIME_SCALP_SYMBOLS.includes(asset.symbol)) {
+    if (longScore > shortScore) longScore += 12;
+    else if (shortScore > longScore) shortScore += 12;
+  } else if (SLUGGISH_COMMODITY_SYMBOLS.includes(asset.symbol)) {
+    longScore -= 30; // Deprioritize choppy/flat commodities from taking active slots
+    shortScore -= 30;
+  }
+
   // Force directional mode locks
   if (tradeDirection === 'SHORT_ONLY') {
     longScore = 0;
@@ -166,11 +180,11 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   const targetRR = Math.max(1.15, Number(options.targetRiskRewardRatio) || 1.30);
 
   if (asset.category === 'Crypto') {
-    stopPct = 0.0050; // 0.50% for fast crypto micro-scalps
+    stopPct = 0.0040; // 0.40% for fast crypto micro-scalps
   } else if (asset.category === 'Forex') {
-    stopPct = 0.0020; // 0.20% for forex (20-25 pips)
+    stopPct = 0.0018; // 0.18% for forex (18-20 pips)
   } else if (asset.category === 'Commodities' || asset.category === 'Indices') {
-    stopPct = 0.0030; // 0.30% for commodities & indices
+    stopPct = 0.0025; // 0.25% for commodities & indices
   }
 
   const baseStopDist = Number((currentPrice * stopPct).toFixed(asset.decimals || 4));

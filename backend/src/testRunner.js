@@ -314,7 +314,7 @@ for (let step = 0; step < 2500; step++) {
 
   const closed = engine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
   for (const c of closed) {
-    cooldowns[c.symbol] = 6;
+    cooldowns[c.symbol] = c.exitReason === 'STOP_LOSS_TRIGGER' ? 20 : 6;
     if (c.exitReason === 'TAKE_PROFIT_TRIGGER') takeProfits++;
     else if (c.exitReason === 'TRAILING_STOP_TRIGGER') trailingStops++;
     else if (c.exitReason === 'BREAKEVEN_STOP_TRIGGER') breakEvens++;
@@ -346,7 +346,7 @@ console.log(`• Total Equity:        $${stats.equity.toFixed(2)} (${stats.total
 
 const spotStats = spotEngine.getPortfolioState();
 console.log('\n🪙 PURE SPOT CRYPTO RESULTS:');
-console.log(`• Total Closed Trades: ${spotStats.totalTrades}`);
+console.log(`• Total Closed Trades: ${spotStats.totalTrades} (Active: ${spotEngine.activePositions.length})`);
 console.log(`• Decisive Wins:       ${spotStats.winCount} (${spotStats.winRate}%)`);
 console.log(`• Decisive Losses:     ${spotStats.lossCount}`);
 console.log(`• Break-Evens:         ${spotStats.breakEvenCount}`);
@@ -356,4 +356,10 @@ console.log(`• Starting Balance:    $${spotStats.initialBalance.toFixed(2)}`);
 console.log(`• Final Balance:       $${spotStats.balance.toFixed(2)}`);
 console.log(`• Realized PnL:        +$${spotStats.realizedPnL.toFixed(2)}`);
 console.log(`• Spot Equity:         $${spotStats.equity.toFixed(2)} (${spotStats.totalPnLPct >= 0 ? '+' : ''}${spotStats.totalPnLPct}%)`);
+
+console.log('\n🔎 SAMPLE MARGIN TRADES (Verifying 500x Leverage & Margin Math):');
+stats.closedTrades.slice(0, 8).forEach(t => {
+  const actualLev = (t.notional / t.margin).toFixed(1);
+  console.log(`  ${t.side.padEnd(5)} ${t.symbol.padEnd(10)} | Size: $${t.notional} | Margin: $${t.margin} | Leverage: ${actualLev}x | PnL: ${t.finalPnL >= 0 ? '+' : ''}$${t.finalPnL} | ROE: ${t.roePercent >= 0 ? '+' : ''}${t.roePercent}% | Reason: ${t.exitReason}`);
+});
 console.log('================================================================');

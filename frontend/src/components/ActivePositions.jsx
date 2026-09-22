@@ -142,7 +142,8 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
                       <span className="text-[10px] text-indigo-400 font-normal">Margin:</span>
                       <span>${marginVal}</span>
                     </div>
-                    <div className="text-[10px] text-slate-500">{pos.units} units (${pos.notional})</div>
+                    <div className="text-[10px] text-slate-400 font-medium">{pos.units} units (${pos.notional})</div>
+                    <div className="text-[9px] text-amber-400/80 font-mono mt-0.5">{leverage}x Buying Power</div>
                   </td>
 
                   {/* Live PnL & Leveraged ROE% */}

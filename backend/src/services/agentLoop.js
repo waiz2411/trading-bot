@@ -441,7 +441,9 @@ export class AutonomousAgentLoop {
       // A. Margin Engine Trigger Checks
       const marginClosed = this.marginTradingEngine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
       for (const closed of marginClosed) {
-        this.assetCooldowns.set(closed.symbol, 6);
+        // Extended cooldown (18 cycles) if stopped out to prevent revenge trading into an adverse trend
+        const cooldownTime = closed.exitReason === 'STOP_LOSS_TRIGGER' ? 18 : 6;
+        this.assetCooldowns.set(closed.symbol, cooldownTime);
         if (closed.exitReason === 'TAKE_PROFIT_TRIGGER') {
           this.log(`🎯 [MARGIN] TP HIT: ${closed.symbol} ${closed.side}! Realized: +$${closed.finalPnL}`, 'SUCCESS');
         } else if (closed.exitReason === 'TRAILING_STOP_TRIGGER') {
