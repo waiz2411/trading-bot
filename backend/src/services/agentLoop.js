@@ -276,6 +276,8 @@ export class AutonomousAgentLoop {
           change24h: asset.change24h,
           high24h: asset.high24h,
           low24h: asset.low24h,
+          isCooldown: isMarginCooldown,
+          cooldownCycles: this.assetCooldowns.get(asset.symbol) || 0,
           technicals: {
             rsi: technicals?.rsi,
             macd: technicals?.macd?.histogram,
@@ -304,20 +306,26 @@ export class AutonomousAgentLoop {
             break; // Max slots occupied
           }
 
-          // Currency & Sector Exposure Limiter:
-          // Prevents stacking all concurrent slots into correlated pairs (e.g. 5 USD pairs)
+          // Dynamic Currency & Sector Exposure Limiter:
+          // Scales with total slots so 6-8 slot setups are never starved of high-conviction trades
           const openPositions = portfolioState.activePositions;
+          const maxSlots = this.marginRiskManager.maxConcurrentTrades || 4;
+          const maxCrypto = Math.max(2, Math.floor(maxSlots * 0.65)); // 2 for 2-3 slots, 3 for 4 slots, 4 for 6 slots, 5 for 8 slots
+          const maxForexCurrency = Math.max(2, Math.floor(maxSlots * 0.50)); // 2 for 2-4 slots, 3 for 6 slots, 4 for 8 slots
+          const maxCommodities = Math.max(1, Math.floor(maxSlots * 0.35));
+          const maxIndices = Math.max(1, Math.floor(maxSlots * 0.35));
+
           const sameCategoryCount = openPositions.filter(p => p.category === asset.category).length;
-          if (asset.category === 'Crypto' && sameCategoryCount >= 2) continue; // Max 2 Crypto
-          if (asset.category === 'Commodities' && sameCategoryCount >= 1) continue; // Max 1 Commodity
-          if (asset.category === 'Indices' && sameCategoryCount >= 1) continue; // Max 1 Index
+          if (asset.category === 'Crypto' && sameCategoryCount >= maxCrypto) continue;
+          if (asset.category === 'Commodities' && sameCategoryCount >= maxCommodities) continue;
+          if (asset.category === 'Indices' && sameCategoryCount >= maxIndices) continue;
 
           if (asset.category === 'Forex') {
             const usdCount = openPositions.filter(p => p.symbol && p.symbol.includes('USD')).length;
-            if (asset.symbol.includes('USD') && usdCount >= 2) continue; // Max 2 USD pairs
+            if (asset.symbol.includes('USD') && usdCount >= maxForexCurrency) continue;
 
             const jpyCount = openPositions.filter(p => p.symbol && p.symbol.includes('JPY')).length;
-            if (asset.symbol.includes('JPY') && jpyCount >= 2) continue; // Max 2 JPY pairs
+            if (asset.symbol.includes('JPY') && jpyCount >= maxForexCurrency) continue;
           }
 
           const riskEval = this.marginRiskManager.evaluateTradeRisk(portfolioState, signal, asset);

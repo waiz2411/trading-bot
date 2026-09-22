@@ -226,19 +226,25 @@ for (let step = 0; step < 2500; step++) {
         break; // Slot limit reached
       }
 
-      // Currency & Sector Exposure Limiter
+      // Dynamic Currency & Sector Exposure Limiter
       const openPositions = portfolio.activePositions;
+      const maxSlots = riskManager.getSettings().maxConcurrentTrades || 4;
+      const maxCrypto = Math.max(2, Math.floor(maxSlots * 0.65));
+      const maxForexCurrency = Math.max(2, Math.floor(maxSlots * 0.50));
+      const maxCommodities = Math.max(1, Math.floor(maxSlots * 0.35));
+      const maxIndices = Math.max(1, Math.floor(maxSlots * 0.35));
+
       const sameCategoryCount = openPositions.filter(p => p.category === asset.category).length;
-      if (asset.category === 'Crypto' && sameCategoryCount >= 2) continue;
-      if (asset.category === 'Commodities' && sameCategoryCount >= 1) continue;
-      if (asset.category === 'Indices' && sameCategoryCount >= 1) continue;
+      if (asset.category === 'Crypto' && sameCategoryCount >= maxCrypto) continue;
+      if (asset.category === 'Commodities' && sameCategoryCount >= maxCommodities) continue;
+      if (asset.category === 'Indices' && sameCategoryCount >= maxIndices) continue;
 
       if (asset.category === 'Forex') {
         const usdCount = openPositions.filter(p => p.symbol && p.symbol.includes('USD')).length;
-        if (asset.symbol.includes('USD') && usdCount >= 2) continue;
+        if (asset.symbol.includes('USD') && usdCount >= maxForexCurrency) continue;
 
         const jpyCount = openPositions.filter(p => p.symbol && p.symbol.includes('JPY')).length;
-        if (asset.symbol.includes('JPY') && jpyCount >= 2) continue;
+        if (asset.symbol.includes('JPY') && jpyCount >= maxForexCurrency) continue;
       }
 
       const risk = riskManager.evaluateTradeRisk(portfolio, signal, asset);

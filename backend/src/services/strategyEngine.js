@@ -193,10 +193,11 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   const targetDistance = Number((stopDistance * targetRR).toFixed(asset.decimals || 4));
   const effectiveRR = Number((targetDistance / stopDistance).toFixed(2));
 
-  // Require High Confluence (Score >= minConfidenceThreshold) with Clear Directional Dominance
+  // Require High Confluence (Score >= minConfidenceThreshold) with Directional Advantage
   const SNIPER_THRESHOLD = Number(options.minConfidenceThreshold) || 82;
 
-  if (finalShortConfidence >= SNIPER_THRESHOLD && (tradeDirection === 'SHORT_ONLY' || finalShortConfidence > finalLongConfidence + 18)) {
+  // 1. Check SHORT Scalp Setup
+  if (tradeDirection !== 'LONG_ONLY' && finalShortConfidence >= SNIPER_THRESHOLD && finalShortConfidence > finalLongConfidence) {
     const stopLoss = Number((currentPrice + stopDistance).toFixed(asset.decimals || 4));
     const takeProfit = Number((currentPrice - targetDistance).toFixed(asset.decimals || 4));
 
@@ -217,7 +218,8 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
     };
   }
 
-  if (tradeDirection !== 'SHORT_ONLY' && finalLongConfidence >= SNIPER_THRESHOLD && finalLongConfidence > finalShortConfidence + 18) {
+  // 2. Check LONG Scalp Setup
+  if (tradeDirection !== 'SHORT_ONLY' && finalLongConfidence >= SNIPER_THRESHOLD && finalLongConfidence > finalShortConfidence) {
     const stopLoss = Number((currentPrice - stopDistance).toFixed(asset.decimals || 4));
     const takeProfit = Number((currentPrice + targetDistance).toFixed(asset.decimals || 4));
 

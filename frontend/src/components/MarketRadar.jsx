@@ -235,7 +235,16 @@ export default function MarketRadar({ marketScan = [], onSelectAsset, onQuickTra
 
                     {/* Signal */}
                     <td className="py-3 px-4 text-center">
-                      {getSignalBadge(item.signal)}
+                      {item.isCooldown ? (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            COOLDOWN ({item.cooldownCycles}c)
+                          </span>
+                          <span className="text-[9px] text-slate-500">{item.signal?.action || 'NEUTRAL'}</span>
+                        </div>
+                      ) : (
+                        getSignalBadge(item.signal)
+                      )}
                     </td>
 
                     {/* Actions */}
