@@ -29,6 +29,7 @@ export class AutonomousAgentLoop {
     this.spotRiskManager = {
       maxSlots: 4, // 1, 2, 4, 6, 8 portions (default 4 = 25% balance each)
       allocationPct: 25, // 25% of balance per portion
+      maxTradesPerPair: 2, // Up to 2 concurrent portions per coin (dip laddering & multi-entry)
       stopLossPct: 1.0, // 1.0% Stop Loss default (prevents noise stop-outs)
       takeProfitPct: 2.2, // 2.2% Take Profit default (1:2.2 R:R)
       minConfidenceThreshold: 82
@@ -205,7 +206,10 @@ export class AutonomousAgentLoop {
       this.spotRiskManager.maxSlots = slots;
       this.spotRiskManager.allocationPct = Number((100 / slots).toFixed(1));
     }
-    this.log(`⚙️ Spot Strategy updated: ${this.spotRiskManager.maxSlots} Portions (${this.spotRiskManager.allocationPct}% each), SL: -${this.spotRiskManager.stopLossPct}%, TP: +${this.spotRiskManager.takeProfitPct}%`, 'INFO');
+    if (newSettings.maxTradesPerPair !== undefined) {
+      this.spotRiskManager.maxTradesPerPair = Math.max(1, Math.min(4, parseInt(newSettings.maxTradesPerPair, 10)));
+    }
+    this.log(`⚙️ Spot Strategy updated: ${this.spotRiskManager.maxSlots} Portions (${this.spotRiskManager.allocationPct}% each, max ${this.spotRiskManager.maxTradesPerPair}/coin), SL: -${this.spotRiskManager.stopLossPct}%, TP: +${this.spotRiskManager.takeProfitPct}%`, 'INFO');
     return this.spotRiskManager;
   }
 
@@ -357,8 +361,12 @@ export class AutonomousAgentLoop {
               liquidationPrice: riskEval.liquidationPrice
             });
 
+            const isHedge = portfolioState.activePositions.some(p => p.symbol === asset.symbol && p.side !== signal.side);
+            const isScaleIn = portfolioState.activePositions.some(p => p.symbol === asset.symbol && p.side === signal.side);
+            const badge = isHedge ? ' [HEDGE COUNTER-SCALP]' : isScaleIn ? ' [SCALE-IN]' : '';
+
             this.log(
-              `⚡ [MARGIN] SCALP OPEN: ${signal.side} ${asset.symbol} @ $${signal.entryPrice} (${riskEval.leverage}x Lev, Margin: $${riskEval.margin}). Target: $${signal.takeProfit} | Stop: $${signal.stopLoss} (Confidence: ${signal.confidence}%)`,
+              `⚡ [MARGIN] SCALP OPEN${badge}: ${signal.side} ${asset.symbol} @ $${signal.entryPrice} (${riskEval.leverage}x Lev, Margin: $${riskEval.margin}). Target: $${signal.takeProfit} | Stop: $${signal.stopLoss} (Confidence: ${signal.confidence}%)`,
               'SUCCESS'
             );
 
@@ -399,13 +407,21 @@ export class AutonomousAgentLoop {
 
         const totalCash = this.spotTradingEngine.balance;
         const portionSize = Number((totalCash / spotSlots).toFixed(2));
+        const maxPerCoin = this.spotRiskManager.maxTradesPerPair || 2;
 
         for (const candidate of validSpotBuys) {
           if (this.spotTradingEngine.activePositions.length >= spotSlots) break;
 
-          // Prevent opening duplicate position on the same coin
-          const alreadyOpen = this.spotTradingEngine.activePositions.some(p => p.symbol === candidate.asset.symbol);
-          if (alreadyOpen) continue;
+          // Limit positions per coin (allows up to maxPerCoin with price spacing)
+          const coinPositions = this.spotTradingEngine.activePositions.filter(p => p.symbol === candidate.asset.symbol);
+          if (coinPositions.length >= maxPerCoin) continue;
+
+          // Enforce minimum price spacing (>= 0.3%) between spot entries on the same coin
+          if (coinPositions.length > 0) {
+            const lastEntry = coinPositions[coinPositions.length - 1].entryPrice;
+            const diffPct = Math.abs(candidate.signal.entryPrice - lastEntry) / lastEntry;
+            if (diffPct < 0.003) continue;
+          }
 
           // Calculate current available cash
           const currentUsed = this.spotTradingEngine.activePositions.reduce((acc, p) => acc + (p.notional || 0), 0);
@@ -423,6 +439,9 @@ export class AutonomousAgentLoop {
           const stopLoss = candidate.signal.stopLoss;
           const takeProfit = candidate.signal.takeProfit;
 
+          const isScaleIn = coinPositions.length > 0;
+          const scaleLabel = isScaleIn ? ` [SCALE-IN #${coinPositions.length + 1}]` : '';
+
           const spotPos = this.spotTradingEngine.openPosition({
             symbol: candidate.asset.symbol,
             name: candidate.asset.name,
@@ -436,7 +455,7 @@ export class AutonomousAgentLoop {
             units,
             notional,
             confidence: candidate.signal.confidence,
-            reason: `Spot Scalp Slot ${this.spotTradingEngine.activePositions.length + 1}/${spotSlots} (${candidate.signal.reason})`,
+            reason: `Spot Scalp Slot ${this.spotTradingEngine.activePositions.length + 1}/${spotSlots}${scaleLabel} (${candidate.signal.reason})`,
             riskRewardRatio: Number((this.spotRiskManager.takeProfitPct / this.spotRiskManager.stopLossPct).toFixed(1)),
             tradingStyle: 'SPOT_BUY',
             leverage: 1, // 1x Spot Cash
@@ -445,7 +464,7 @@ export class AutonomousAgentLoop {
           });
 
           this.log(
-            `🪙 [SPOT] SCALP OPEN: Bought ${candidate.asset.symbol} with $${notional} (Portion ${this.spotTradingEngine.activePositions.length}/${spotSlots}) @ $${entryPrice} (Confidence: ${candidate.signal.confidence}%). Target: +${this.spotRiskManager.takeProfitPct}% ($${takeProfit}) | Stop: -${this.spotRiskManager.stopLossPct}% ($${stopLoss})`,
+            `🪙 [SPOT] SCALP OPEN${scaleLabel}: Bought ${candidate.asset.symbol} with $${notional} (Portion ${this.spotTradingEngine.activePositions.length}/${spotSlots}) @ $${entryPrice} (Confidence: ${candidate.signal.confidence}%). Target: +${this.spotRiskManager.takeProfitPct}% ($${takeProfit}) | Stop: -${this.spotRiskManager.stopLossPct}% ($${stopLoss})`,
             'SUCCESS'
           );
 

@@ -15,6 +15,7 @@ export class RiskManager {
     this.tradingStyle = options.tradingStyle || 'SCALPING'; // 'SCALPING' | 'SWING'
     this.targetRiskRewardRatio = options.targetRiskRewardRatio || 1.3; // 1:1.3 R:R for 75%-85% scalp hit rate
     this.defaultLeverage = options.defaultLeverage || 500; // 500x leverage with real buying power
+    this.maxTradesPerPair = options.maxTradesPerPair || 2; // Up to 2 concurrent trades per symbol (Hedging / Scale-in)
   }
 
   updateSettings(newSettings) {
@@ -39,6 +40,9 @@ export class RiskManager {
     if (newSettings.defaultLeverage !== undefined) {
       this.defaultLeverage = Math.max(1, Math.min(500, parseInt(newSettings.defaultLeverage, 10)));
     }
+    if (newSettings.maxTradesPerPair !== undefined) {
+      this.maxTradesPerPair = Math.max(1, Math.min(4, parseInt(newSettings.maxTradesPerPair, 10)));
+    }
   }
 
   getSettings() {
@@ -51,7 +55,8 @@ export class RiskManager {
       tradeDirection: this.tradeDirection,
       tradingStyle: this.tradingStyle,
       targetRiskRewardRatio: this.targetRiskRewardRatio,
-      defaultLeverage: this.defaultLeverage
+      defaultLeverage: this.defaultLeverage,
+      maxTradesPerPair: this.maxTradesPerPair
     };
   }
 
@@ -91,13 +96,29 @@ export class RiskManager {
       };
     }
 
-    // Check 3: Do not open duplicate positions on the same asset
-    const alreadyOpen = activePositions.some(p => p.symbol === asset.symbol);
-    if (alreadyOpen) {
+    // Check 3: Multi-Trade & Bi-Directional Hedging Limit per Asset
+    const symbolPositions = activePositions.filter(p => p.symbol === asset.symbol);
+    const maxPerPair = this.maxTradesPerPair || 2;
+
+    if (symbolPositions.length >= maxPerPair) {
       return {
         allowed: false,
-        reason: `An active position for ${asset.symbol} is already open`
+        reason: `Max positions for ${asset.symbol} reached (${symbolPositions.length}/${maxPerPair})`
       };
+    }
+
+    // If a position in the SAME side already exists, require minimum entry price spacing (>= 0.3%)
+    // so the agent does not open duplicates on the exact same price tick
+    const sameSidePositions = symbolPositions.filter(p => p.side === signal.side);
+    if (sameSidePositions.length > 0) {
+      const lastEntry = sameSidePositions[sameSidePositions.length - 1].entryPrice;
+      const priceDiffPct = Math.abs(signal.entryPrice - lastEntry) / lastEntry;
+      if (priceDiffPct < 0.003) {
+        return {
+          allowed: false,
+          reason: `New ${signal.side} entry price ($${signal.entryPrice}) is too close to existing entry ($${lastEntry}, ${(priceDiffPct * 100).toFixed(2)}% < 0.3% min spacing)`
+        };
+      }
     }
 
     // Check 4: Stop loss must be valid

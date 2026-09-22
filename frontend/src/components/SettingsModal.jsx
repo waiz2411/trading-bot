@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, ShieldAlert, Sliders, RotateCcw, Check, Target, Zap, Coins, TrendingUp, ShieldCheck, Sparkles } from 'lucide-react';
+import { X, ShieldAlert, Sliders, RotateCcw, Check, Target, Zap, Coins, TrendingUp, ShieldCheck, Sparkles, Layers } from 'lucide-react';
 
 export default function SettingsModal({
   settings,
@@ -19,6 +19,7 @@ export default function SettingsModal({
   const [minConfidenceThreshold, setMinConfidenceThreshold] = useState(initialMargin.minConfidenceThreshold || 82);
   const [targetRiskRewardRatio, setTargetRiskRewardRatio] = useState(initialMargin.targetRiskRewardRatio || 1.3);
   const [defaultLeverage, setDefaultLeverage] = useState(initialMargin.defaultLeverage || 500);
+  const [maxTradesPerPair, setMaxTradesPerPair] = useState(initialMargin.maxTradesPerPair || 2);
 
   // Spot Settings State
   const initialSpot = spotSettings || {};
@@ -26,8 +27,21 @@ export default function SettingsModal({
   const [spotTakeProfitPct, setSpotTakeProfitPct] = useState(initialSpot.takeProfitPct || 2.5);
   const [spotMinConfidence, setSpotMinConfidence] = useState(initialSpot.minConfidenceThreshold || 82);
   const [spotMaxSlots, setSpotMaxSlots] = useState(initialSpot.maxSlots || 4);
+  const [spotMaxTradesPerPair, setSpotMaxTradesPerPair] = useState(initialSpot.maxTradesPerPair || 2);
 
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  const marginPerPairPresets = [
+    { label: '1 Trade', value: 1, tag: 'Strict Isolated' },
+    { label: '2 Trades ⭐', value: 2, tag: 'Hedge & Scale' },
+    { label: '3 Trades 🔥', value: 3, tag: 'Multi-Scalp' }
+  ];
+
+  const spotPerCoinPresets = [
+    { label: '1 Portion', value: 1, tag: 'Max Diversify' },
+    { label: '2 Portions ⭐', value: 2, tag: 'Dip Ladder' },
+    { label: '3 Portions 🔥', value: 3, tag: 'Multi-Entry' }
+  ];
 
   const spotPortionPresets = [
     { label: '1 Portion (100%)', value: 1, tag: 'All-in' },
@@ -85,7 +99,8 @@ export default function SettingsModal({
         stopLossPct: parseFloat(spotStopLossPct),
         takeProfitPct: parseFloat(spotTakeProfitPct),
         minConfidenceThreshold: parseInt(spotMinConfidence, 10),
-        maxSlots: parseInt(spotMaxSlots, 10)
+        maxSlots: parseInt(spotMaxSlots, 10),
+        maxTradesPerPair: parseInt(spotMaxTradesPerPair, 10)
       });
     } else {
       onSaveSettings({
@@ -94,7 +109,8 @@ export default function SettingsModal({
         maxConcurrentTrades: parseInt(maxConcurrentTrades, 10),
         minConfidenceThreshold: parseInt(minConfidenceThreshold, 10),
         targetRiskRewardRatio: parseFloat(targetRiskRewardRatio),
-        defaultLeverage: parseInt(defaultLeverage, 10)
+        defaultLeverage: parseInt(defaultLeverage, 10),
+        maxTradesPerPair: parseInt(maxTradesPerPair, 10)
       });
     }
     setSavedSuccess(true);
@@ -318,6 +334,42 @@ export default function SettingsModal({
                 </p>
               </div>
 
+              {/* Max Trades Per Pair & Bi-Directional Hedging */}
+              <div className="p-3.5 rounded-xl bg-indigo-950/20 border border-indigo-500/30">
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="text-indigo-300 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Max Trades Per Pair & Hedging</span>
+                  </label>
+                  <span className="text-indigo-400 font-bold text-sm bg-terminal-950 px-2.5 py-0.5 rounded border border-indigo-500/40 font-mono">
+                    {maxTradesPerPair} Trade{maxTradesPerPair > 1 ? 's' : ''} Max
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 font-sans mb-2">
+                  Enables bi-directional hedging (e.g. simultaneous LONG & SHORT on DOGE) and allows scaling into strong trend pullbacks.
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {marginPerPairPresets.map((p) => {
+                    const active = Number(maxTradesPerPair) === p.value;
+                    return (
+                      <button
+                        key={p.value}
+                        type="button"
+                        onClick={() => setMaxTradesPerPair(p.value)}
+                        className={`px-2 py-1.5 rounded text-xs font-semibold border transition-all text-center ${
+                          active
+                            ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
+                            : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                        }`}
+                      >
+                        <div className="font-bold">{p.label}</div>
+                        <div className="text-[10px] opacity-75 font-normal truncate">{p.tag}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Min Confluence Score */}
               <div>
                 <div className="flex justify-between items-center mb-1.5">
@@ -392,6 +444,42 @@ export default function SettingsModal({
                       {preset.label} <span className="opacity-75">({preset.tag})</span>
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Max Portions Per Coin */}
+              <div className="p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-500/30">
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="text-emerald-300 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Max Portions Per Coin</span>
+                  </label>
+                  <span className="text-emerald-400 font-bold text-sm bg-terminal-950 px-2.5 py-0.5 rounded border border-emerald-500/40 font-mono">
+                    {spotMaxTradesPerPair} Portion{spotMaxTradesPerPair > 1 ? 's' : ''} Max
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 font-sans mb-2">
+                  Allows allocating multiple free portions to top-performing volatile altcoins/memecoins on high-confluence dip pullbacks.
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {spotPerCoinPresets.map((p) => {
+                    const active = Number(spotMaxTradesPerPair) === p.value;
+                    return (
+                      <button
+                        key={p.value}
+                        type="button"
+                        onClick={() => setSpotMaxTradesPerPair(p.value)}
+                        className={`px-2 py-1.5 rounded text-xs font-semibold border transition-all text-center ${
+                          active
+                            ? 'bg-emerald-600/30 border-emerald-500 text-white shadow-sm'
+                            : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                        }`}
+                      >
+                        <div className="font-bold">{p.label}</div>
+                        <div className="text-[10px] opacity-75 font-normal truncate">{p.tag}</div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

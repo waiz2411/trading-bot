@@ -57,6 +57,11 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
               const marginVal = pos.margin !== undefined ? pos.margin : Number((pos.notional / leverage).toFixed(2));
               const roeVal = pos.roePercent !== undefined ? pos.roePercent : Number(((pos.unrealizedPnL / marginVal) * 100).toFixed(1));
 
+              const sameSymbolPositions = positions.filter(p => p.symbol === pos.symbol);
+              const isHedged = sameSymbolPositions.some(p => p.side !== pos.side);
+              const isMultiTrade = sameSymbolPositions.length > 1;
+              const tradeIndex = sameSymbolPositions.findIndex(p => p.id === pos.id) + 1;
+
               return (
                 <tr key={pos.id} className="hover:bg-terminal-800/30 transition-colors">
                   {/* Symbol, Side, and Leverage */}
@@ -76,6 +81,16 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
                       <div>
                         <div className="font-bold text-white flex items-center gap-1.5">
                           <span>{pos.symbol}</span>
+                          {isHedged && (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/25 text-purple-300 border border-purple-500/40 font-mono font-bold tracking-tight">
+                              HEDGE
+                            </span>
+                          )}
+                          {isMultiTrade && !isHedged && (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-500/25 text-cyan-300 border border-cyan-500/40 font-mono font-bold">
+                              #{tradeIndex}
+                            </span>
+                          )}
                           <span className="text-[10px] text-slate-400 font-normal">
                             ({pos.category})
                           </span>

@@ -99,6 +99,7 @@ const engine = new PaperTradingEngine(100, 'MARGIN');
 const riskManager = new RiskManager({
   riskPerTradePct: 1.5,
   maxConcurrentTrades: 4, // Multi-slot scalper
+  maxTradesPerPair: 2, // Up to 2 concurrent trades per pair (Hedging / Scale-in)
   minConfidenceThreshold: 82,
   tradeDirection: 'BOTH',
   tradingStyle: 'SCALPING',
@@ -110,6 +111,7 @@ const riskManager = new RiskManager({
 const spotEngine = new PaperTradingEngine(100, 'SPOT');
 const spotRiskSettings = {
   maxSlots: 4,
+  maxTradesPerPair: 2, // Up to 2 portions per coin (dip laddering)
   stopLossPct: 1.0,
   takeProfitPct: 2.2,
   minConfidenceThreshold: 82
@@ -277,7 +279,6 @@ for (let step = 0; step < 2500; step++) {
           margin: risk.margin,
           liquidationPrice: risk.liquidationPrice
         });
-        marginCooldowns[asset.symbol] = 8;
       }
     }
   }
@@ -293,10 +294,19 @@ for (let step = 0; step < 2500; step++) {
 
     const totalSpotCash = spotEngine.balance;
     const spotPortionSize = Number((totalSpotCash / spotSlots).toFixed(2));
+    const maxPerCoin = spotRiskSettings.maxTradesPerPair || 2;
 
     for (const topSpot of spotCandidates) {
       if (spotEngine.activePositions.length >= spotSlots) break;
-      if (spotEngine.activePositions.some(p => p.symbol === topSpot.asset.symbol)) continue;
+
+      const coinPositions = spotEngine.activePositions.filter(p => p.symbol === topSpot.asset.symbol);
+      if (coinPositions.length >= maxPerCoin) continue;
+
+      if (coinPositions.length > 0) {
+        const lastEntry = coinPositions[coinPositions.length - 1].entryPrice;
+        const diffPct = Math.abs(topSpot.signal.entryPrice - lastEntry) / lastEntry;
+        if (diffPct < 0.003) continue;
+      }
 
       const currentUsed = spotEngine.activePositions.reduce((acc, p) => acc + (p.notional || 0), 0);
       const availableCash = Math.max(0, totalSpotCash - currentUsed);
@@ -329,7 +339,6 @@ for (let step = 0; step < 2500; step++) {
         margin: notional,
         liquidationPrice: 0
       });
-      spotCooldowns[topSpot.asset.symbol] = 6;
     }
   }
 
