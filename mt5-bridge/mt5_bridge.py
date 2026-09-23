@@ -14,10 +14,13 @@ CORS(app)
 def health():
     return jsonify({'status': 'ONLINE', 'bridge': 'MT5-Python-Bridge', 'port': 5001})
 
-@app.route('/api/mt5/status', methods=['POST'])
+@app.route('/api/mt5/status', methods=['GET', 'POST'])
 def status():
     mt5.initialize()
-    data = request.json or {}
+    data = {}
+    if request.is_json and request.json:
+        data = request.json
+
     login = data.get('login')
     password = data.get('password')
     server = data.get('server')
@@ -45,8 +48,8 @@ def status():
     if positions:
         for p in positions:
             open_positions.append({
-                'ticket': p.ticket,
-                'symbol': p.symbol,
+                'ticket': int(p.ticket),
+                'symbol': str(p.symbol),
                 'type': 'BUY' if p.type == mt5.ORDER_TYPE_BUY else 'SELL',
                 'volume': float(p.volume),
                 'priceOpen': float(p.price_open),
@@ -56,7 +59,7 @@ def status():
                 'profit': float(p.profit),
                 'time': int(getattr(p, 'time', 0)),
                 'timeMsc': int(getattr(p, 'time_msc', 0)),
-                'comment': p.comment
+                'comment': str(p.comment)
             })
 
     return jsonify({
@@ -123,6 +126,35 @@ def place_order():
     else:
         filling_mode = mt5.ORDER_FILLING_RETURN
 
+    digits = symbol_info.digits
+    point = symbol_info.point
+    stops_level = getattr(symbol_info, 'stops_level', 0) or 0
+    spread = tick.ask - tick.bid
+    min_dist = max((stops_level + 15) * point, spread * 1.5, 30 * point)
+
+    safe_sl = None
+    safe_tp = None
+
+    if sl is not None:
+        raw_sl = float(sl)
+        if order_type == mt5.ORDER_TYPE_BUY:
+            if (price - raw_sl) < min_dist:
+                raw_sl = price - min_dist
+        else:
+            if (raw_sl - price) < min_dist:
+                raw_sl = price + min_dist
+        safe_sl = round(raw_sl, digits)
+
+    if tp is not None:
+        raw_tp = float(tp)
+        if order_type == mt5.ORDER_TYPE_BUY:
+            if (raw_tp - price) < min_dist:
+                raw_tp = price + min_dist
+        else:
+            if (price - raw_tp) < min_dist:
+                raw_tp = price - min_dist
+        safe_tp = round(raw_tp, digits)
+
     request_payload = {
         "action": mt5.TRADE_ACTION_DEAL,
         "symbol": target_sym,
@@ -135,18 +167,29 @@ def place_order():
         "type_time": mt5.ORDER_TIME_GTC,
         "type_filling": filling_mode,
     }
-    if sl:
-        request_payload["sl"] = float(sl)
-    if tp:
-        request_payload["tp"] = float(tp)
+    if safe_sl is not None:
+        request_payload["sl"] = safe_sl
+    if safe_tp is not None:
+        request_payload["tp"] = safe_tp
 
     result = mt5.order_send(request_payload)
 
-    # If rejected due to invalid stops (retcode 10016), retry without SL/TP so market order executes
+    # If rejected due to invalid stops (retcode 10016), retry without SL/TP and then set stops via SLTP action
     if result.retcode == 10016:
         request_payload.pop("sl", None)
         request_payload.pop("tp", None)
         result = mt5.order_send(request_payload)
+        if result.retcode == mt5.TRADE_RETCODE_DONE and (safe_sl is not None or safe_tp is not None):
+            import time
+            time.sleep(0.15)
+            sltp_req = {
+                "action": mt5.TRADE_ACTION_SLTP,
+                "position": result.order,
+                "symbol": target_sym,
+                "sl": safe_sl if safe_sl is not None else 0.0,
+                "tp": safe_tp if safe_tp is not None else 0.0,
+            }
+            mt5.order_send(sltp_req)
 
     if result.retcode != mt5.TRADE_RETCODE_DONE:
         return jsonify({
@@ -156,12 +199,24 @@ def place_order():
             'error': f'Order failed: {result.comment} (code {result.retcode})'
         }), 400
 
+    pos_ticket = result.order
+    # Match the actual live position ticket
+    positions = mt5.positions_get(symbol=target_sym)
+    if positions:
+        matched = [p for p in positions if getattr(p, 'identifier', None) == result.order or p.ticket == result.order]
+        if matched:
+            pos_ticket = matched[0].ticket
+        else:
+            pos_ticket = positions[-1].ticket
+
     return jsonify({
         'success': True,
-        'ticket': result.order,
+        'ticket': int(pos_ticket),
         'volume': result.volume,
         'price': result.price,
         'symbol': target_sym,
+        'sl': safe_sl,
+        'tp': safe_tp,
         'comment': result.comment
     })
 

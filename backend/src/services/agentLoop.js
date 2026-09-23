@@ -344,6 +344,10 @@ export class AutonomousAgentLoop {
 
           if (this.currentMode === 'LIVE') {
             // Keep engine positions strictly filtered to real broker tickets
+            if (Array.isArray(mt5Connector.openPositions) && mt5Connector.openPositions.length > 0) {
+              const liveTickets = new Set(mt5Connector.openPositions.map(p => p.ticket));
+              this.marginTradingEngine.activePositions = (this.marginTradingEngine.activePositions || []).filter(p => liveTickets.has(p.ticket));
+            }
             this.marginTradingEngine.activePositions = (this.marginTradingEngine.activePositions || []).filter(p => !!p.ticket);
             portfolioState.activePositions = this.marginTradingEngine.activePositions;
 
@@ -358,9 +362,19 @@ export class AutonomousAgentLoop {
               portfolioState.usedMargin = liveMargin;
               portfolioState.freeMargin = liveFreeMargin;
 
-              // If free margin is below $2.00, pause new order attempts until an open position closes
-              if (liveFreeMargin < 2.0) {
+              // If free margin is below $5.00, pause new order attempts
+              if (liveFreeMargin < 5.0) {
                 break;
+              }
+
+              // BROKER REALITY CHECK: If broker has margin locked, calculate actual live slots in use
+              const brokerPositionsCount = Array.isArray(mt5Connector.openPositions) && mt5Connector.openPositions.length > 0
+                ? mt5Connector.openPositions.length
+                : (liveMargin > 0 ? Math.floor(liveMargin / 2.0) : 0);
+
+              const realSlotsInUse = Math.max(portfolioState.activePositions.length, brokerPositionsCount);
+              if (realSlotsInUse >= this.marginRiskManager.maxConcurrentTrades) {
+                break; // Max slots occupied on real broker! Strictly prevent opening more trades!
               }
             }
           }
@@ -614,23 +628,29 @@ export class AutonomousAgentLoop {
       }
 
       // A2. Live MT5 Broker 5-Minute Watchdog: Guarantee no position on MT5 ever stays open > 5 minutes
-      if (this.currentMode === 'LIVE' && mt5Connector.connected && Array.isArray(mt5Connector.openPositions)) {
-        for (const p of mt5Connector.openPositions) {
-          const openTimeMs = p.time ? (p.time * 1000) : 0;
-          const tracked = (this.marginTradingEngine.activePositions || []).find(ap => ap.ticket === p.ticket);
-          const trackedAgeMs = tracked && tracked.openTime ? (Date.now() - new Date(tracked.openTime).getTime()) : 0;
-          const actualAgeMs = openTimeMs > 0 ? (Date.now() - openTimeMs) : trackedAgeMs;
+      if (this.currentMode === 'LIVE' && mt5Connector.connected) {
+        const positionsToWatch = [
+          ...(Array.isArray(mt5Connector.openPositions) ? mt5Connector.openPositions : []),
+          ...(this.marginTradingEngine.activePositions || []).filter(p => !!p.ticket)
+        ];
+        const handledTickets = new Set();
+
+        for (const p of positionsToWatch) {
+          const ticket = p.ticket;
+          if (!ticket || handledTickets.has(ticket)) continue;
+          handledTickets.add(ticket);
+
+          const openTimeMs = p.time ? (p.time * 1000) : (p.openTime ? new Date(p.openTime).getTime() : 0);
+          const actualAgeMs = openTimeMs > 0 ? (Date.now() - openTimeMs) : 0;
 
           if (actualAgeMs >= 300000) {
-            this.log(`⏱️ [MT5 LIVE] 5-minute scalp expiry triggered for Ticket #${p.ticket} (${p.symbol}, open for ${Math.round(actualAgeMs / 60000)}m). Auto-closing on Exness MT5...`, 'WARN');
-            mt5Connector.closePosition({ symbol: p.symbol, ticket: p.ticket }).then(res => {
+            this.log(`⏱️ [MT5 LIVE] 5-minute scalp expiry triggered for Ticket #${ticket} (${p.symbol}, open for ${Math.round(actualAgeMs / 60000)}m). Auto-closing on Exness MT5...`, 'WARN');
+            mt5Connector.closePosition({ symbol: p.symbol, ticket }).then(res => {
               if (res && res.closed > 0) {
-                this.log(`📡 [MT5 LIVE] Expired scalp closed on Exness MT5 (Ticket #${p.ticket})`, 'SUCCESS');
-                this.marginTradingEngine.activePositions = (this.marginTradingEngine.activePositions || []).filter(ap => ap.ticket !== p.ticket);
+                this.log(`📡 [MT5 LIVE] Expired scalp closed on Exness MT5 (Ticket #${ticket})`, 'SUCCESS');
+                this.marginTradingEngine.activePositions = (this.marginTradingEngine.activePositions || []).filter(ap => ap.ticket !== ticket);
               }
             }).catch(() => {});
-          } else if (tracked && !tracked.openTime && openTimeMs > 0) {
-            tracked.openTime = new Date(openTimeMs).toISOString();
           }
         }
       }
@@ -728,16 +748,20 @@ export class AutonomousAgentLoop {
 
         let confirmedActive = (this.marginTradingEngine.activePositions || []).filter(p => !!p.ticket);
 
-        // If MT5 reports zero margin and zero terminal positions, all positions on broker are closed
-        if (liveMargin === 0 && terminalPositions.length === 0) {
-          this.marginTradingEngine.activePositions = [];
-          confirmedActive = [];
-        } else if (terminalPositions.length > 0) {
-          // If terminal reported positions, synchronize activePositions to only those still open in MT5
+        // Synchronize activePositions with terminal positions if available
+        if (terminalPositions.length > 0) {
           this.marginTradingEngine.activePositions = this.marginTradingEngine.activePositions.filter(p =>
             terminalPositions.some(tp => tp.ticket === p.ticket)
           );
           confirmedActive = this.marginTradingEngine.activePositions;
+        } else if (liveMargin === 0) {
+          // Zero margin and zero positions means broker has no open trades
+          const now = Date.now();
+          const recent = confirmedActive.filter(p => p.openTime && (now - new Date(p.openTime).getTime()) < 15000);
+          if (recent.length === 0) {
+            this.marginTradingEngine.activePositions = [];
+            confirmedActive = [];
+          }
         }
 
         const mergedActive = [...confirmedActive];
@@ -766,31 +790,7 @@ export class AutonomousAgentLoop {
           p.unrealizedPnLPct = p.margin > 0 ? Number(((p.unrealizedPnL / p.margin) * 100).toFixed(1)) : 0;
         }
 
-        // If broker shows margin locked but terminal positions array is empty
-        if (liveMargin > 0 && mergedActive.length === 0) {
-          mergedActive.push({
-            id: 'MT5-LIVE-ACTIVE',
-            ticket: 'MT5-BROKER',
-            symbol: 'EURUSD',
-            name: 'EUR/USD Live Scalp',
-            category: 'Forex',
-            side: pnl >= 0 ? 'LONG' : 'SHORT',
-            entryPrice: 1.1422,
-            currentPrice: marketDataService.getPrice('EURUSD=X') || 1.1422,
-            units: 0.01,
-            notional: Number((liveMargin * (mt5Status.accountInfo?.leverage || 500)).toFixed(2)),
-            unrealizedPnL: pnl,
-            unrealizedPnLPct: liveMargin > 0 ? Number(((pnl / liveMargin) * 100).toFixed(1)) : 0,
-            leverage: mt5Status.accountInfo?.leverage || 500,
-            margin: liveMargin,
-            maxHoldMinutes: 5,
-            openTime: new Date().toISOString(),
-            isLiveBrokerOrder: true,
-            comment: 'Exness Live Scalp'
-          });
-        }
-
-        // Align per-position margin and PnL with Exness account summary if terminal positions list was empty but account has them
+        // Real broker PnL and margin synchronization across active positions
         if (mergedActive.length > 0) {
           if (pnl !== 0) {
             const sumPnL = mergedActive.reduce((acc, p) => acc + (p.unrealizedPnL || 0), 0);

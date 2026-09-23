@@ -501,10 +501,11 @@ app.post('/api/trades/close-all', async (req, res) => {
     }
 
     if (agentLoop.currentMode === 'LIVE' && mt5Connector.connected) {
-      await mt5Connector.closePosition({}).catch(() => {});
+      await mt5Connector.closeAllPositions().catch(() => {});
+      agentLoop.marginTradingEngine.activePositions = [];
     }
 
-    agentLoop.log(`🧹 Closed all ${closedList.length} active positions in [${agentLoop.activeAccount}].`, 'INFO');
+    agentLoop.log(`🧹 Closed all active positions in [${agentLoop.activeAccount}].`, 'INFO');
     res.json({ success: true, closedCount: closedList.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
