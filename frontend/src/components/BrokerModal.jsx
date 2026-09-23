@@ -805,6 +805,27 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
                     </p>
                   </div>
 
+                  {/* Private Cloud Gateway Bridge URL (Optional - For AWS Cloudflare Tunnel) */}
+                  <div className="p-3 rounded-xl bg-terminal-950/80 border border-terminal-border/80 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-slate-300 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                        <Server className="w-3.5 h-3.5 text-blue-400" />
+                        <span>Private Cloud Gateway URL (Optional - AWS / VPS Bridge)</span>
+                      </label>
+                      <span className="text-[10px] text-blue-400 font-mono">Port 5001</span>
+                    </div>
+                    <input
+                      type="text"
+                      value={mt5Gateway}
+                      onChange={(e) => setMt5Gateway(e.target.value)}
+                      placeholder="e.g. https://your-server.trycloudflare.com"
+                      className="w-full pl-3 pr-3 py-1.5 bg-terminal-900 border border-terminal-border rounded-lg text-white font-mono text-xs focus:outline-none focus:border-blue-500"
+                    />
+                    <p className="text-[10px] text-slate-400">
+                      If you host the Python bridge on AWS or a VPS with Cloudflare Tunnel, paste your <code className="text-blue-300">https://...trycloudflare.com</code> URL here.
+                    </p>
+                  </div>
+
                   {/* Action Button */}
                   <div className="flex items-center justify-between pt-1">
                     <button

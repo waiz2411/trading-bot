@@ -148,9 +148,20 @@ export class MT5Connector {
 
     const startTime = Date.now();
     const token = this.metaApiToken || process.env.META_API_TOKEN;
+    const hasCloudGateway = Boolean(this.gatewayUrl && !this.gatewayUrl.includes('localhost'));
 
     // ====================================================
-    // PATH 1: METAAPI CLOUD REST INTEGRATION (100% Cloud SaaS)
+    // PATH 1: CLOUD GATEWAY BRIDGE (AWS / Cloudflare Tunnel)
+    // ====================================================
+    if (hasCloudGateway) {
+      const gwRes = await this.tryGatewayConnection(startTime);
+      if (gwRes && gwRes.connected) {
+        return gwRes;
+      }
+    }
+
+    // ====================================================
+    // PATH 2: METAAPI CLOUD REST INTEGRATION (100% Cloud SaaS)
     // ====================================================
     if (token) {
       try {
@@ -159,6 +170,13 @@ export class MT5Connector {
         return metaResult;
       } catch (err) {
         console.warn('MetaApi connection failed:', err.message);
+
+        // Fallback to Gateway before giving up
+        const gwFallback = await this.tryGatewayConnection(startTime);
+        if (gwFallback && gwFallback.connected) {
+          return gwFallback;
+        }
+
         this.connected = false;
         this.status = 'DISCONNECTED';
         this.lastChecked = new Date().toISOString();
@@ -173,11 +191,15 @@ export class MT5Connector {
     }
 
     // ====================================================
-    // PATH 2: GATEWAY / TUNNEL BRIDGE (VPS or Local Bridge)
+    // PATH 3: DEFAULT GATEWAY BRIDGE (Local / Dedicated)
     // ====================================================
+    return await this.tryGatewayConnection(startTime);
+  }
+
+  async tryGatewayConnection(startTime = Date.now()) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
 
       const res = await fetch(`${this.gatewayUrl}/api/mt5/status`, {
         method: 'POST',
@@ -219,27 +241,11 @@ export class MT5Connector {
         };
       }
 
-      // If gateway is unreachable
-      this.connected = false;
-      this.status = 'DISCONNECTED';
-      this.lastChecked = new Date().toISOString();
-      this.accountInfo = {
-        balance: null,
-        equity: null,
-        margin: 0,
-        freeMargin: null,
-        leverage: 500,
-        currency: 'USD',
-        company: this.server,
-        server: this.server
-      };
-
       const isLocalhost = this.gatewayUrl.includes('localhost') || this.gatewayUrl.includes('127.0.0.1');
-      const isCloudHosted = !!(process.env.RENDER || process.env.PORT);
-
+      const isCloudHosted = process.env.RENDER || process.env.NODE_ENV === 'production';
       let errorMessage = `Could not reach MT5 Gateway Bridge at ${this.gatewayUrl}.`;
       if (isLocalhost && isCloudHosted) {
-        errorMessage = `Your website is running in the cloud on Render and cannot reach "localhost:5001" on your laptop directly. To connect your Vault Markets account: (1) Run the bridge with Ngrok on your PC and paste the public URL below (e.g. https://xxx.ngrok-free.app), OR (2) Provide a free MetaApi Cloud Token for 100% automated cloud hosting.`;
+        errorMessage = `Your website is running in the cloud on Render and cannot reach "localhost:5001" on your laptop directly. To connect your Exness account: provide your Cloud Gateway URL (e.g. https://xxx.trycloudflare.com).`;
       }
 
       return {
@@ -249,10 +255,9 @@ export class MT5Connector {
         error: errorMessage
       };
     } catch (err) {
-      this.status = 'ERROR';
-      this.connected = false;
       return {
         success: false,
+        connected: false,
         error: err.message || 'Failed to connect to MT5 gateway'
       };
     }
