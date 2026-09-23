@@ -65,6 +65,7 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
               const sameSymbolPositions = positions.filter(p => p.symbol === pos.symbol);
               const isHedged = sameSymbolPositions.some(p => p.side !== pos.side);
               const isMultiTrade = sameSymbolPositions.length > 1;
+              const tradeIndex = sameSymbolPositions.findIndex(p => p.id === pos.id) + 1;
               const isSpot = pos.tradingStyle === 'SPOT_BUY' || leverage === 1;
               const maxHoldMins = pos.maxHoldMinutes || 5;
               const elapsedSec = pos.openTime ? Math.max(0, Math.floor((Date.now() - new Date(pos.openTime).getTime()) / 1000)) : ((pos.cycleCount || 0) * 5);
