@@ -29,8 +29,8 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
   const [mt5Method, setMt5Method] = useState('CLOUD'); // 'CLOUD' | 'EA'
   const [mt5Login, setMt5Login] = useState(user?.brokerConnections?.mt5?.login?.replace(/\*+/g, '') || '');
   const [mt5Password, setMt5Password] = useState('');
-  const [mt5Server, setMt5Server] = useState(user?.brokerConnections?.mt5?.server || 'Exness-MT5Trial16');
-  const [mt5Gateway, setMt5Gateway] = useState('http://localhost:5001');
+  const [mt5Server, setMt5Server] = useState(user?.brokerConnections?.mt5?.server || 'Exness-MT5Trial15');
+  const [mt5Gateway, setMt5Gateway] = useState(user?.brokerConnections?.mt5?.gatewayUrl || 'https://taken-background-implemented-constitute.trycloudflare.com');
   const [metaApiToken, setMetaApiToken] = useState(user?.brokerConnections?.mt5?.metaApiToken || '');
   const [showMetaApiToken, setShowMetaApiToken] = useState(false);
   const [showMt5Password, setShowMt5Password] = useState(false);
@@ -58,6 +58,9 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
         if (user.brokerConnections.mt5.server && !mt5Server) {
           setMt5Server(user.brokerConnections.mt5.server);
         }
+        if (user.brokerConnections.mt5.gatewayUrl && (!mt5Gateway || mt5Gateway === 'http://localhost:5001')) {
+          setMt5Gateway(user.brokerConnections.mt5.gatewayUrl);
+        }
         if (user.brokerConnections.mt5.metaApiToken && !metaApiToken) {
           setMetaApiToken(user.brokerConnections.mt5.metaApiToken);
         }
@@ -84,6 +87,7 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
   };
 
   const POPULAR_SERVERS = [
+    'Exness-MT5Trial15',
     'Exness-MT5Trial16',
     'Exness-Trial',
     'Exness-Real',

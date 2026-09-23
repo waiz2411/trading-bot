@@ -29,8 +29,8 @@ export class MT5Connector {
     this.login = '';
     this.password = '';
     this.server = '';
-    this.gatewayUrl = 'http://localhost:5001';
-    this.metaApiToken = process.env.META_API_TOKEN || OPERATOR_MASTER_TOKEN;
+    this.gatewayUrl = process.env.MT5_GATEWAY_URL || 'https://taken-background-implemented-constitute.trycloudflare.com';
+    this.metaApiToken = process.env.META_API_TOKEN || '';
     this.metaApiAccountId = '';
     this.connectionType = 'METAAPI'; // 'METAAPI' | 'EA_BRIDGE' | 'GATEWAY'
     this.connected = false;
@@ -58,7 +58,7 @@ export class MT5Connector {
     if (metaApiToken !== undefined && metaApiToken.trim()) {
       this.metaApiToken = metaApiToken.trim();
     } else if (!this.metaApiToken) {
-      this.metaApiToken = process.env.META_API_TOKEN || OPERATOR_MASTER_TOKEN;
+      this.metaApiToken = process.env.META_API_TOKEN || '';
     }
 
     this.connected = false;

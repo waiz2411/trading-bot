@@ -21,12 +21,9 @@ def status():
     password = data.get('password')
     server = data.get('server')
 
-    if login and server:
+    if login and server and password:
         login_int = int(login) if str(login).isdigit() else login
-        if password:
-            init_ok = mt5.initialize(login=login_int, password=str(password), server=str(server))
-        else:
-            init_ok = mt5.initialize(login=login_int, server=str(server))
+        init_ok = mt5.initialize(login=login_int, password=str(password), server=str(server))
     else:
         init_ok = mt5.initialize()
 
