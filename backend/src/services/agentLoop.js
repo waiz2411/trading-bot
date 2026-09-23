@@ -253,8 +253,11 @@ export class AutonomousAgentLoop {
         else this.spotCooldowns.set(symbol, count - 1);
       }
 
-      // 2. Update live market prices
+      // 2. Update live market prices & broker telemetry
       await marketDataService.updateAll();
+      if (this.currentMode === 'LIVE' && mt5Connector.connected) {
+        await mt5Connector.tryGatewayConnection().catch(() => {});
+      }
       const markets = marketDataService.getAllMarkets();
       const pricesMap = marketDataService.getAllPricesMap();
 
