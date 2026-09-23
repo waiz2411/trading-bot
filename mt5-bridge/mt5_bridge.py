@@ -67,23 +67,38 @@ def place_order():
     tp = data.get('tp')
     comment = data.get('comment', 'NexusQuant Scalp')
 
-    symbol_info = mt5.symbol_info(symbol)
+    target_sym = symbol
+    if mt5.symbol_info(target_sym) is None:
+        for suffix in ['m', 'c', '.raw', '_i', '.r']:
+            if mt5.symbol_info(target_sym + suffix) is not None:
+                target_sym = target_sym + suffix
+                break
+
+    symbol_info = mt5.symbol_info(target_sym)
     if symbol_info is None:
-        return jsonify({'success': False, 'error': f'Symbol {symbol} not found in Market Watch'}), 400
+        return jsonify({'success': False, 'error': f'Symbol {symbol} (or with suffix) not found in Market Watch'}), 400
 
     if not symbol_info.visible:
-        mt5.symbol_select(symbol, True)
+        mt5.symbol_select(target_sym, True)
 
-    tick = mt5.symbol_info_tick(symbol)
+    tick = mt5.symbol_info_tick(target_sym)
     if tick is None:
-        return jsonify({'success': False, 'error': f'Cannot get live tick for {symbol}'}), 400
+        return jsonify({'success': False, 'error': f'Cannot get live tick for {target_sym}'}), 400
 
     order_type = mt5.ORDER_TYPE_BUY if side == 'BUY' else mt5.ORDER_TYPE_SELL
     price = tick.ask if side == 'BUY' else tick.bid
 
+    filling_mode = mt5.ORDER_FILLING_IOC
+    if symbol_info.filling_mode & 1:
+        filling_mode = mt5.ORDER_FILLING_FOK
+    elif symbol_info.filling_mode & 2:
+        filling_mode = mt5.ORDER_FILLING_IOC
+    else:
+        filling_mode = mt5.ORDER_FILLING_RETURN
+
     request_payload = {
         "action": mt5.TRADE_ACTION_DEAL,
-        "symbol": symbol,
+        "symbol": target_sym,
         "volume": volume,
         "type": order_type,
         "price": price,
@@ -91,7 +106,7 @@ def place_order():
         "magic": 241100,
         "comment": comment,
         "type_time": mt5.ORDER_TIME_GTC,
-        "type_filling": mt5.ORDER_FILLING_IOC,
+        "type_filling": filling_mode,
     }
     if sl:
         request_payload["sl"] = float(sl)
@@ -112,8 +127,49 @@ def place_order():
         'ticket': result.order,
         'volume': result.volume,
         'price': result.price,
+        'symbol': target_sym,
         'comment': result.comment
     })
+
+@app.route('/api/mt5/close', methods=['POST'])
+def close_order():
+    data = request.json or {}
+    symbol = data.get('symbol')
+    ticket = data.get('ticket')
+
+    positions = mt5.positions_get()
+    if positions is None or len(positions) == 0:
+        return jsonify({'success': True, 'closed': 0, 'message': 'No open positions found.'})
+
+    closed_count = 0
+    for pos in positions:
+        if ticket and pos.ticket != int(ticket):
+            continue
+        if symbol and not pos.symbol.startswith(symbol):
+            continue
+
+        close_type = mt5.ORDER_TYPE_SELL if pos.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY
+        tick = mt5.symbol_info_tick(pos.symbol)
+        close_price = tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask
+
+        close_req = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "position": pos.ticket,
+            "symbol": pos.symbol,
+            "volume": pos.volume,
+            "type": close_type,
+            "price": close_price,
+            "deviation": 20,
+            "magic": 241100,
+            "comment": "NexusQuant Scalp Close",
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+        res = mt5.order_send(close_req)
+        if res.retcode == mt5.TRADE_RETCODE_DONE:
+            closed_count += 1
+
+    return jsonify({'success': True, 'closed': closed_count})
 
 if __name__ == '__main__':
     print("=" * 60)
