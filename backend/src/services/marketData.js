@@ -381,7 +381,21 @@ export class MarketDataService {
   }
 
   getMarket(symbol) {
-    return marketCache.get(symbol) || null;
+    if (!symbol) return null;
+    if (marketCache.has(symbol)) return marketCache.get(symbol);
+    const cleanSym = symbol.replace(/[-_./=]/g, '').toUpperCase();
+    for (const [k, v] of marketCache.entries()) {
+      const cleanK = k.replace(/[-_./=]/g, '').toUpperCase();
+      if (cleanK === cleanSym || cleanK.startsWith(cleanSym) || cleanSym.startsWith(cleanK)) {
+        return v;
+      }
+    }
+    return null;
+  }
+
+  getPrice(symbol) {
+    const m = this.getMarket(symbol);
+    return m ? m.price : null;
   }
 
   getAllPricesMap() {
