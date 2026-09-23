@@ -272,6 +272,9 @@ export class AutonomousAgentLoop {
           technicalsMap[asset.symbol] = technicals;
         }
 
+        const isMarginCooldown = (this.assetCooldowns.get(asset.symbol) || 0) > 0;
+        const isSpotCooldown = (this.spotCooldowns.get(asset.symbol) || 0) > 0;
+
         // 3A. Margin Scalper Confluence (Forex, Commodities, Indices, and Top Crypto BTC only)
         const isMt5Symbol = asset.category === 'Forex' ||
                             asset.category === 'Commodities' ||
@@ -281,7 +284,6 @@ export class AutonomousAgentLoop {
         let signal = null;
         if (isMt5Symbol) {
           signal = evaluateStrategyConfluence(asset, technicals, marginRiskSettings);
-          const isMarginCooldown = (this.assetCooldowns.get(asset.symbol) || 0) > 0;
           if (!isMarginCooldown && (signal.action === 'STRONG_BUY' || signal.action === 'STRONG_SELL')) {
             validMarginSignals.push({ asset, signal });
           }
@@ -291,10 +293,15 @@ export class AutonomousAgentLoop {
         let spotSignal = null;
         if (asset.category === 'Crypto') {
           spotSignal = evaluateSpotConfluence(asset, technicals, this.spotRiskManager);
-          if (spotSignal.action === 'STRONG_BUY' && !(this.spotCooldowns.get(asset.symbol) > 0)) {
+          if (spotSignal.action === 'STRONG_BUY' && !isSpotCooldown) {
             validSpotBuys.push({ asset, signal: spotSignal });
           }
         }
+
+        const isCooldown = this.activeAccount === 'SPOT' ? isSpotCooldown : isMarginCooldown;
+        const cooldownCycles = this.activeAccount === 'SPOT'
+          ? (this.spotCooldowns.get(asset.symbol) || 0)
+          : (this.assetCooldowns.get(asset.symbol) || 0);
 
         const scanItem = {
           symbol: asset.symbol,
@@ -305,8 +312,8 @@ export class AutonomousAgentLoop {
           change24h: asset.change24h,
           high24h: asset.high24h,
           low24h: asset.low24h,
-          isCooldown: isMarginCooldown,
-          cooldownCycles: this.assetCooldowns.get(asset.symbol) || 0,
+          isCooldown,
+          cooldownCycles,
           technicals: {
             rsi: technicals?.rsi,
             macd: technicals?.macd?.histogram,

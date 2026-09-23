@@ -96,6 +96,22 @@ export class MarketDataService {
       else if (item.symbol === 'GBPAUD=X') { defaultPrice = 1.9770; volatility = 0.0014; }
       else if (item.symbol === 'GBPCAD=X') { defaultPrice = 1.7940; volatility = 0.0013; }
       else if (item.symbol === 'AUDNZD=X') { defaultPrice = 1.1120; volatility = 0.0011; }
+      else if (item.symbol === 'EURCHF=X') { defaultPrice = 0.9450; volatility = 0.0010; }
+      else if (item.symbol === 'EURNZD=X') { defaultPrice = 1.7750; volatility = 0.0014; }
+      else if (item.symbol === 'GBPCHF=X') { defaultPrice = 1.1250; volatility = 0.0014; }
+      else if (item.symbol === 'GBPNZD=X') { defaultPrice = 2.1150; volatility = 0.0016; }
+      else if (item.symbol === 'AUDCAD=X') { defaultPrice = 0.9080; volatility = 0.0012; }
+      else if (item.symbol === 'AUDCHF=X') { defaultPrice = 0.5670; volatility = 0.0012; }
+      else if (item.symbol === 'CADCHF=X') { defaultPrice = 0.6250; volatility = 0.0012; }
+      else if (item.symbol === 'NZDCAD=X') { defaultPrice = 0.8160; volatility = 0.0012; }
+      else if (item.symbol === 'NZDCHF=X') { defaultPrice = 0.5090; volatility = 0.0012; }
+      else if (item.symbol === 'USDZAR=X') { defaultPrice = 17.65; volatility = 0.0022; }
+      else if (item.symbol === 'USDTRY=X') { defaultPrice = 34.20; volatility = 0.0025; }
+      else if (item.symbol === 'USDMXN=X') { defaultPrice = 19.35; volatility = 0.0020; }
+      else if (item.symbol === 'USDSGD=X') { defaultPrice = 1.3050; volatility = 0.0010; }
+      else if (item.symbol === 'USDHKD=X') { defaultPrice = 7.7850; volatility = 0.0005; }
+      else if (item.symbol === 'USDSEK=X') { defaultPrice = 10.25; volatility = 0.0015; }
+      else if (item.symbol === 'USDNOK=X') { defaultPrice = 10.60; volatility = 0.0016; }
       // Commodities & Indices defaults
       else if (item.symbol === 'GC=F') { defaultPrice = 2635.00; volatility = 0.0020; }
       else if (item.symbol === 'SI=F') { defaultPrice = 31.20; volatility = 0.0030; }
@@ -103,12 +119,16 @@ export class MarketDataService {
       else if (item.symbol === 'BZ=F') { defaultPrice = 74.20; volatility = 0.0035; }
       else if (item.symbol === 'NG=F') { defaultPrice = 2.850; volatility = 0.0050; }
       else if (item.symbol === 'HG=F') { defaultPrice = 4.3500; volatility = 0.0030; }
+      else if (item.symbol === 'PL=F') { defaultPrice = 985.00; volatility = 0.0030; }
+      else if (item.symbol === 'PA=F') { defaultPrice = 1060.00; volatility = 0.0035; }
       else if (item.symbol === '^GSPC') { defaultPrice = 5850.00; volatility = 0.0015; }
       else if (item.symbol === '^IXIC') { defaultPrice = 18500.00; volatility = 0.0020; }
       else if (item.symbol === '^DJI') { defaultPrice = 42800.00; volatility = 0.0015; }
       else if (item.symbol === '^GDAXI') { defaultPrice = 19400.00; volatility = 0.0016; }
       else if (item.symbol === '^FTSE') { defaultPrice = 8250.00; volatility = 0.0014; }
       else if (item.symbol === '^N225') { defaultPrice = 38900.00; volatility = 0.0018; }
+      else if (item.symbol === '^STOXX50E') { defaultPrice = 4950.00; volatility = 0.0017; }
+      else if (item.symbol === '^HSI') { defaultPrice = 20500.00; volatility = 0.0022; }
 
       const candles = generateBalancedCandles(defaultPrice, volatility, 70);
       const latest = candles[candles.length - 1];

@@ -493,6 +493,166 @@ export const WATCHLIST = [
     icon: 'A$/NZ$',
     minVolatility: 0.11
   },
+  {
+    symbol: 'EURCHF=X',
+    name: 'Euro / Swiss Franc',
+    category: 'Forex',
+    baseAsset: 'EUR',
+    quoteAsset: 'CHF',
+    decimals: 4,
+    icon: '€/Fr',
+    minVolatility: 0.10
+  },
+  {
+    symbol: 'EURNZD=X',
+    name: 'Euro / New Zealand Dollar',
+    category: 'Forex',
+    baseAsset: 'EUR',
+    quoteAsset: 'NZD',
+    decimals: 4,
+    icon: '€/NZ$',
+    minVolatility: 0.14
+  },
+  {
+    symbol: 'GBPCHF=X',
+    name: 'British Pound / Swiss Franc',
+    category: 'Forex',
+    baseAsset: 'GBP',
+    quoteAsset: 'CHF',
+    decimals: 4,
+    icon: '£/Fr',
+    minVolatility: 0.14
+  },
+  {
+    symbol: 'GBPNZD=X',
+    name: 'British Pound / New Zealand Dollar',
+    category: 'Forex',
+    baseAsset: 'GBP',
+    quoteAsset: 'NZD',
+    decimals: 4,
+    icon: '£/NZ$',
+    minVolatility: 0.16
+  },
+  {
+    symbol: 'AUDCAD=X',
+    name: 'Australian Dollar / Canadian Dollar',
+    category: 'Forex',
+    baseAsset: 'AUD',
+    quoteAsset: 'CAD',
+    decimals: 4,
+    icon: 'A$/C$',
+    minVolatility: 0.12
+  },
+  {
+    symbol: 'AUDCHF=X',
+    name: 'Australian Dollar / Swiss Franc',
+    category: 'Forex',
+    baseAsset: 'AUD',
+    quoteAsset: 'CHF',
+    decimals: 4,
+    icon: 'A$/Fr',
+    minVolatility: 0.12
+  },
+  {
+    symbol: 'CADCHF=X',
+    name: 'Canadian Dollar / Swiss Franc',
+    category: 'Forex',
+    baseAsset: 'CAD',
+    quoteAsset: 'CHF',
+    decimals: 4,
+    icon: 'C$/Fr',
+    minVolatility: 0.12
+  },
+  {
+    symbol: 'NZDCAD=X',
+    name: 'New Zealand Dollar / Canadian Dollar',
+    category: 'Forex',
+    baseAsset: 'NZD',
+    quoteAsset: 'CAD',
+    decimals: 4,
+    icon: 'NZ$/C$',
+    minVolatility: 0.12
+  },
+  {
+    symbol: 'NZDCHF=X',
+    name: 'New Zealand Dollar / Swiss Franc',
+    category: 'Forex',
+    baseAsset: 'NZD',
+    quoteAsset: 'CHF',
+    decimals: 4,
+    icon: 'NZ$/Fr',
+    minVolatility: 0.12
+  },
+  {
+    symbol: 'USDZAR=X',
+    name: 'US Dollar / South African Rand',
+    category: 'Forex',
+    baseAsset: 'USD',
+    quoteAsset: 'ZAR',
+    decimals: 4,
+    icon: '$/R',
+    minVolatility: 0.22
+  },
+  {
+    symbol: 'USDTRY=X',
+    name: 'US Dollar / Turkish Lira',
+    category: 'Forex',
+    baseAsset: 'USD',
+    quoteAsset: 'TRY',
+    decimals: 4,
+    icon: '$/₺',
+    minVolatility: 0.25
+  },
+  {
+    symbol: 'USDMXN=X',
+    name: 'US Dollar / Mexican Peso',
+    category: 'Forex',
+    baseAsset: 'USD',
+    quoteAsset: 'MXN',
+    decimals: 4,
+    icon: '$/Mex$',
+    minVolatility: 0.20
+  },
+  {
+    symbol: 'USDSGD=X',
+    name: 'US Dollar / Singapore Dollar',
+    category: 'Forex',
+    baseAsset: 'USD',
+    quoteAsset: 'SGD',
+    decimals: 4,
+    icon: '$/S$',
+    minVolatility: 0.10
+  },
+  {
+    symbol: 'USDHKD=X',
+    name: 'US Dollar / Hong Kong Dollar',
+    category: 'Forex',
+    baseAsset: 'USD',
+    quoteAsset: 'HKD',
+    decimals: 4,
+    icon: '$/HK$',
+    minVolatility: 0.05
+  },
+  {
+    symbol: 'USDSEK=X',
+    name: 'US Dollar / Swedish Krona',
+    category: 'Forex',
+    baseAsset: 'USD',
+    quoteAsset: 'SEK',
+    decimals: 4,
+    icon: '$/kr',
+    minVolatility: 0.15
+  },
+  {
+    symbol: 'USDNOK=X',
+    name: 'US Dollar / Norwegian Krone',
+    category: 'Forex',
+    baseAsset: 'USD',
+    quoteAsset: 'NOK',
+    decimals: 4,
+    icon: '$/kr',
+    minVolatility: 0.16
+  },
 
   // ==========================================
   // 3. COMMODITIES
@@ -555,6 +715,26 @@ export const WATCHLIST = [
     quoteAsset: 'USD',
     decimals: 4,
     icon: '🧱',
+    minVolatility: 0.35
+  },
+  {
+    symbol: 'PL=F',
+    name: 'Platinum Futures (XPT/USD)',
+    category: 'Commodities',
+    baseAsset: 'Platinum',
+    quoteAsset: 'USD',
+    decimals: 2,
+    icon: '⚪',
+    minVolatility: 0.30
+  },
+  {
+    symbol: 'PA=F',
+    name: 'Palladium Futures (XPD/USD)',
+    category: 'Commodities',
+    baseAsset: 'Palladium',
+    quoteAsset: 'USD',
+    decimals: 2,
+    icon: '🔘',
     minVolatility: 0.35
   },
 
@@ -620,5 +800,25 @@ export const WATCHLIST = [
     decimals: 2,
     icon: '🇯🇵',
     minVolatility: 0.20
+  },
+  {
+    symbol: '^STOXX50E',
+    name: 'Euro Stoxx 50 (Europe)',
+    category: 'Indices',
+    baseAsset: 'EU50',
+    quoteAsset: 'EUR',
+    decimals: 2,
+    icon: '🇪🇺',
+    minVolatility: 0.17
+  },
+  {
+    symbol: '^HSI',
+    name: 'Hang Seng Index (Hong Kong)',
+    category: 'Indices',
+    baseAsset: 'HK50',
+    quoteAsset: 'HKD',
+    decimals: 2,
+    icon: '🇭🇰',
+    minVolatility: 0.22
   }
 ];
