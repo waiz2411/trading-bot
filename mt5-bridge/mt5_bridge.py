@@ -50,9 +50,12 @@ def status():
                 'type': 'BUY' if p.type == mt5.ORDER_TYPE_BUY else 'SELL',
                 'volume': float(p.volume),
                 'priceOpen': float(p.price_open),
+                'priceCurrent': float(getattr(p, 'price_current', p.price_open)),
                 'sl': float(p.sl) if p.sl else 0.0,
                 'tp': float(p.tp) if p.tp else 0.0,
                 'profit': float(p.profit),
+                'time': int(getattr(p, 'time', 0)),
+                'timeMsc': int(getattr(p, 'time_msc', 0)),
                 'comment': p.comment
             })
 

@@ -370,39 +370,42 @@ export class PaperTradingEngine {
       }
 
       // ====================================================
-      // 2. SPOT FAST SCALP TIME-LIMIT (At most 5 minutes per trade)
+      // 2. STRICT 5-MINUTE SCALP TIME-LIMIT (At most 5 minutes per trade for BOTH Margin and Spot)
       // ====================================================
-      const isSpot = this.accountType === 'SPOT' || pos.tradingStyle === 'SPOT_BUY';
-      if (isSpot) {
-        const openTimeMs = pos.openTime ? new Date(pos.openTime).getTime() : 0;
-        const ageMs = openTimeMs > 0 ? (Date.now() - openTimeMs) : ((pos.cycleCount || 0) * 5000);
-        const cyclesElapsed = pos.cycleCount || 0;
-        const maxHoldMinutes = pos.maxHoldMinutes || 5;
-        const maxHoldMs = maxHoldMinutes * 60 * 1000; // default 5m = 300,000ms
-        const maxHoldCycles = maxHoldMinutes * 12; // 12 cycles/min * 5 min = 60 cycles
+      const openTimeMs = pos.openTime ? new Date(pos.openTime).getTime() : 0;
+      const ageMs = openTimeMs > 0 ? (Date.now() - openTimeMs) : ((pos.cycleCount || 0) * 5000);
+      const cyclesElapsed = pos.cycleCount || 0;
+      const maxHoldMinutes = 5; // Strict 5-minute maximum holding cap
+      const maxHoldMs = maxHoldMinutes * 60 * 1000; // 300,000ms = 5 minutes
+      const maxHoldCycles = maxHoldMinutes * 12; // 60 cycles @ 5s = 5 minutes
 
-        // A. Hard 5-Minute Cap: Exit at market price to free cash slot
-        if (ageMs >= maxHoldMs || cyclesElapsed >= maxHoldCycles) {
-          const isProfitable = pos.unrealizedPnL >= 0;
-          const exitNote = isProfitable
-            ? `5m Scalp Expiry: Banked profit at 5m cap (+${pos.pnlPercent}%)`
-            : `5m Scalp Expiry: Stalled position exited at 5m cap (${pos.pnlPercent}%)`;
-          const closed = this.closePosition(pos.id, livePrice, 'TIME_LIMIT_EXIT', exitNote);
+      // A. Hard 5-Minute Cap: Exit at market price to rotate capital
+      if (ageMs >= maxHoldMs || cyclesElapsed >= maxHoldCycles) {
+        const isProfitable = pos.unrealizedPnL >= 0;
+        const exitNote = isProfitable
+          ? `5m Scalp Expiry: Banked profit at 5m cap (+${pos.pnlPercent}%)`
+          : `5m Scalp Expiry: Scalp duration reached 5m cap (${pos.pnlPercent}%)`;
+        const closed = this.closePosition(pos.id, livePrice, 'TIME_LIMIT_EXIT', exitNote);
+        if (closed) {
+          closedTriggers.push(closed);
+          continue;
+        }
+      }
+
+      // B. Stalled Momentum Soft Exit (After 3.5m / 42 cycles)
+      // If scalp reached profit but starts pulling back from micro peak, lock it in!
+      if ((ageMs >= 210000 || cyclesElapsed >= 42) && pos.unrealizedPnL > 0) {
+        if (pos.side === 'LONG' && livePrice < pos.highestPrice * 0.998) {
+          const closed = this.closePosition(pos.id, livePrice, 'MOMENTUM_EXHAUSTION_EXIT', `Fast Scalp Lock: Secured +${pos.pnlPercent}% gain before 5m cap`);
           if (closed) {
             closedTriggers.push(closed);
             continue;
           }
-        }
-
-        // B. Stalled Momentum Soft Exit (After 3.5m / 42 cycles)
-        // If scalp reached profit (>= +0.25%) but starts pulling back from micro peak, lock it in!
-        if ((ageMs >= 210000 || cyclesElapsed >= 42) && pos.unrealizedPnL > 0 && pos.pnlPercent >= 0.25) {
-          if (livePrice < pos.highestPrice * 0.998) {
-            const closed = this.closePosition(pos.id, livePrice, 'MOMENTUM_EXHAUSTION_EXIT', `Fast Scalp Lock: Secured +${pos.pnlPercent}% gain before 5m cap`);
-            if (closed) {
-              closedTriggers.push(closed);
-              continue;
-            }
+        } else if (pos.side === 'SHORT' && livePrice > pos.lowestPrice * 1.002) {
+          const closed = this.closePosition(pos.id, livePrice, 'MOMENTUM_EXHAUSTION_EXIT', `Fast Scalp Lock: Secured +${pos.pnlPercent}% gain before 5m cap`);
+          if (closed) {
+            closedTriggers.push(closed);
+            continue;
           }
         }
       }

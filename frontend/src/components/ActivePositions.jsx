@@ -2,6 +2,12 @@ import React from 'react';
 import { ArrowUpRight, ArrowDownRight, XCircle, Shield, Target, ShieldCheck, Lock, Activity, Timer } from 'lucide-react';
 
 export default function ActivePositions({ positions = [], onCloseTrade, isClosingId, isLive = false, activeAccount = 'MARGIN' }) {
+  const [, setNow] = React.useState(Date.now());
+  React.useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   if (!positions || positions.length === 0) {
     return (
       <div className="bg-terminal-850/70 border border-terminal-border rounded-xl p-8 text-center shadow-lg">
@@ -112,15 +118,13 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
                           </span>
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
-                          {isSpot && (
-                            <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold flex items-center gap-0.5 ${
-                              isExpiringSoon
-                                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
-                                : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                            }`}>
-                              <Timer className="w-2.5 h-2.5" /> {elapsedStr} / {maxHoldMins}m cap
-                            </span>
-                          )}
+                          <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold flex items-center gap-0.5 ${
+                            isExpiringSoon
+                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
+                              : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                          }`}>
+                            <Timer className="w-2.5 h-2.5" /> {elapsedStr} / {maxHoldMins}m cap
+                          </span>
                           {pos.trailingStopActive && (
                             <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-0.5">
                               <ShieldCheck className="w-2.5 h-2.5" /> Trailing Locked

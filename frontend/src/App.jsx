@@ -169,11 +169,11 @@ export default function App() {
     }
   }, [getAuthHeaders]);
 
-  // Poll state every 2.5 seconds when authenticated
+  // Poll state every 1.5 seconds when authenticated for live real-time telemetry & PnL
   useEffect(() => {
     if (!token || !user) return;
     fetchDashboard();
-    const interval = setInterval(fetchDashboard, 2500);
+    const interval = setInterval(fetchDashboard, 1500);
     return () => clearInterval(interval);
   }, [fetchDashboard, token, user]);
 

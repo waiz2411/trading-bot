@@ -57,6 +57,17 @@ export class MT5Connector {
       company: 'Exness Technologies Ltd',
       server: 'Exness-MT5Trial15'
     };
+    this.telemetryIntervalId = null;
+    this.startTelemetryPolling();
+  }
+
+  startTelemetryPolling(intervalMs = 2500) {
+    if (this.telemetryIntervalId) return;
+    this.telemetryIntervalId = setInterval(async () => {
+      if (this.gatewayUrl && !this.gatewayUrl.includes('localhost') && this.login && this.server) {
+        await this.tryGatewayConnection().catch(() => {});
+      }
+    }, intervalMs);
   }
 
   configure({ login, password, server, gatewayUrl, metaApiToken, connected, status, accountInfo }) {

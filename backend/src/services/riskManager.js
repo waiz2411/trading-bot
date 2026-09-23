@@ -6,16 +6,16 @@
 
 export class RiskManager {
   constructor(options = {}) {
-    this.riskPerTradePct = options.riskPerTradePct || 2.0; // Risk 2.0% of total equity per trade
-    this.maxConcurrentTrades = options.maxConcurrentTrades || 2; // Default 2 sniper positions max
+    this.riskPerTradePct = options.riskPerTradePct !== undefined ? Number(options.riskPerTradePct) : 1.5; // Strictly 1.5% capital risk per trade
+    this.maxConcurrentTrades = options.maxConcurrentTrades || 6; // Active multi-scalp positions
     this.maxPositionAllocationPct = options.maxPositionAllocationPct || 25; // Max 25% notional per asset for spot
     this.maxDailyDrawdownPct = options.maxDailyDrawdownPct || 5.0; // Circuit breaker at 5% daily loss
-    this.minConfidenceThreshold = options.minConfidenceThreshold || 82; // 82% for sniper scalps
+    this.minConfidenceThreshold = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 50; // Active 50% threshold for frequent scalps
     this.tradeDirection = options.tradeDirection || 'BOTH'; // 'BOTH' | 'SHORT_ONLY' | 'LONG_ONLY'
     this.tradingStyle = options.tradingStyle || 'SCALPING'; // 'SCALPING' | 'SWING'
-    this.targetRiskRewardRatio = options.targetRiskRewardRatio || 1.3; // 1:1.3 R:R for 75%-85% scalp hit rate
-    this.defaultLeverage = options.defaultLeverage || 500; // 500x leverage with real buying power
-    this.maxTradesPerPair = options.maxTradesPerPair || 2; // Up to 2 concurrent trades per symbol (Hedging / Scale-in)
+    this.targetRiskRewardRatio = 1.3; // Strictly 1:1.3 Risk-to-Reward ratio
+    this.defaultLeverage = 500; // Strictly 500x leverage
+    this.maxTradesPerPair = options.maxTradesPerPair || 2; // Up to 2 concurrent trades per symbol
   }
 
   updateSettings(newSettings) {
@@ -26,7 +26,7 @@ export class RiskManager {
       this.maxConcurrentTrades = Math.max(1, Math.min(10, parseInt(newSettings.maxConcurrentTrades, 10)));
     }
     if (newSettings.minConfidenceThreshold !== undefined) {
-      this.minConfidenceThreshold = Math.max(50, Math.min(95, parseInt(newSettings.minConfidenceThreshold, 10)));
+      this.minConfidenceThreshold = Math.max(40, Math.min(95, parseInt(newSettings.minConfidenceThreshold, 10)));
     }
     if (newSettings.tradeDirection !== undefined) {
       this.tradeDirection = newSettings.tradeDirection;
