@@ -227,8 +227,14 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
               {riskSettings?.defaultLeverage || 500}x LEV
             </span>
           </div>
-          <div className="text-[11px] font-mono mt-1 text-rose-300 font-semibold flex items-center justify-between">
-            <span>{riskSettings?.tradeDirection === 'SHORT_ONLY' ? '▼ SHORT ONLY' : riskSettings?.tradeDirection}</span>
+          <div className="text-[11px] font-mono mt-1 font-semibold flex items-center justify-between">
+            <span className={
+              riskSettings?.tradeDirection === 'SHORT_ONLY' ? 'text-rose-400' :
+              riskSettings?.tradeDirection === 'LONG_ONLY' ? 'text-emerald-400' : 'text-indigo-400'
+            }>
+              {riskSettings?.tradeDirection === 'SHORT_ONLY' ? '▼ SHORT ONLY' :
+               riskSettings?.tradeDirection === 'LONG_ONLY' ? '▲ LONG ONLY' : '⇅ BI-DIRECTIONAL'}
+            </span>
             <span className="text-slate-400 font-normal">1:{riskSettings?.targetRiskRewardRatio || '1.3'} R:R</span>
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-500 opacity-60" />

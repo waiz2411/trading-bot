@@ -10,7 +10,7 @@ import AssetDetailModal from './components/AssetDetailModal';
 import BalanceModal from './components/BalanceModal';
 import BrokerModal from './components/BrokerModal';
 import LoginPage from './components/LoginPage';
-import { Compass, Target, History, Terminal, Zap, ArrowDownRight, Coins, Key, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Compass, Target, History, Terminal, Zap, ArrowDownRight, ArrowUpRight, Repeat, Coins, Key, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem('nexus_auth_token') || null);
@@ -395,7 +395,7 @@ export default function App() {
   const isSpot = data.activeAccount === 'SPOT';
   const activePositionsCount = data.portfolio?.activePositions?.length || 0;
   const closedTradesCount = data.portfolio?.closedTrades?.length || 0;
-  const tradeDirection = data.riskSettings?.tradeDirection || 'SHORT_ONLY';
+  const tradeDirection = data.riskSettings?.tradeDirection || 'BOTH';
 
   // Loading Splash Screen
   if (isAuthLoading) {
@@ -569,9 +569,29 @@ export default function App() {
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold flex items-center gap-1">
-                <ArrowDownRight className="w-3.5 h-3.5" />
-                {tradeDirection === 'SHORT_ONLY' ? 'SHORT TRADES ONLY' : tradeDirection}
+              <span className={`px-2 py-0.5 rounded border font-bold flex items-center gap-1 ${
+                tradeDirection === 'SHORT_ONLY'
+                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                  : tradeDirection === 'LONG_ONLY'
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+              }`}>
+                {tradeDirection === 'SHORT_ONLY' ? (
+                  <>
+                    <ArrowDownRight className="w-3.5 h-3.5" />
+                    SHORT ONLY
+                  </>
+                ) : tradeDirection === 'LONG_ONLY' ? (
+                  <>
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                    LONG ONLY
+                  </>
+                ) : (
+                  <>
+                    <Repeat className="w-3.5 h-3.5" />
+                    BI-DIRECTIONAL (BOTH)
+                  </>
+                )}
               </span>
               {isLiveMode ? (
                 <button

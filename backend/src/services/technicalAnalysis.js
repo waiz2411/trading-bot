@@ -134,9 +134,9 @@ export function calculateBollingerBands(closes, period = 20, stdDev = 2) {
   const std = Math.sqrt(variance);
 
   return {
-    upper: Number((mean + std * stdDev).toFixed(4)),
-    middle: Number(mean.toFixed(4)),
-    lower: Number((mean - std * stdDev).toFixed(4)),
+    upper: Number((mean + std * stdDev)),
+    middle: Number(mean),
+    lower: Number((mean - std * stdDev)),
     bandwidth: Number((((mean + std * stdDev) - (mean - std * stdDev)) / mean * 100).toFixed(2))
   };
 }
@@ -176,16 +176,16 @@ export function calculateTechnicalMetrics(candles) {
 
   return {
     currentPrice,
-    ema9: ema9 ? Number(ema9.toFixed(4)) : currentPrice,
-    ema21: ema21 ? Number(ema21.toFixed(4)) : currentPrice,
-    ema50: ema50 ? Number(ema50.toFixed(4)) : currentPrice,
-    ema200: ema200 ? Number(ema200.toFixed(4)) : currentPrice,
+    ema9: ema9 !== null && ema9 !== undefined ? Number(ema9) : currentPrice,
+    ema21: ema21 !== null && ema21 !== undefined ? Number(ema21) : currentPrice,
+    ema50: ema50 !== null && ema50 !== undefined ? Number(ema50) : null,
+    ema200: ema200 !== null && ema200 !== undefined ? Number(ema200) : null,
     rsi,
     macd,
     atr,
     bb,
-    resistance: Number(resistance.toFixed(4)),
-    support: Number(support.toFixed(4)),
+    resistance: Number(resistance),
+    support: Number(support),
     candleCount: candles.length
   };
 }

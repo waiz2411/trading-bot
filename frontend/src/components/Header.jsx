@@ -13,7 +13,7 @@ export default function Header({
   onOpenSettings,
   onOpenBalanceModal,
   onCloseAllTrades,
-  tradeDirection = 'SHORT_ONLY',
+  tradeDirection = 'BOTH',
   onChangeDirection,
   tradingStyle = 'SCALPING',
   lastUpdated,
@@ -69,9 +69,29 @@ export default function Header({
                     <Zap className="w-3 h-3" />
                     SCALPER CORE (500x)
                   </span>
-                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold flex items-center gap-0.5">
-                    <ArrowDownRight className="w-3 h-3" />
-                    {tradeDirection === 'SHORT_ONLY' ? 'SHORT TRADES ONLY' : tradeDirection}
+                  <span className={`text-[10px] uppercase font-mono px-2 py-0.5 rounded border font-bold flex items-center gap-0.5 ${
+                    tradeDirection === 'SHORT_ONLY'
+                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                      : tradeDirection === 'LONG_ONLY'
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                  }`}>
+                    {tradeDirection === 'SHORT_ONLY' ? (
+                      <>
+                        <ArrowDownRight className="w-3 h-3" />
+                        SHORT ONLY
+                      </>
+                    ) : tradeDirection === 'LONG_ONLY' ? (
+                      <>
+                        <ArrowUpRight className="w-3 h-3" />
+                        LONG ONLY
+                      </>
+                    ) : (
+                      <>
+                        <Repeat className="w-3 h-3" />
+                        BI-DIRECTIONAL (BOTH)
+                      </>
+                    )}
                   </span>
                 </>
               )}
