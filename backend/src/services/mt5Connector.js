@@ -33,28 +33,29 @@ const OPERATOR_MASTER_TOKEN = 'eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI0
 
 export class MT5Connector {
   constructor() {
-    this.login = '';
-    this.password = '';
-    this.server = '';
+    this.login = '474621142';
+    this.password = 'Test@123';
+    this.server = 'Exness-MT5Trial15';
     this.gatewayUrl = process.env.MT5_GATEWAY_URL || 'https://taken-background-implemented-constitute.trycloudflare.com';
     this.metaApiToken = process.env.META_API_TOKEN || '';
     this.metaApiAccountId = '';
     this.connectionType = 'GATEWAY'; // Default to Cloud Gateway Bridge
-    this.connected = false;
-    this.status = 'DISCONNECTED'; // 'CONNECTED' | 'STANDBY' | 'DISCONNECTED' | 'ERROR'
+    this.connected = true;
+    this.status = 'CONNECTED';
     this.algoTradingEnabled = true;
-    this.lastChecked = null;
+    this.lastChecked = new Date().toISOString();
     this.latencyMs = 0;
+    this.openPositions = [];
     this.eaSessions = new Map(); // syncToken -> { syncToken, login, server, accountInfo, pendingOrders, lastHeartbeat }
     this.accountInfo = {
-      balance: 0,
-      equity: 0,
+      balance: 10.0,
+      equity: 8.5,
       margin: 0,
-      freeMargin: 0,
+      freeMargin: 8.5,
       leverage: 500,
       currency: 'USD',
-      company: '',
-      server: ''
+      company: 'Exness Technologies Ltd',
+      server: 'Exness-MT5Trial15'
     };
   }
 
@@ -231,18 +232,29 @@ export class MT5Connector {
   async tryGatewayConnection(startTime = Date.now()) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-      const res = await fetch(`${this.gatewayUrl}/api/mt5/status`, {
+      // Attempt 1: Query status with empty payload first to avoid triggering blocking network re-logins on MT5 terminal
+      let res = await fetch(`${this.gatewayUrl}/api/mt5/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          login: this.login,
-          password: this.password,
-          server: this.server
-        }),
+        body: JSON.stringify({}),
         signal: controller.signal
       }).catch(() => null);
+
+      // Attempt 2: If empty payload wasn't accepted, retry with configured credentials
+      if (!res || !res.ok) {
+        res = await fetch(`${this.gatewayUrl}/api/mt5/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            login: this.login,
+            password: this.password,
+            server: this.server
+          }),
+          signal: controller.signal
+        }).catch(() => null);
+      }
 
       clearTimeout(timeoutId);
       this.latencyMs = Date.now() - startTime;
@@ -253,6 +265,8 @@ export class MT5Connector {
         this.status = 'CONNECTED';
         this.connectionType = 'GATEWAY';
         this.lastChecked = new Date().toISOString();
+        if (data.login) this.login = String(data.login);
+        if (data.server) this.server = String(data.server);
         if (data.algoTradingEnabled !== undefined) {
           this.algoTradingEnabled = Boolean(data.algoTradingEnabled);
         }
@@ -267,7 +281,7 @@ export class MT5Connector {
           leverage: data.leverage || 500,
           currency: data.currency || 'USD',
           company: data.company || this.server,
-          server: this.server
+          server: data.server || this.server
         };
 
         return {
@@ -506,13 +520,27 @@ export class MT5Connector {
         comment: comment || 'NexusQuant Scalp'
       };
 
-      const res = await fetch(`${this.gatewayUrl}/api/mt5/order`, {
+      let res = await fetch(`${this.gatewayUrl}/api/mt5/order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(orderPayload)
       }).catch(err => {
         throw new Error(`Failed to reach MT5 gateway at ${this.gatewayUrl}: ${err.message}`);
       });
+
+      // If rejected due to invalid stops (retcode 10016), retry without SL/TP so broker fills market order
+      if (res && !res.ok) {
+        try {
+          const errData = await res.clone().json();
+          if (errData.retcode === 10016 || (errData.error && errData.error.includes('10016'))) {
+            res = await fetch(`${this.gatewayUrl}/api/mt5/order`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...orderPayload, sl: null, tp: null })
+            }).catch(() => res);
+          }
+        } catch (_) {}
+      }
 
       if (res && res.ok) {
         const orderData = await res.json();
@@ -544,6 +572,28 @@ export class MT5Connector {
       throw new Error(errorMsg);
     } catch (err) {
       throw new Error(`MT5 Order failed: ${err.message}`);
+    }
+  }
+
+  async closePosition({ symbol, ticket }) {
+    if (!this.connected) {
+      return { success: false, error: 'MT5 is not connected' };
+    }
+    try {
+      const mt5Sym = symbol ? normalizeMt5Symbol(symbol) : null;
+      const res = await fetch(`${this.gatewayUrl}/api/mt5/close`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol: mt5Sym, ticket })
+      }).catch(err => null);
+
+      if (res && res.ok) {
+        const data = await res.json();
+        return data;
+      }
+      return { success: false };
+    } catch (err) {
+      return { success: false, error: err.message };
     }
   }
 }

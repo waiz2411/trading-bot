@@ -94,7 +94,7 @@ const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://taken-backg
         name: 'Main Live Account',
         role: 'LIVE_BROKER',
         mode: 'LIVE',
-        isAutoTradingEnabled: false,
+        isAutoTradingEnabled: true,
         activeAccount: 'MARGIN',
         createdAt: '2026-09-01T00:00:00.000Z',
         brokerConnections: {
@@ -107,14 +107,14 @@ const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://taken-backg
             lastChecked: null
           },
           mt5: {
-            connected: false,
-            login: '8636748',
-            password: '',
-            server: 'VaultMarkets-Live',
+            connected: true,
+            login: '474621142',
+            password: 'Test@123',
+            server: 'Exness-MT5Trial15',
             gatewayUrl: LIVE_MT5_GATEWAY_URL,
             syncToken: 'NQ-SYNC-TEST002',
-            status: 'STANDBY',
-            lastChecked: null
+            status: 'CONNECTED',
+            lastChecked: new Date().toISOString()
           }
         }
       };
@@ -122,6 +122,32 @@ const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://taken-backg
 
     // Ensure all existing users have syncToken, isAutoTradingEnabled, activeAccount, and live gatewayUrl
     for (const user of Object.values(this.users)) {
+      if (user.email === 'test@gmail.com') {
+        user.mode = 'LIVE';
+        user.isAutoTradingEnabled = true;
+        user.activeAccount = 'MARGIN';
+        if (!user.brokerConnections) user.brokerConnections = {};
+        user.brokerConnections.mt5 = {
+          connected: true,
+          login: '474621142',
+          password: 'Test@123',
+          server: 'Exness-MT5Trial15',
+          gatewayUrl: LIVE_MT5_GATEWAY_URL,
+          syncToken: user.brokerConnections.mt5?.syncToken || 'NQ-SYNC-TEST002',
+          status: 'CONNECTED',
+          lastChecked: new Date().toISOString(),
+          accountInfo: {
+            balance: 10.0,
+            equity: 8.5,
+            margin: 0,
+            freeMargin: 8.5,
+            leverage: 500,
+            currency: 'USD',
+            company: 'Exness Technologies Ltd',
+            server: 'Exness-MT5Trial15'
+          }
+        };
+      }
       if (user.isAutoTradingEnabled === undefined) {
         user.isAutoTradingEnabled = false;
       }

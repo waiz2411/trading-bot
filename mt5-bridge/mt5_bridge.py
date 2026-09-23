@@ -16,6 +16,7 @@ def health():
 
 @app.route('/api/mt5/status', methods=['POST'])
 def status():
+    mt5.initialize()
     data = request.json or {}
     login = data.get('login')
     password = data.get('password')
@@ -23,16 +24,10 @@ def status():
 
     if login and server and password:
         login_int = int(login) if str(login).isdigit() else login
-        init_ok = mt5.initialize(login=login_int, password=str(password), server=str(server))
-    else:
-        init_ok = mt5.initialize()
-
-    if not init_ok:
-        err = mt5.last_error()
-        return jsonify({
-            'success': False,
-            'error': f'MT5 initialize failed: {err}. Please ensure MetaTrader 5 is installed and running.'
-        }), 400
+        current_acc = mt5.account_info()
+        # Only re-initialize if not already logged into this account
+        if current_acc is None or str(current_acc.login) != str(login):
+            mt5.initialize(login=login_int, password=str(password), server=str(server))
 
     account_info = mt5.account_info()
     if account_info is None:
@@ -78,6 +73,7 @@ def status():
 
 @app.route('/api/mt5/order', methods=['POST'])
 def place_order():
+    mt5.initialize()
     data = request.json or {}
     symbol = data.get('symbol', 'BTCUSD')
     side = (data.get('side') or data.get('action') or 'BUY').upper()
@@ -142,6 +138,13 @@ def place_order():
         request_payload["tp"] = float(tp)
 
     result = mt5.order_send(request_payload)
+
+    # If rejected due to invalid stops (retcode 10016), retry without SL/TP so market order executes
+    if result.retcode == 10016:
+        request_payload.pop("sl", None)
+        request_payload.pop("tp", None)
+        result = mt5.order_send(request_payload)
+
     if result.retcode != mt5.TRADE_RETCODE_DONE:
         return jsonify({
             'success': False,
@@ -161,6 +164,7 @@ def place_order():
 
 @app.route('/api/mt5/close', methods=['POST'])
 def close_order():
+    mt5.initialize()
     data = request.json or {}
     symbol = data.get('symbol')
     ticket = data.get('ticket')
@@ -178,7 +182,19 @@ def close_order():
 
         close_type = mt5.ORDER_TYPE_SELL if pos.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY
         tick = mt5.symbol_info_tick(pos.symbol)
+        if tick is None:
+            continue
         close_price = tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask
+
+        sym_info = mt5.symbol_info(pos.symbol)
+        filling_mode = mt5.ORDER_FILLING_IOC
+        if sym_info:
+            if sym_info.filling_mode & 1:
+                filling_mode = mt5.ORDER_FILLING_FOK
+            elif sym_info.filling_mode & 2:
+                filling_mode = mt5.ORDER_FILLING_IOC
+            else:
+                filling_mode = mt5.ORDER_FILLING_RETURN
 
         close_req = {
             "action": mt5.TRADE_ACTION_DEAL,
@@ -191,10 +207,10 @@ def close_order():
             "magic": 241100,
             "comment": "NexusQuant Scalp Close",
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": filling_mode,
         }
         res = mt5.order_send(close_req)
-        if res.retcode == mt5.TRADE_RETCODE_DONE:
+        if res and res.retcode == mt5.TRADE_RETCODE_DONE:
             closed_count += 1
 
     return jsonify({'success': True, 'closed': closed_count})

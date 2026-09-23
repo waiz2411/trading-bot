@@ -454,9 +454,17 @@ app.post('/api/portfolio/adjust', (req, res) => {
 });
 
 // API: Close an active trade manually (checks active engine, then fallback)
-app.post('/api/trades/close/:id', (req, res) => {
+app.post('/api/trades/close/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    // Check if this is a direct MT5 broker order ticket
+    if (id.startsWith('MT5-')) {
+      const ticket = id.replace('MT5-', '');
+      const closeRes = await mt5Connector.closePosition({ ticket });
+      agentLoop.log(`✋ Manual MT5 Exit: Ticket #${ticket}`, 'INFO');
+      return res.json({ success: true, closedTrade: { id, ticket, finalPnL: 0 } });
+    }
+
     let closed = agentLoop.tradingEngine.closePosition(id, null, 'MANUAL_USER_EXIT', 'Manual user exit via dashboard');
     if (!closed) {
       const otherEngine = agentLoop.activeAccount === 'SPOT' ? agentLoop.marginTradingEngine : agentLoop.spotTradingEngine;
@@ -465,6 +473,12 @@ app.post('/api/trades/close/:id', (req, res) => {
     if (!closed) {
       return res.status(404).json({ error: 'Trade not found or already closed' });
     }
+
+    // If running live MT5, also close on broker terminal
+    if (agentLoop.currentMode === 'LIVE' && mt5Connector.connected) {
+      mt5Connector.closePosition({ symbol: closed.symbol, ticket: closed.ticket }).catch(() => {});
+    }
+
     agentLoop.log(
       `✋ Manual Exit: ${closed.symbol} (${closed.side}). Realized: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}`,
       closed.finalPnL >= 0 ? 'SUCCESS' : 'WARN'
@@ -476,7 +490,7 @@ app.post('/api/trades/close/:id', (req, res) => {
 });
 
 // API: Close ALL active trades at once
-app.post('/api/trades/close-all', (req, res) => {
+app.post('/api/trades/close-all', async (req, res) => {
   try {
     const targetEngine = agentLoop.tradingEngine;
     const active = [...targetEngine.activePositions];
@@ -485,6 +499,11 @@ app.post('/api/trades/close-all', (req, res) => {
       const closed = targetEngine.closePosition(pos.id, null, 'MANUAL_USER_EXIT', 'Close All Triggered');
       if (closed) closedList.push(closed);
     }
+
+    if (agentLoop.currentMode === 'LIVE' && mt5Connector.connected) {
+      await mt5Connector.closePosition({}).catch(() => {});
+    }
+
     agentLoop.log(`🧹 Closed all ${closedList.length} active positions in [${agentLoop.activeAccount}].`, 'INFO');
     res.json({ success: true, closedCount: closedList.length });
   } catch (err) {
@@ -624,7 +643,7 @@ app.get('*', (req, res) => {
 });
 
 // Start agent loop and web server
-agentLoop.setUserMode('demo@gmail.com', 'SIMULATED');
+agentLoop.setUserMode('test@gmail.com', 'LIVE');
 agentLoop.start();
 
 app.listen(PORT, '0.0.0.0', () => {

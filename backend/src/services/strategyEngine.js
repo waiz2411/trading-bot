@@ -230,7 +230,7 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   const effectiveRR = Number((targetDistance / stopDistance).toFixed(2));
 
   // Require High Confluence (Score >= minConfidenceThreshold) with Directional Advantage
-  const SNIPER_THRESHOLD = Number(options.minConfidenceThreshold) || 82;
+  const SNIPER_THRESHOLD = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 72;
 
   // 1. Check SHORT Scalp Setup
   if (tradeDirection !== 'LONG_ONLY' && finalShortConfidence >= SNIPER_THRESHOLD && finalShortConfidence > finalLongConfidence) {

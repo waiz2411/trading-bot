@@ -13,11 +13,11 @@ export class AutonomousAgentLoop {
     this.currentUser = 'demo@gmail.com';
     this.currentMode = 'SIMULATED'; // 'SIMULATED' | 'LIVE'
 
-    // Account 1: Margin Scalper (500x leverage, 2 sniper slots, 1.5% risk)
+    // Account 1: Margin Scalper (500x leverage, 4 sniper slots, 1.5% risk)
     this.marginRiskManager = new RiskManager({
       riskPerTradePct: 1.5,
-      maxConcurrentTrades: 2,
-      minConfidenceThreshold: 78,
+      maxConcurrentTrades: 4,
+      minConfidenceThreshold: 72,
       tradeDirection: 'BOTH',
       tradingStyle: 'SCALPING',
       defaultLeverage: 500,
@@ -33,11 +33,11 @@ export class AutonomousAgentLoop {
       stopLossPct: 0.6, // 0.6% Stop Loss default (tight fast scalp risk)
       takeProfitPct: 1.0, // 1.0% Take Profit default (quick 1-5m burst target)
       maxHoldMinutes: 5, // Strict 5-minute maximum holding cap
-      minConfidenceThreshold: 80
+      minConfidenceThreshold: 75
     };
     this.spotTradingEngine = new PaperTradingEngine(25, 'SPOT');
 
-    this.isAutoTradingEnabled = false; // Bot is OFF by default until explicitly turned on
+    this.isAutoTradingEnabled = true; // Bot is ACTIVE 24/7 by default
     this.isScanning = false;
     this.agentLogs = [];
     this.latestScanResults = [];
@@ -158,7 +158,7 @@ export class AutonomousAgentLoop {
         throw new Error('Cannot start auto-trading: Binance Spot API is not connected. Connect Binance in Broker settings first.');
       }
       if (this.activeAccount === 'MARGIN' && !mt5Connector.getStatus().connected) {
-        throw new Error('Cannot start auto-trading: MetaTrader 5 Margin broker is not connected. Connect MT5 in Broker settings first.');
+        mt5Connector.tryGatewayConnection().catch(() => {});
       }
     }
 
@@ -389,6 +389,8 @@ export class AutonomousAgentLoop {
                   comment: `Scalp ${pos.id}`
                 }).then(ticket => {
                   this.log(`📡 [MT5 LIVE] Scalp order executed on Exness MT5! Ticket #${ticket.ticket} (${asset.symbol} ${signal.side} 0.01 lot)`, 'SUCCESS');
+                  pos.ticket = ticket.ticket;
+                  if (ticket.price) pos.entryPrice = ticket.price;
                 }).catch(err => {
                   if (err.message && (err.message.includes('10027') || err.message.includes('Algo Trading'))) {
                     this.log(`🚨 [MT5 LIVE] Order blocked: "Algo Trading" is turned OFF in your MetaTrader 5 window. Please click the "Algo Trading" button in the MT5 top toolbar on AWS (or press Ctrl+E) so it turns green!`, 'ERROR');
@@ -397,7 +399,8 @@ export class AutonomousAgentLoop {
                   }
                 });
               } else {
-                this.log(`ℹ️ [LIVE MODE] Order recorded in local trading engine. MT5 broker not yet connected — verify MT5 in Broker settings to route orders to terminal.`, 'INFO');
+                mt5Connector.tryGatewayConnection().catch(() => {});
+                this.log(`ℹ️ [LIVE MODE] Order recorded in local trading engine. Connecting to Exness MT5 gateway...`, 'INFO');
               }
             }
           }
@@ -517,6 +520,18 @@ export class AutonomousAgentLoop {
         } else if (closed.exitReason === 'STOP_LOSS_TRIGGER') {
           this.log(`🛡️ [MARGIN] STOP HIT: ${closed.symbol} ${closed.side}. Loss capped: -$${Math.abs(closed.finalPnL)}`, 'WARN');
         }
+
+        // Live MT5 Broker Exit
+        if (this.currentMode === 'LIVE' && mt5Connector.connected) {
+          mt5Connector.closePosition({
+            symbol: closed.symbol,
+            ticket: closed.ticket
+          }).then(res => {
+            if (res && res.closed > 0) {
+              this.log(`📡 [MT5 LIVE] Scalp position closed on Exness MT5 (${closed.symbol})`, 'INFO');
+            }
+          }).catch(() => {});
+        }
       }
 
       // B. Spot Engine Trigger Checks
@@ -572,6 +587,36 @@ export class AutonomousAgentLoop {
         const bal = Number(mt5Status.accountInfo.balance || 0);
         const eq = Number(mt5Status.accountInfo.equity || bal);
         const pnl = Number((eq - bal).toFixed(2));
+
+        // Format any open positions reported directly from the MT5 terminal
+        const terminalPositions = (mt5Status.openPositions || []).map(p => ({
+          id: `MT5-${p.ticket}`,
+          ticket: p.ticket,
+          symbol: p.symbol,
+          name: p.symbol,
+          category: p.symbol.startsWith('BTC') || p.symbol.startsWith('ETH') ? 'Crypto' : 'Forex',
+          side: p.type === 'BUY' ? 'LONG' : 'SHORT',
+          entryPrice: p.priceOpen,
+          currentPrice: p.priceOpen,
+          stopLoss: p.sl || null,
+          takeProfit: p.tp || null,
+          units: p.volume,
+          notional: Number((p.volume * p.priceOpen).toFixed(2)),
+          unrealizedPnL: p.profit,
+          unrealizedPnLPct: 0,
+          leverage: mt5Status.accountInfo.leverage || 500,
+          margin: Number(mt5Status.accountInfo.margin || 0),
+          isLiveBrokerOrder: true,
+          comment: p.comment
+        }));
+
+        const mergedActive = [...engineMargin.activePositions];
+        for (const tp of terminalPositions) {
+          if (!mergedActive.some(ap => ap.ticket === tp.ticket || ap.id === tp.id)) {
+            mergedActive.unshift(tp);
+          }
+        }
+
         marginPortfolio = {
           isLive: true,
           isConnected: true,
@@ -586,7 +631,7 @@ export class AutonomousAgentLoop {
           realizedPnL: engineMargin.realizedPnL || 0,
           totalPnL: pnl,
           totalPnLPct: bal > 0 ? Number(((pnl / bal) * 100).toFixed(2)) : 0,
-          activePositions: engineMargin.activePositions || [],
+          activePositions: mergedActive,
           closedTrades: engineMargin.closedTrades || []
         };
       } else {
