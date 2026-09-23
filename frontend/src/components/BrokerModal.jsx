@@ -38,15 +38,22 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
   const [showMt5Password, setShowMt5Password] = useState(false);
   const [mt5Testing, setMt5Testing] = useState(false);
   const [mt5Result, setMt5Result] = useState(null);
+  const [mt5GatewayUrl, setMt5GatewayUrl] = useState('');
+  const [showGatewayInput, setShowGatewayInput] = useState(false);
   const [copiedSyncKey, setCopiedSyncKey] = useState(false);
   const [serverIp, setServerIp] = useState('');
   const [copiedIp, setCopiedIp] = useState(false);
 
-  // Fetch outbound server IP for Binance whitelisting
+  // Fetch outbound server IP for Binance whitelisting and active MT5 gateway URL
   React.useEffect(() => {
     fetch('/api/system/ip')
       .then(r => r.json())
       .then(d => { if (d.success && d.ip) setServerIp(d.ip); })
+      .catch(() => null);
+
+    fetch('/api/broker/mt5/gateway-url')
+      .then(r => r.json())
+      .then(d => { if (d.success && d.gatewayUrl) setMt5GatewayUrl(d.gatewayUrl); })
       .catch(() => null);
   }, []);
 
@@ -182,7 +189,7 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
     setMt5Testing(true);
     setMt5Result(null);
 
-    const targetGateway = 'https://taken-background-implemented-constitute.trycloudflare.com';
+    const targetGateway = mt5GatewayUrl?.trim() || undefined;
 
     try {
       // First save config
@@ -769,15 +776,40 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
                   </div>
 
                   {/* Automatic Cloud Gateway Bridge Indicator (Pre-Configured & Connected) */}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-terminal-950/80 border border-terminal-border/80 text-[11px] font-mono">
-                    <span className="flex items-center gap-1.5 text-slate-300">
-                      <Server className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>AWS Cloud MT5 Gateway Bridge</span>
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      LIVE CLOUD CONNECTED
-                    </span>
+                  <div className="rounded-xl bg-terminal-950/80 border border-terminal-border/80 text-[11px] font-mono p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-slate-300">
+                        <Server className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>AWS Cloud MT5 Gateway Bridge</span>
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowGatewayInput(!showGatewayInput)}
+                          className="text-[10px] text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+                        >
+                          {showGatewayInput ? 'Hide Gateway URL' : 'Gateway URL'}
+                        </button>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          LIVE CLOUD
+                        </span>
+                      </div>
+                    </div>
+                    {showGatewayInput && (
+                      <div className="pt-1.5 border-t border-terminal-border/50">
+                        <label className="text-[10px] text-slate-400 block mb-1">
+                          Cloud Gateway / Tunnel URL:
+                        </label>
+                        <input
+                          type="text"
+                          value={mt5GatewayUrl}
+                          onChange={(e) => setMt5GatewayUrl(e.target.value)}
+                          placeholder="https://...trycloudflare.com"
+                          className="w-full bg-terminal-900 border border-terminal-border rounded-lg px-2.5 py-1 text-[11px] text-emerald-300 font-mono focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Action Button */}

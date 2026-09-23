@@ -273,9 +273,96 @@ def close_order():
 
     return jsonify({'success': True, 'closed': closed_count})
 
+RENDER_BACKEND = "https://trading-bot-test-z6bi.onrender.com"
+
+def register_tunnel_with_render(tunnel_url):
+    target = f"{RENDER_BACKEND}/api/broker/mt5/register-tunnel"
+    try:
+        import urllib.request
+        import json
+        req = urllib.request.Request(
+            target,
+            data=json.dumps({"url": tunnel_url}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            if data.get("success"):
+                print(f"[OK] Successfully auto-registered Cloudflare Tunnel with Render: {tunnel_url}")
+                return True
+    except Exception as e:
+        print(f"[WARN] Failed to auto-register tunnel with Render: {e}")
+    return False
+
+def start_cloudflared_subservice():
+    import os
+    import sys
+    import shutil
+    import subprocess
+    import threading
+    import re
+
+    candidates = [
+        os.path.join(os.path.expanduser("~"), "cloudflared.exe"),
+        os.path.join(os.getcwd(), "cloudflared.exe"),
+        shutil.which("cloudflared.exe") or "",
+        shutil.which("cloudflared") or ""
+    ]
+    cf_path = next((p for p in candidates if p and os.path.exists(p)), None)
+    if not cf_path:
+        print("[INFO] cloudflared.exe not found in $HOME or PATH. Skipping auto-tunnel.")
+        print("[INFO] If running cloudflared manually, use: & \"$HOME\\cloudflared.exe\" tunnel --url http://localhost:5001")
+        return None
+
+    print(f"[*] Starting Cloudflare Tunnel using: {cf_path}")
+    try:
+        proc = subprocess.Popen(
+            [cf_path, "tunnel", "--url", "http://localhost:5001"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+
+        def monitor_tunnel():
+            registered = False
+            for line in proc.stdout:
+                line_str = line.strip()
+                match = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", line_str)
+                if match:
+                    tunnel_url = match.group(0)
+                    if not registered:
+                        registered = True
+                        print("\n" + "=" * 60)
+                        print(f"[*] DETECTED CLOUDFLARE PUBLIC TUNNEL: {tunnel_url}")
+                        print("=" * 60)
+                        register_tunnel_with_render(tunnel_url)
+
+        t = threading.Thread(target=monitor_tunnel, daemon=True)
+        t.start()
+        return proc
+    except Exception as e:
+        print(f"[WARN] Could not launch cloudflared: {e}")
+        return None
+
 if __name__ == '__main__':
+    import sys
+    parser_tunnel = None
+    no_cf = '--no-cf' in sys.argv
+    for i, arg in enumerate(sys.argv):
+        if arg == '--tunnel' and i + 1 < len(sys.argv):
+            parser_tunnel = sys.argv[i + 1]
+
     print("=" * 60)
     print("MetaTrader 5 Python Gateway Bridge active on http://localhost:5001")
     print("Bridge endpoint: POST http://localhost:5001/api/mt5/status")
     print("=" * 60)
+
+    if parser_tunnel:
+        print(f"[*] Custom tunnel passed: {parser_tunnel}")
+        register_tunnel_with_render(parser_tunnel)
+    elif not no_cf:
+        start_cloudflared_subservice()
+
     app.run(host='0.0.0.0', port=5001, debug=False)
+

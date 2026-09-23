@@ -131,6 +131,26 @@ app.get('/api/broker/binance/balances', async (req, res) => {
 });
 
 // MetaTrader 5 Config & Test
+app.post('/api/broker/mt5/register-tunnel', (req, res) => {
+  try {
+    const { url } = req.body;
+    if (url && typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
+      const cleanUrl = url.trim().replace(/\/+$/, '');
+      mt5Connector.gatewayUrl = cleanUrl;
+      console.log(`[MT5 Bridge] Registered public gateway URL: ${cleanUrl}`);
+      mt5Connector.tryGatewayConnection().catch(() => {});
+      return res.json({ success: true, gatewayUrl: cleanUrl });
+    }
+    return res.status(400).json({ success: false, error: 'Valid gateway URL required' });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/broker/mt5/gateway-url', (req, res) => {
+  res.json({ success: true, gatewayUrl: mt5Connector.gatewayUrl || '' });
+});
+
 app.post('/api/broker/mt5/config', (req, res) => {
   try {
     const { email, login, password, server, gatewayUrl, metaApiToken } = req.body;
