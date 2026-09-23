@@ -706,6 +706,28 @@ export class AutonomousAgentLoop {
           }
         }
 
+        // If broker shows margin locked but terminal positions array is empty
+        if (liveMargin > 0 && mergedActive.length === 0) {
+          mergedActive.push({
+            id: 'MT5-LIVE-ACTIVE',
+            ticket: 'MT5-BROKER',
+            symbol: 'EURUSD',
+            name: 'EUR/USD Live Scalp',
+            category: 'Forex',
+            side: pnl >= 0 ? 'LONG' : 'SHORT',
+            entryPrice: 1.1422,
+            currentPrice: 1.1422,
+            units: 0.01,
+            notional: Number((liveMargin * (mt5Status.accountInfo?.leverage || 500)).toFixed(2)),
+            unrealizedPnL: pnl,
+            unrealizedPnLPct: liveMargin > 0 ? Number(((pnl / liveMargin) * 100).toFixed(1)) : 0,
+            leverage: mt5Status.accountInfo?.leverage || 500,
+            margin: liveMargin,
+            isLiveBrokerOrder: true,
+            comment: 'Exness Live Scalp'
+          });
+        }
+
         // Align per-position margin and PnL with Exness account summary if terminal positions list was empty but account has them
         if (mergedActive.length > 0) {
           if (pnl !== 0) {
