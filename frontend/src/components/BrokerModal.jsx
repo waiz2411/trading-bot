@@ -35,9 +35,6 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
   const [mt5Login, setMt5Login] = useState(user?.brokerConnections?.mt5?.login?.replace(/\*+/g, '') || '');
   const [mt5Password, setMt5Password] = useState('');
   const [mt5Server, setMt5Server] = useState(user?.brokerConnections?.mt5?.server || 'Exness-MT5Trial15');
-  const [mt5Gateway, setMt5Gateway] = useState(user?.brokerConnections?.mt5?.gatewayUrl || 'https://taken-background-implemented-constitute.trycloudflare.com');
-  const [metaApiToken, setMetaApiToken] = useState(user?.brokerConnections?.mt5?.metaApiToken || '');
-  const [showMetaApiToken, setShowMetaApiToken] = useState(false);
   const [showMt5Password, setShowMt5Password] = useState(false);
   const [mt5Testing, setMt5Testing] = useState(false);
   const [mt5Result, setMt5Result] = useState(null);
@@ -62,12 +59,6 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
         }
         if (user.brokerConnections.mt5.server && !mt5Server) {
           setMt5Server(user.brokerConnections.mt5.server);
-        }
-        if (user.brokerConnections.mt5.gatewayUrl && (!mt5Gateway || mt5Gateway === 'http://localhost:5001')) {
-          setMt5Gateway(user.brokerConnections.mt5.gatewayUrl);
-        }
-        if (user.brokerConnections.mt5.metaApiToken && !metaApiToken) {
-          setMetaApiToken(user.brokerConnections.mt5.metaApiToken);
         }
       }
       if (user.brokerConnections.mexc) {
@@ -191,7 +182,7 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
     setMt5Testing(true);
     setMt5Result(null);
 
-    const targetGateway = mt5Gateway || 'https://taken-background-implemented-constitute.trycloudflare.com';
+    const targetGateway = 'https://taken-background-implemented-constitute.trycloudflare.com';
 
     try {
       // First save config
@@ -203,8 +194,7 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
           login: mt5Login,
           password: mt5Password,
           server: mt5Server,
-          gatewayUrl: targetGateway,
-          metaApiToken: metaApiToken.trim()
+          gatewayUrl: targetGateway
         })
       });
 
@@ -217,8 +207,7 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
           login: mt5Login,
           password: mt5Password,
           server: mt5Server,
-          gatewayUrl: targetGateway,
-          metaApiToken: metaApiToken.trim()
+          gatewayUrl: targetGateway
         })
       });
       const data = await res.json();
@@ -779,62 +768,16 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
                     </div>
                   </div>
 
-                  {/* Personal MetaApi Token (Optional for Pure Cloud Connection without Local PC) */}
-                  <div className="p-3 rounded-xl bg-terminal-950/80 border border-terminal-border/80 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-slate-300 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-                        <Key className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Personal MetaApi Token (Optional - 100% Cloud / No PC)</span>
-                      </label>
-                      <a
-                        href="https://app.metaapi.cloud"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[10px] text-amber-400 hover:underline flex items-center gap-1"
-                      >
-                        <span>Get Free Token</span> &rarr;
-                      </a>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type={showMetaApiToken ? 'text' : 'password'}
-                        value={metaApiToken}
-                        onChange={(e) => setMetaApiToken(e.target.value)}
-                        placeholder="Optional: Free token from app.metaapi.cloud for 24/7 cloud connection"
-                        className="w-full pl-3 pr-10 py-1.5 bg-terminal-900 border border-terminal-border rounded-lg text-white font-mono text-xs focus:outline-none focus:border-amber-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowMetaApiToken(!showMetaApiToken)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
-                      >
-                        {showMetaApiToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-slate-400">
-                      Leave empty to use shared gateway, or paste your free personal token from <span className="text-amber-400">app.metaapi.cloud</span> to run fully hosted in the cloud with zero software on your laptop!
-                    </p>
-                  </div>
-
-                  {/* Private Cloud Gateway Bridge URL (Optional - For AWS Cloudflare Tunnel) */}
-                  <div className="p-3 rounded-xl bg-terminal-950/80 border border-terminal-border/80 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-slate-300 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-                        <Server className="w-3.5 h-3.5 text-blue-400" />
-                        <span>Private Cloud Gateway URL (Optional - AWS / VPS Bridge)</span>
-                      </label>
-                      <span className="text-[10px] text-blue-400 font-mono">Port 5001</span>
-                    </div>
-                    <input
-                      type="text"
-                      value={mt5Gateway}
-                      onChange={(e) => setMt5Gateway(e.target.value)}
-                      placeholder="e.g. https://your-server.trycloudflare.com"
-                      className="w-full pl-3 pr-3 py-1.5 bg-terminal-900 border border-terminal-border rounded-lg text-white font-mono text-xs focus:outline-none focus:border-blue-500"
-                    />
-                    <p className="text-[10px] text-slate-400">
-                      If you host the Python bridge on AWS or a VPS with Cloudflare Tunnel, paste your <code className="text-blue-300">https://...trycloudflare.com</code> URL here.
-                    </p>
+                  {/* Automatic Cloud Gateway Bridge Indicator (Pre-Configured & Connected) */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-terminal-950/80 border border-terminal-border/80 text-[11px] font-mono">
+                    <span className="flex items-center gap-1.5 text-slate-300">
+                      <Server className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>AWS Cloud MT5 Gateway Bridge</span>
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      LIVE CLOUD CONNECTED
+                    </span>
                   </div>
 
                   {/* Action Button */}

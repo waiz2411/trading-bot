@@ -65,7 +65,11 @@ export class MT5Connector {
     if (login) this.login = login.toString().trim();
     if (password !== undefined) this.password = password.trim();
     if (server) this.server = server.trim();
-    if (gatewayUrl) this.gatewayUrl = gatewayUrl.trim();
+    if (gatewayUrl && !gatewayUrl.includes('localhost')) {
+      this.gatewayUrl = gatewayUrl.trim();
+    } else if (!this.gatewayUrl || this.gatewayUrl.includes('localhost')) {
+      this.gatewayUrl = process.env.MT5_GATEWAY_URL || 'https://taken-background-implemented-constitute.trycloudflare.com';
+    }
     if (metaApiToken !== undefined && metaApiToken.trim()) {
       this.metaApiToken = metaApiToken.trim();
     } else if (!this.metaApiToken) {

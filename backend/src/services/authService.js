@@ -84,6 +84,8 @@ export class AuthService {
       };
     }
 
+const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://taken-background-implemented-constitute.trycloudflare.com';
+
     if (!this.users['test@gmail.com']) {
       this.users['test@gmail.com'] = {
         id: 'usr_live_002',
@@ -109,7 +111,7 @@ export class AuthService {
             login: '8636748',
             password: '',
             server: 'VaultMarkets-Live',
-            gatewayUrl: 'http://localhost:5001',
+            gatewayUrl: LIVE_MT5_GATEWAY_URL,
             syncToken: 'NQ-SYNC-TEST002',
             status: 'STANDBY',
             lastChecked: null
@@ -118,7 +120,7 @@ export class AuthService {
       };
     }
 
-    // Ensure all existing users have syncToken, isAutoTradingEnabled, and activeAccount
+    // Ensure all existing users have syncToken, isAutoTradingEnabled, activeAccount, and live gatewayUrl
     for (const user of Object.values(this.users)) {
       if (user.isAutoTradingEnabled === undefined) {
         user.isAutoTradingEnabled = false;
@@ -128,6 +130,9 @@ export class AuthService {
       }
       if (!user.brokerConnections) user.brokerConnections = {};
       if (!user.brokerConnections.mt5) user.brokerConnections.mt5 = {};
+      if (!user.brokerConnections.mt5.gatewayUrl || user.brokerConnections.mt5.gatewayUrl.includes('localhost')) {
+        user.brokerConnections.mt5.gatewayUrl = LIVE_MT5_GATEWAY_URL;
+      }
       if (!user.brokerConnections.mexc) {
         user.brokerConnections.mexc = {
           connected: false,
@@ -191,7 +196,7 @@ export class AuthService {
           login: '',
           password: '',
           server: '',
-          gatewayUrl: 'http://localhost:5001',
+          gatewayUrl: LIVE_MT5_GATEWAY_URL,
           syncToken: `NQ-SYNC-${userId.slice(-6).toUpperCase()}`,
           status: 'DISCONNECTED',
           lastChecked: null
