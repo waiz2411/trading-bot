@@ -512,7 +512,7 @@ app.post('/api/trades/close-all', async (req, res) => {
 });
 
 // API: Execute trade on demand
-app.post('/api/trades/execute', (req, res) => {
+app.post('/api/trades/execute', async (req, res) => {
   try {
     const { symbol, side } = req.body;
     const asset = marketDataService.getMarket(symbol);
@@ -583,6 +583,61 @@ app.post('/api/trades/execute', (req, res) => {
     }
 
     // MARGIN SCALPER execution mode
+    if (agentLoop.currentMode === 'LIVE') {
+      const isMt5Symbol = asset.category === 'Forex' ||
+                          asset.category === 'Commodities' ||
+                          asset.category === 'Indices' ||
+                          asset.symbol === 'BTC-USD' || asset.symbol === 'BTCUSD';
+      if (!isMt5Symbol) {
+        return res.status(400).json({ error: `${asset.symbol} is not supported on MetaTrader 5 margin accounts. Trade Forex, Gold, or BTC on MT5, or switch to Spot Account for Altcoins.` });
+      }
+      if (!mt5Connector.connected) {
+        return res.status(400).json({ error: 'MetaTrader 5 broker is not connected. Connect MT5 first.' });
+      }
+
+      try {
+        const ticket = await mt5Connector.openPosition({
+          symbol: asset.symbol,
+          side: side || signal.side,
+          volume: 0.01,
+          sl: signal.stopLoss,
+          tp: signal.takeProfit,
+          comment: `Manual Scalp ${asset.symbol}`
+        });
+
+        const fillPrice = ticket.price || asset.price;
+        const notionalVal = Number((fillPrice * (asset.category === 'Forex' ? 1000 : 1)).toFixed(2));
+        const marginVal = Number((notionalVal / (mt5Connector.accountInfo?.leverage || 500)).toFixed(2));
+
+        const trade = agentLoop.marginTradingEngine.openPosition({
+          symbol: asset.symbol,
+          name: asset.name,
+          category: asset.category,
+          side: side || signal.side,
+          entryPrice: fillPrice,
+          stopLoss: signal.stopLoss,
+          takeProfit: signal.takeProfit,
+          stopDistance: signal.stopDistance || stopDist,
+          targetDistance: signal.targetDistance || targetDist,
+          units: 0.01,
+          notional: notionalVal,
+          confidence: signal.confidence,
+          reason: `Manual One-Click Scalp (${signal.reason || 'User initiated'})`,
+          riskRewardRatio: signal.riskRewardRatio || 1.55,
+          tradingStyle: 'SCALPING',
+          leverage: mt5Connector.accountInfo?.leverage || 500,
+          margin: marginVal,
+          liquidationPrice: 0
+        });
+        trade.ticket = ticket.ticket;
+
+        agentLoop.log(`📡 [MT5 LIVE] Manual Scalp executed on Exness MT5! Ticket #${ticket.ticket} (${asset.symbol} ${trade.side} 0.01 lot @ $${fillPrice})`, 'SUCCESS');
+        return res.json({ success: true, trade });
+      } catch (err) {
+        return res.status(400).json({ error: `MT5 Execution Failed: ${err.message}` });
+      }
+    }
+
     const portfolio = agentLoop.marginTradingEngine.getPortfolioState();
     const riskEval = agentLoop.marginRiskManager.evaluateTradeRisk(portfolio, { ...signal, confidence: 99 }, asset);
 

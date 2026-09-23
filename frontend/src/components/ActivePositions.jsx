@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowUpRight, ArrowDownRight, XCircle, Shield, Target, ShieldCheck, Lock, Activity, Timer } from 'lucide-react';
 
-export default function ActivePositions({ positions = [], onCloseTrade, isClosingId }) {
+export default function ActivePositions({ positions = [], onCloseTrade, isClosingId, isLive = false, activeAccount = 'MARGIN' }) {
   if (!positions || positions.length === 0) {
     return (
       <div className="bg-terminal-850/70 border border-terminal-border rounded-xl p-8 text-center shadow-lg">
@@ -10,7 +10,7 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
         </div>
         <h3 className="text-sm font-bold font-mono text-white mb-1">No Active Positions</h3>
         <p className="text-xs text-slate-400 max-w-md mx-auto">
-          The agent monitors 15 global markets. High-probability setups will auto-open and auto-close with dynamic profit protection.
+          The agent monitors global markets. High-probability setups will auto-open and auto-close with dynamic profit protection.
         </p>
       </div>
     );
@@ -21,8 +21,13 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
       <div className="p-4 border-b border-terminal-border flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-terminal-900/50">
         <div className="flex items-center space-x-2">
           <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-          <h2 className="text-sm font-bold font-mono text-white tracking-wide uppercase">
-            Active Demo Positions ({positions.length})
+          <h2 className="text-sm font-bold font-mono text-white tracking-wide uppercase flex items-center gap-2">
+            <span>{isLive ? (activeAccount === 'SPOT' ? 'Active Binance Positions' : 'Active MetaTrader 5 Positions') : 'Active Demo Positions'} ({positions.length})</span>
+            {isLive && (
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
+                LIVE BROKER
+              </span>
+            )}
           </h2>
         </div>
         <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400">
@@ -86,6 +91,11 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
                       <div>
                         <div className="font-bold text-white flex items-center gap-1.5">
                           <span>{pos.symbol}</span>
+                          {pos.ticket && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-300 border border-amber-500/40 font-mono font-bold tracking-tight">
+                              TICKET #{pos.ticket}
+                            </span>
+                          )}
                           {isHedged && (
                             <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/25 text-purple-300 border border-purple-500/40 font-mono font-bold tracking-tight">
                               HEDGE

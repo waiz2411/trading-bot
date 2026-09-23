@@ -676,6 +676,8 @@ export default function App() {
               positions={data.portfolio?.activePositions}
               onCloseTrade={handleCloseTrade}
               isClosingId={isClosingId}
+              isLive={isLiveMode}
+              activeAccount={data.activeAccount}
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -702,6 +704,8 @@ export default function App() {
                 positions={data.portfolio?.activePositions}
                 onCloseTrade={handleCloseTrade}
                 isClosingId={isClosingId}
+                isLive={isLiveMode}
+                activeAccount={data.activeAccount}
               />
               <AgentLogs logs={data.logs} />
             </div>

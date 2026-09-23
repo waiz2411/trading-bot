@@ -53,6 +53,11 @@ export class AutonomousAgentLoop {
     this.currentUser = userEmail;
     this.currentMode = mode;
 
+    // Purge phantom simulated trades without a real MT5 ticket when in LIVE broker mode
+    if (mode === 'LIVE' && this.marginTradingEngine) {
+      this.marginTradingEngine.activePositions = this.marginTradingEngine.activePositions.filter(p => !!p.ticket);
+    }
+
     // Synchronize broker connectors and persistent user state
     try {
       const user = authService.getUser(userEmail);
@@ -267,11 +272,19 @@ export class AutonomousAgentLoop {
           technicalsMap[asset.symbol] = technicals;
         }
 
-        // 3A. Margin Scalper Confluence
-        const signal = evaluateStrategyConfluence(asset, technicals, marginRiskSettings);
-        const isMarginCooldown = (this.assetCooldowns.get(asset.symbol) || 0) > 0;
-        if (!isMarginCooldown && (signal.action === 'STRONG_BUY' || signal.action === 'STRONG_SELL')) {
-          validMarginSignals.push({ asset, signal });
+        // 3A. Margin Scalper Confluence (Forex, Commodities, Indices, and Top Crypto BTC only)
+        const isMt5Symbol = asset.category === 'Forex' ||
+                            asset.category === 'Commodities' ||
+                            asset.category === 'Indices' ||
+                            asset.symbol === 'BTC-USD' || asset.symbol === 'BTCUSD';
+
+        let signal = null;
+        if (isMt5Symbol) {
+          signal = evaluateStrategyConfluence(asset, technicals, marginRiskSettings);
+          const isMarginCooldown = (this.assetCooldowns.get(asset.symbol) || 0) > 0;
+          if (!isMarginCooldown && (signal.action === 'STRONG_BUY' || signal.action === 'STRONG_SELL')) {
+            validMarginSignals.push({ asset, signal });
+          }
         }
 
         // 3B. Pure Spot Crypto Confluence (Decoupled, 75%+ Win Rate Edge)
@@ -301,7 +314,7 @@ export class AutonomousAgentLoop {
             ema200: technicals?.ema200,
             atr: technicals?.atr
           },
-          signal: this.activeAccount === 'SPOT' && spotSignal ? spotSignal : signal
+          signal: this.activeAccount === 'SPOT' && spotSignal ? spotSignal : (signal || { action: 'NEUTRAL', confidence: 0 })
         };
 
         scanResults.push(scanItem);
@@ -318,6 +331,30 @@ export class AutonomousAgentLoop {
 
         for (const { asset, signal } of validMarginSignals) {
           const portfolioState = this.marginTradingEngine.getPortfolioState();
+
+          if (this.currentMode === 'LIVE') {
+            // Keep engine positions strictly filtered to real broker tickets
+            this.marginTradingEngine.activePositions = (this.marginTradingEngine.activePositions || []).filter(p => !!p.ticket);
+            portfolioState.activePositions = this.marginTradingEngine.activePositions;
+
+            if (mt5Connector.connected && mt5Connector.accountInfo) {
+              const liveBal = Number(mt5Connector.accountInfo.balance || 0);
+              const liveEq = Number(mt5Connector.accountInfo.equity || liveBal);
+              const liveMargin = Number(mt5Connector.accountInfo.margin || 0);
+              const liveFreeMargin = Number(mt5Connector.accountInfo.freeMargin || Math.max(0, liveBal - liveMargin));
+
+              portfolioState.equity = liveEq;
+              portfolioState.balance = liveBal;
+              portfolioState.usedMargin = liveMargin;
+              portfolioState.freeMargin = liveFreeMargin;
+
+              // If free margin is below $2.00, pause new order attempts until an open position closes
+              if (liveFreeMargin < 2.0) {
+                break;
+              }
+            }
+          }
+
           if (portfolioState.activePositions.length >= this.marginRiskManager.maxConcurrentTrades) {
             break; // Max slots occupied
           }
@@ -346,62 +383,90 @@ export class AutonomousAgentLoop {
 
           const riskEval = this.marginRiskManager.evaluateTradeRisk(portfolioState, signal, asset);
           if (riskEval.allowed) {
-            const pos = this.marginTradingEngine.openPosition({
-              symbol: asset.symbol,
-              name: asset.name,
-              category: asset.category,
-              decimals: asset.decimals !== undefined ? asset.decimals : 4,
-              side: signal.side,
-              entryPrice: signal.entryPrice,
-              stopLoss: signal.stopLoss,
-              takeProfit: signal.takeProfit,
-              stopDistance: signal.stopDistance,
-              targetDistance: signal.targetDistance,
-              units: riskEval.units,
-              notional: riskEval.notional,
-              confidence: signal.confidence,
-              reason: signal.reason,
-              riskRewardRatio: signal.riskRewardRatio,
-              tradingStyle: marginRiskSettings.tradingStyle,
-              leverage: riskEval.leverage,
-              margin: riskEval.margin,
-              liquidationPrice: riskEval.liquidationPrice
-            });
-
-            const isHedge = portfolioState.activePositions.some(p => p.symbol === asset.symbol && p.side !== signal.side);
-            const isScaleIn = portfolioState.activePositions.some(p => p.symbol === asset.symbol && p.side === signal.side);
-            const badge = isHedge ? ' [HEDGE COUNTER-SCALP]' : isScaleIn ? ' [SCALE-IN]' : '';
-
-            this.log(
-              `⚡ [MARGIN] SCALP OPEN${badge}: ${signal.side} ${asset.symbol} @ $${signal.entryPrice} (${riskEval.leverage}x Lev, Margin: $${riskEval.margin}). Target: $${signal.takeProfit} | Stop: $${signal.stopLoss} (Confidence: ${signal.confidence}%)`,
-              'SUCCESS'
-            );
-
-            // Live MT5 Bridge Dispatcher (when logged into Live Account)
             if (this.currentMode === 'LIVE') {
               if (mt5Connector.connected) {
-                mt5Connector.openPosition({
-                  symbol: asset.symbol,
-                  side: signal.side,
-                  volume: 0.01,
-                  sl: signal.stopLoss,
-                  tp: signal.takeProfit,
-                  comment: `Scalp ${pos.id}`
-                }).then(ticket => {
-                  this.log(`📡 [MT5 LIVE] Scalp order executed on Exness MT5! Ticket #${ticket.ticket} (${asset.symbol} ${signal.side} 0.01 lot)`, 'SUCCESS');
-                  pos.ticket = ticket.ticket;
-                  if (ticket.price) pos.entryPrice = ticket.price;
-                }).catch(err => {
+                try {
+                  const ticket = await mt5Connector.openPosition({
+                    symbol: asset.symbol,
+                    side: signal.side,
+                    volume: 0.01,
+                    sl: signal.stopLoss,
+                    tp: signal.takeProfit,
+                    comment: `Scalp ${asset.symbol}`
+                  });
+
+                  if (ticket && ticket.ticket) {
+                    const fillPrice = ticket.price || signal.entryPrice;
+                    const notionalVal = Number((fillPrice * (asset.category === 'Forex' ? 1000 : 1)).toFixed(2));
+                    const marginVal = Number((notionalVal / (mt5Connector.accountInfo?.leverage || 500)).toFixed(2));
+
+                    const pos = this.marginTradingEngine.openPosition({
+                      symbol: asset.symbol,
+                      name: asset.name,
+                      category: asset.category,
+                      decimals: asset.decimals !== undefined ? asset.decimals : 4,
+                      side: signal.side,
+                      entryPrice: fillPrice,
+                      stopLoss: signal.stopLoss,
+                      takeProfit: signal.takeProfit,
+                      stopDistance: signal.stopDistance,
+                      targetDistance: signal.targetDistance,
+                      units: 0.01,
+                      notional: notionalVal,
+                      confidence: signal.confidence,
+                      reason: signal.reason,
+                      riskRewardRatio: signal.riskRewardRatio,
+                      tradingStyle: marginRiskSettings.tradingStyle,
+                      leverage: mt5Connector.accountInfo?.leverage || 500,
+                      margin: marginVal,
+                      liquidationPrice: riskEval.liquidationPrice
+                    });
+                    pos.ticket = ticket.ticket;
+
+                    this.log(
+                      `📡 [MT5 LIVE] Scalp executed on Exness MT5! Ticket #${ticket.ticket} (${asset.symbol} ${signal.side} 0.01 lot @ $${fillPrice})`,
+                      'SUCCESS'
+                    );
+                  }
+                } catch (err) {
                   if (err.message && (err.message.includes('10027') || err.message.includes('Algo Trading'))) {
                     this.log(`🚨 [MT5 LIVE] Order blocked: "Algo Trading" is turned OFF in your MetaTrader 5 window. Please click the "Algo Trading" button in the MT5 top toolbar on AWS (or press Ctrl+E) so it turns green!`, 'ERROR');
                   } else {
-                    this.log(`⚠️ [MT5 LIVE] Broker order notice: ${err.message}`, 'WARN');
+                    this.log(`⚠️ [MT5 LIVE] Broker order notice (${asset.symbol}): ${err.message}`, 'WARN');
                   }
-                });
+                }
               } else {
                 mt5Connector.tryGatewayConnection().catch(() => {});
-                this.log(`ℹ️ [LIVE MODE] Order recorded in local trading engine. Connecting to Exness MT5 gateway...`, 'INFO');
+                this.log(`ℹ️ [LIVE MODE] Reconnecting to Exness MT5 gateway...`, 'INFO');
               }
+            } else {
+              // Simulated Paper Demo Mode
+              const pos = this.marginTradingEngine.openPosition({
+                symbol: asset.symbol,
+                name: asset.name,
+                category: asset.category,
+                decimals: asset.decimals !== undefined ? asset.decimals : 4,
+                side: signal.side,
+                entryPrice: signal.entryPrice,
+                stopLoss: signal.stopLoss,
+                takeProfit: signal.takeProfit,
+                stopDistance: signal.stopDistance,
+                targetDistance: signal.targetDistance,
+                units: riskEval.units,
+                notional: riskEval.notional,
+                confidence: signal.confidence,
+                reason: signal.reason,
+                riskRewardRatio: signal.riskRewardRatio,
+                tradingStyle: marginRiskSettings.tradingStyle,
+                leverage: riskEval.leverage,
+                margin: riskEval.margin,
+                liquidationPrice: riskEval.liquidationPrice
+              });
+
+              this.log(
+                `⚡ [MARGIN DEMO] SCALP OPEN: ${signal.side} ${asset.symbol} @ $${signal.entryPrice} (${riskEval.leverage}x Lev, Margin: $${riskEval.margin})`,
+                'SUCCESS'
+              );
             }
           }
         }
@@ -582,10 +647,16 @@ export class AutonomousAgentLoop {
     // 1. Resolve Margin Portfolio (MetaTrader 5 Only)
     let marginPortfolio;
     if (isLive) {
+      if (this.marginTradingEngine) {
+        this.marginTradingEngine.activePositions = (this.marginTradingEngine.activePositions || []).filter(p => !!p.ticket);
+      }
       const engineMargin = this.marginTradingEngine.getPortfolioState();
+
       if (mt5Status.connected) {
         const bal = Number(mt5Status.accountInfo.balance || 0);
         const eq = Number(mt5Status.accountInfo.equity || bal);
+        const liveMargin = Number(mt5Status.accountInfo.margin || 0);
+        const liveFreeMargin = Number(mt5Status.accountInfo.freeMargin || Math.max(0, bal - liveMargin));
         const pnl = Number((eq - bal).toFixed(2));
 
         // Format any open positions reported directly from the MT5 terminal
@@ -601,19 +672,55 @@ export class AutonomousAgentLoop {
           stopLoss: p.sl || null,
           takeProfit: p.tp || null,
           units: p.volume,
-          notional: Number((p.volume * p.priceOpen).toFixed(2)),
+          notional: Number((p.volume * (p.symbol.includes('USD') ? 100000 : p.priceOpen)).toFixed(2)),
           unrealizedPnL: p.profit,
           unrealizedPnLPct: 0,
           leverage: mt5Status.accountInfo.leverage || 500,
-          margin: Number(mt5Status.accountInfo.margin || 0),
+          margin: Number((p.volume * 100000 / (mt5Status.accountInfo.leverage || 500)).toFixed(2)),
           isLiveBrokerOrder: true,
           comment: p.comment
         }));
 
-        const mergedActive = [...engineMargin.activePositions];
+        let confirmedActive = (this.marginTradingEngine.activePositions || []).filter(p => !!p.ticket);
+
+        // If MT5 reports zero margin and zero terminal positions, all positions on broker are closed
+        if (liveMargin === 0 && terminalPositions.length === 0) {
+          this.marginTradingEngine.activePositions = [];
+          confirmedActive = [];
+        } else if (terminalPositions.length > 0) {
+          // If terminal reported positions, synchronize activePositions to only those still open in MT5
+          this.marginTradingEngine.activePositions = this.marginTradingEngine.activePositions.filter(p =>
+            terminalPositions.some(tp => tp.ticket === p.ticket)
+          );
+          confirmedActive = this.marginTradingEngine.activePositions;
+        }
+
+        const mergedActive = [...confirmedActive];
         for (const tp of terminalPositions) {
-          if (!mergedActive.some(ap => ap.ticket === tp.ticket || ap.id === tp.id)) {
+          const existing = mergedActive.find(ap => ap.ticket === tp.ticket || ap.id === tp.id);
+          if (!existing) {
             mergedActive.unshift(tp);
+          } else {
+            if (tp.unrealizedPnL !== undefined) existing.unrealizedPnL = tp.unrealizedPnL;
+            if (tp.currentPrice) existing.currentPrice = tp.currentPrice;
+          }
+        }
+
+        // Align per-position margin and PnL with Exness account summary if terminal positions list was empty but account has them
+        if (mergedActive.length > 0) {
+          if (pnl !== 0) {
+            const sumPnL = mergedActive.reduce((acc, p) => acc + (p.unrealizedPnL || 0), 0);
+            if (sumPnL === 0) {
+              const splitPnL = Number((pnl / mergedActive.length).toFixed(2));
+              mergedActive.forEach(p => { p.unrealizedPnL = splitPnL; });
+            }
+          }
+          if (liveMargin > 0) {
+            const sumMargin = mergedActive.reduce((acc, p) => acc + (p.margin || 0), 0);
+            if (sumMargin === 0 || Math.abs(sumMargin - liveMargin) > 1.0) {
+              const splitMargin = Number((liveMargin / mergedActive.length).toFixed(2));
+              mergedActive.forEach(p => { p.margin = splitMargin; });
+            }
           }
         }
 
@@ -624,8 +731,8 @@ export class AutonomousAgentLoop {
           brokerName: 'MetaTrader 5',
           balance: bal,
           equity: eq,
-          margin: Number(mt5Status.accountInfo.margin || 0),
-          freeMargin: Number(mt5Status.accountInfo.freeMargin || bal),
+          margin: liveMargin,
+          freeMargin: liveFreeMargin,
           leverage: mt5Status.accountInfo.leverage || 500,
           unrealizedPnL: pnl,
           realizedPnL: engineMargin.realizedPnL || 0,
