@@ -85,14 +85,31 @@ export default function App() {
             localStorage.removeItem('nexus_auth_token');
             localStorage.removeItem('nexus_user');
           }
-        } else {
+        } else if (res.status === 401) {
+          // Explicitly expired or invalid session token
           setToken(null);
           setUser(null);
           localStorage.removeItem('nexus_auth_token');
           localStorage.removeItem('nexus_user');
+        } else {
+          // Server may be waking up (500, 502, 503) — restore session from cache
+          const cachedUser = localStorage.getItem('nexus_user');
+          if (cachedUser) {
+            try {
+              setUser(JSON.parse(cachedUser));
+              setToken(storedToken);
+            } catch (_) {}
+          }
         }
       } catch (err) {
-        console.error('Failed to verify token:', err);
+        console.warn('Network delay while verifying session, using cached user:', err.message);
+        const cachedUser = localStorage.getItem('nexus_user');
+        if (cachedUser) {
+          try {
+            setUser(JSON.parse(cachedUser));
+            setToken(storedToken);
+          } catch (_) {}
+        }
       } finally {
         setIsAuthLoading(false);
       }
@@ -744,7 +761,20 @@ export default function App() {
           onClose={() => setIsBrokerModalOpen(false)}
           user={user}
           initialTab={brokerModalTab}
-          onBrokerUpdated={fetchDashboard}
+          onBrokerUpdated={() => {
+            fetchDashboard();
+            fetch('/api/auth/me', { headers: getAuthHeaders() })
+              .then(r => r.json())
+              .then(d => { if (d.success && d.user) setUser(d.user); })
+              .catch(() => {});
+          }}
+          onUpdateBrokers={() => {
+            fetchDashboard();
+            fetch('/api/auth/me', { headers: getAuthHeaders() })
+              .then(r => r.json())
+              .then(d => { if (d.success && d.user) setUser(d.user); })
+              .catch(() => {});
+          }}
         />
       )}
     </div>

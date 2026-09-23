@@ -134,7 +134,20 @@ app.get('/api/broker/binance/balances', async (req, res) => {
 app.post('/api/broker/mt5/config', (req, res) => {
   try {
     const { email, login, password, server, gatewayUrl, metaApiToken } = req.body;
-    const status = mt5Connector.configure({ login, password, server, gatewayUrl, metaApiToken });
+    const existing = email ? authService.getUser(email)?.brokerConnections?.mt5 : null;
+    const isSameCreds = existing && String(existing.login) === String(login) && existing.server === server;
+    const connected = isSameCreds ? Boolean(existing.connected) : false;
+
+    const status = mt5Connector.configure({
+      login,
+      password,
+      server,
+      gatewayUrl,
+      metaApiToken,
+      connected,
+      status: connected ? 'CONNECTED' : (login && server ? 'STANDBY' : 'DISCONNECTED')
+    });
+
     if (email) {
       authService.updateBrokerConfig(email, 'mt5', {
         login,
@@ -142,8 +155,8 @@ app.post('/api/broker/mt5/config', (req, res) => {
         server,
         gatewayUrl,
         metaApiToken,
-        connected: false,
-        status: login && server ? 'STANDBY' : 'DISCONNECTED'
+        connected,
+        status: connected ? 'CONNECTED' : (login && server ? 'STANDBY' : 'DISCONNECTED')
       });
     }
     res.json({ success: true, mt5: status });
@@ -168,6 +181,7 @@ app.post('/api/broker/mt5/test', async (req, res) => {
         metaApiToken,
         connected: true,
         status: 'CONNECTED',
+        accountInfo: result.accountInfo,
         lastChecked: new Date().toISOString()
       });
     }

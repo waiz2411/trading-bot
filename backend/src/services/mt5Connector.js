@@ -12,13 +12,20 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 export function normalizeMt5Symbol(rawSymbol) {
   if (!rawSymbol) return 'EURUSD';
   let sym = rawSymbol.toUpperCase().trim();
-  sym = sym.replace('=X', '').replace('-USD', 'USD').replace('=F', '');
+  sym = sym.replace('=X', '').replace('=F', '');
+  sym = sym.replace(/[-_/]/g, '');
+  if (sym.endsWith('USDT')) sym = sym.slice(0, -1); // e.g. BTCUSDT -> BTCUSD
   if (sym === 'GC') return 'XAUUSD';
   if (sym === 'SI') return 'XAGUSD';
   if (sym === 'CL') return 'USOIL';
+  if (sym === 'BZ') return 'UKOIL';
+  if (sym === 'NG') return 'NATGAS';
   if (sym === '^GSPC') return 'US500';
   if (sym === '^DJI') return 'US30';
   if (sym === '^IXIC') return 'USTEC';
+  if (sym === '^FTSE') return 'UK100';
+  if (sym === '^GDAXI') return 'GER40';
+  if (sym === '^N225') return 'JP225';
   return sym;
 }
 
@@ -32,9 +39,10 @@ export class MT5Connector {
     this.gatewayUrl = process.env.MT5_GATEWAY_URL || 'https://taken-background-implemented-constitute.trycloudflare.com';
     this.metaApiToken = process.env.META_API_TOKEN || '';
     this.metaApiAccountId = '';
-    this.connectionType = 'METAAPI'; // 'METAAPI' | 'EA_BRIDGE' | 'GATEWAY'
+    this.connectionType = 'GATEWAY'; // Default to Cloud Gateway Bridge
     this.connected = false;
     this.status = 'DISCONNECTED'; // 'CONNECTED' | 'STANDBY' | 'DISCONNECTED' | 'ERROR'
+    this.algoTradingEnabled = true;
     this.lastChecked = null;
     this.latencyMs = 0;
     this.eaSessions = new Map(); // syncToken -> { syncToken, login, server, accountInfo, pendingOrders, lastHeartbeat }
@@ -50,9 +58,12 @@ export class MT5Connector {
     };
   }
 
-  configure({ login, password, server, gatewayUrl, metaApiToken }) {
+  configure({ login, password, server, gatewayUrl, metaApiToken, connected, status, accountInfo }) {
+    const credsChanged = (login && login.toString().trim() !== this.login) ||
+                         (server && server.trim() !== this.server);
+
     if (login) this.login = login.toString().trim();
-    if (password) this.password = password.trim();
+    if (password !== undefined) this.password = password.trim();
     if (server) this.server = server.trim();
     if (gatewayUrl) this.gatewayUrl = gatewayUrl.trim();
     if (metaApiToken !== undefined && metaApiToken.trim()) {
@@ -61,8 +72,23 @@ export class MT5Connector {
       this.metaApiToken = process.env.META_API_TOKEN || '';
     }
 
-    this.connected = false;
-    this.status = this.login && this.server ? 'STANDBY' : 'DISCONNECTED';
+    if (accountInfo) {
+      this.accountInfo = { ...this.accountInfo, ...accountInfo };
+    }
+
+    if (connected !== undefined) {
+      this.connected = Boolean(connected);
+      this.status = status || (this.connected ? 'CONNECTED' : (this.login && this.server ? 'STANDBY' : 'DISCONNECTED'));
+    } else if (credsChanged) {
+      this.connected = false;
+      this.status = this.login && this.server ? 'STANDBY' : 'DISCONNECTED';
+    }
+
+    // Auto-ping cloud gateway in background to keep balance and status updated
+    if (this.gatewayUrl && !this.gatewayUrl.includes('localhost') && this.login && this.server) {
+      this.tryGatewayConnection().catch(() => {});
+    }
+
     return this.getStatus();
   }
 
@@ -131,7 +157,9 @@ export class MT5Connector {
       hasMetaApiToken: !!(this.metaApiToken || process.env.META_API_TOKEN || OPERATOR_MASTER_TOKEN),
       latencyMs: this.latencyMs,
       lastChecked: this.lastChecked,
+      algoTradingEnabled: this.algoTradingEnabled ?? true,
       accountInfo: this.accountInfo,
+      openPositions: this.openPositions || [],
       activeEaSessions: this.eaSessions.size
     };
   }
@@ -221,6 +249,12 @@ export class MT5Connector {
         this.status = 'CONNECTED';
         this.connectionType = 'GATEWAY';
         this.lastChecked = new Date().toISOString();
+        if (data.algoTradingEnabled !== undefined) {
+          this.algoTradingEnabled = Boolean(data.algoTradingEnabled);
+        }
+        if (Array.isArray(data.positions)) {
+          this.openPositions = data.positions;
+        }
         this.accountInfo = {
           balance: Number(data.balance || 0),
           equity: Number(data.equity || data.balance || 0),
@@ -237,6 +271,8 @@ export class MT5Connector {
           connected: true,
           latencyMs: this.latencyMs,
           server: this.server,
+          algoTradingEnabled: this.algoTradingEnabled,
+          positions: this.openPositions || [],
           accountInfo: this.accountInfo
         };
       }
@@ -454,34 +490,54 @@ export class MT5Connector {
 
     // Order via Gateway Bridge
     try {
+      const orderSide = side.toUpperCase() === 'BUY' || side.toUpperCase() === 'LONG' ? 'BUY' : 'SELL';
+      const orderPayload = {
+        login: this.login,
+        symbol: mt5Sym,
+        side: orderSide,
+        action: orderSide,
+        volume: Number(volume) || 0.01,
+        sl: sl ? Number(Number(sl).toFixed(5)) : null,
+        tp: tp ? Number(Number(tp).toFixed(5)) : null,
+        comment: comment || 'NexusQuant Scalp'
+      };
+
       const res = await fetch(`${this.gatewayUrl}/api/mt5/order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          login: this.login,
-          symbol,
-          action: side.toUpperCase() === 'BUY' || side.toUpperCase() === 'LONG' ? 'BUY' : 'SELL',
-          volume,
-          sl,
-          tp,
-          comment
-        })
-      }).catch(() => null);
+        body: JSON.stringify(orderPayload)
+      }).catch(err => {
+        throw new Error(`Failed to reach MT5 gateway at ${this.gatewayUrl}: ${err.message}`);
+      });
 
       if (res && res.ok) {
-        return await res.json();
+        const orderData = await res.json();
+        return {
+          success: true,
+          ticket: orderData.ticket || Math.floor(10000000 + Math.random() * 90000000),
+          symbol: mt5Sym,
+          side: orderSide,
+          volume: orderData.volume || volume,
+          price: orderData.price,
+          sl,
+          tp,
+          openTime: new Date().toISOString()
+        };
       }
 
-      return {
-        success: true,
-        ticket: Math.floor(10000000 + Math.random() * 90000000),
-        symbol,
-        side,
-        volume,
-        sl,
-        tp,
-        openTime: new Date().toISOString()
-      };
+      // If response is not ok, extract exact broker error
+      let errorMsg = `MT5 order rejected (HTTP ${res.status})`;
+      try {
+        const errJson = await res.json();
+        if (errJson.retcode === 10027 || (errJson.error && errJson.error.includes('10027'))) {
+          this.algoTradingEnabled = false;
+          errorMsg = `MetaTrader 5 "Algo Trading" is turned OFF (Code 10027). Please click the "Algo Trading" button in your MetaTrader 5 top toolbar on AWS (or press Ctrl+E) so it turns green!`;
+        } else {
+          errorMsg = errJson.error || errJson.comment || errorMsg;
+        }
+      } catch (_) {}
+
+      throw new Error(errorMsg);
     } catch (err) {
       throw new Error(`MT5 Order failed: ${err.message}`);
     }

@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(__dirname, '../../data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const SECRET_FILE = path.join(DATA_DIR, 'auth_secret.key');
 
 /**
  * Multi-Tenant Authentication & User Storage Service for NexusQuant SaaS
@@ -14,12 +15,33 @@ const USERS_FILE = path.join(DATA_DIR, 'users.json');
  * - Persistent disk storage across server restarts
  * - Per-user isolated broker credentials and live connection states
  */
-class AuthService {
+export class AuthService {
   constructor() {
     this.users = {};
     this.sessions = new Map();
+    this.secretKey = '';
     this.ensureDataDir();
+    this.ensureSecretKey();
     this.loadUsers();
+  }
+
+  ensureSecretKey() {
+    try {
+      if (process.env.JWT_SECRET) {
+        this.secretKey = process.env.JWT_SECRET.trim();
+        return;
+      }
+      if (fs.existsSync(SECRET_FILE)) {
+        this.secretKey = fs.readFileSync(SECRET_FILE, 'utf-8').trim();
+      }
+      if (!this.secretKey) {
+        this.secretKey = crypto.randomBytes(32).toString('hex');
+        fs.writeFileSync(SECRET_FILE, this.secretKey, 'utf-8');
+      }
+    } catch (err) {
+      console.warn('Failed to ensure auth secret file, using fallback salt:', err.message);
+      this.secretKey = process.env.JWT_SECRET || 'nexusquant-prod-auth-salt-9817234';
+    }
   }
 
   ensureDataDir() {
@@ -180,16 +202,29 @@ class AuthService {
     this.users[cleanEmail] = newUser;
     this.saveUsers();
 
-    // Automatically create authenticated session
-    const token = `sess_${crypto.randomBytes(24).toString('hex')}`;
-    const expiresAt = Date.now() + 14 * 24 * 60 * 60 * 1000;
+    // Automatically create authenticated persistent session token (30 days validity)
+    const token = this.createSessionToken(newUser);
+    return { token, user: this.sanitizeUser(newUser) };
+  }
+
+  createSessionToken(user) {
+    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+    const payload = JSON.stringify({
+      userId: user.id,
+      email: user.email,
+      expiresAt
+    });
+    const b64Payload = Buffer.from(payload).toString('base64url');
+    const signature = crypto.createHmac('sha256', this.secretKey).update(b64Payload).digest('base64url');
+    const token = `nq_${b64Payload}.${signature}`;
+
     this.sessions.set(token, {
-      userId: newUser.id,
-      email: newUser.email,
+      userId: user.id,
+      email: user.email,
       expiresAt
     });
 
-    return { token, user: this.sanitizeUser(newUser) };
+    return token;
   }
 
   login(email, password) {
@@ -200,32 +235,64 @@ class AuthService {
       throw new Error('Invalid email or password. Please verify credentials.');
     }
 
-    const token = `sess_${crypto.randomBytes(24).toString('hex')}`;
-    const expiresAt = Date.now() + 14 * 24 * 60 * 60 * 1000;
-
-    this.sessions.set(token, {
-      userId: user.id,
-      email: user.email,
-      expiresAt
-    });
-
+    const token = this.createSessionToken(user);
     return { token, user: this.sanitizeUser(user) };
   }
 
   validateToken(token) {
-    if (!token) return null;
-    const session = this.sessions.get(token);
-    if (!session) return null;
+    if (!token || typeof token !== 'string') return null;
 
-    if (Date.now() > session.expiresAt) {
-      this.sessions.delete(token);
-      return null;
+    // Fast path: In-memory session hit
+    const session = this.sessions.get(token);
+    if (session) {
+      if (Date.now() > session.expiresAt) {
+        this.sessions.delete(token);
+        return null;
+      }
+      const user = this.users[session.email];
+      return user ? this.sanitizeUser(user) : null;
     }
 
-    const user = this.users[session.email];
-    if (!user) return null;
+    // Persistent path: Verify cryptographic HMAC-SHA256 signature
+    if (token.startsWith('nq_') && token.includes('.')) {
+      try {
+        const withoutPrefix = token.slice(3);
+        const dotIndex = withoutPrefix.indexOf('.');
+        if (dotIndex === -1) return null;
 
-    return this.sanitizeUser(user);
+        const b64Payload = withoutPrefix.slice(0, dotIndex);
+        const signature = withoutPrefix.slice(dotIndex + 1);
+        if (!b64Payload || !signature) return null;
+
+        const expectedSig = crypto.createHmac('sha256', this.secretKey).update(b64Payload).digest('base64url');
+        const sigBuf = Buffer.from(signature);
+        const expBuf = Buffer.from(expectedSig);
+        if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+          return null;
+        }
+
+        const payloadStr = Buffer.from(b64Payload, 'base64url').toString('utf-8');
+        const payload = JSON.parse(payloadStr);
+
+        if (payload.expiresAt && Date.now() <= payload.expiresAt) {
+          const user = this.users[payload.email];
+          if (user) {
+            // Re-cache in memory for sub-millisecond future lookups
+            this.sessions.set(token, {
+              userId: user.id,
+              email: user.email,
+              expiresAt: payload.expiresAt
+            });
+            return this.sanitizeUser(user);
+          }
+        }
+      } catch (err) {
+        console.warn('Stateless token verification error:', err.message);
+        return null;
+      }
+    }
+
+    return null;
   }
 
   logout(token) {
@@ -327,8 +394,9 @@ class AuthService {
           connected: user.brokerConnections?.mt5?.connected || false,
           login: user.brokerConnections?.mt5?.login ? `${user.brokerConnections.mt5.login.toString().slice(0, 3)}****` : '',
           server: user.brokerConnections?.mt5?.server || '',
+          gatewayUrl: user.brokerConnections?.mt5?.gatewayUrl || '',
           syncToken: user.brokerConnections?.mt5?.syncToken || `NQ-SYNC-${(user.id || 'usr').slice(-6).toUpperCase()}`,
-          status: user.brokerConnections?.mt5?.status || 'DISCONNECTED',
+          status: user.brokerConnections?.mt5?.status || (user.brokerConnections?.mt5?.connected ? 'CONNECTED' : 'DISCONNECTED'),
           lastChecked: user.brokerConnections?.mt5?.lastChecked || null
         },
         mexc: {

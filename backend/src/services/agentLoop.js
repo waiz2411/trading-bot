@@ -17,7 +17,7 @@ export class AutonomousAgentLoop {
     this.marginRiskManager = new RiskManager({
       riskPerTradePct: 1.5,
       maxConcurrentTrades: 2,
-      minConfidenceThreshold: 82,
+      minConfidenceThreshold: 78,
       tradeDirection: 'BOTH',
       tradingStyle: 'SCALPING',
       defaultLeverage: 500,
@@ -76,7 +76,10 @@ export class AutonomousAgentLoop {
               login: user.brokerConnections.mt5.login || '',
               password: user.brokerConnections.mt5.password || '',
               server: user.brokerConnections.mt5.server || '',
-              gatewayUrl: user.brokerConnections.mt5.gatewayUrl || 'http://localhost:5001'
+              gatewayUrl: user.brokerConnections.mt5.gatewayUrl || process.env.MT5_GATEWAY_URL || 'https://taken-background-implemented-constitute.trycloudflare.com',
+              connected: user.brokerConnections.mt5.connected,
+              status: user.brokerConnections.mt5.status,
+              accountInfo: user.brokerConnections.mt5.accountInfo
             });
           }
         }
@@ -375,19 +378,27 @@ export class AutonomousAgentLoop {
             );
 
             // Live MT5 Bridge Dispatcher (when logged into Live Account)
-            if (this.currentMode === 'LIVE' && mt5Connector.connected) {
-              mt5Connector.openPosition({
-                symbol: asset.symbol,
-                side: signal.side,
-                volume: 0.01,
-                sl: signal.stopLoss,
-                tp: signal.takeProfit,
-                comment: `Scalp ${pos.id}`
-              }).then(ticket => {
-                this.log(`📡 [MT5 LIVE] Scalp order routed to broker! Ticket #${ticket.ticket}`, 'SUCCESS');
-              }).catch(err => {
-                this.log(`⚠️ [MT5 LIVE] Order warning: ${err.message}`, 'WARN');
-              });
+            if (this.currentMode === 'LIVE') {
+              if (mt5Connector.connected) {
+                mt5Connector.openPosition({
+                  symbol: asset.symbol,
+                  side: signal.side,
+                  volume: 0.01,
+                  sl: signal.stopLoss,
+                  tp: signal.takeProfit,
+                  comment: `Scalp ${pos.id}`
+                }).then(ticket => {
+                  this.log(`📡 [MT5 LIVE] Scalp order executed on Exness MT5! Ticket #${ticket.ticket} (${asset.symbol} ${signal.side} 0.01 lot)`, 'SUCCESS');
+                }).catch(err => {
+                  if (err.message && (err.message.includes('10027') || err.message.includes('Algo Trading'))) {
+                    this.log(`🚨 [MT5 LIVE] Order blocked: "Algo Trading" is turned OFF in your MetaTrader 5 window. Please click the "Algo Trading" button in the MT5 top toolbar on AWS (or press Ctrl+E) so it turns green!`, 'ERROR');
+                  } else {
+                    this.log(`⚠️ [MT5 LIVE] Broker order notice: ${err.message}`, 'WARN');
+                  }
+                });
+              } else {
+                this.log(`ℹ️ [LIVE MODE] Order recorded in local trading engine. MT5 broker not yet connected — verify MT5 in Broker settings to route orders to terminal.`, 'INFO');
+              }
             }
           }
         }
@@ -556,6 +567,7 @@ export class AutonomousAgentLoop {
     // 1. Resolve Margin Portfolio (MetaTrader 5 Only)
     let marginPortfolio;
     if (isLive) {
+      const engineMargin = this.marginTradingEngine.getPortfolioState();
       if (mt5Status.connected) {
         const bal = Number(mt5Status.accountInfo.balance || 0);
         const eq = Number(mt5Status.accountInfo.equity || bal);
@@ -571,11 +583,11 @@ export class AutonomousAgentLoop {
           freeMargin: Number(mt5Status.accountInfo.freeMargin || bal),
           leverage: mt5Status.accountInfo.leverage || 500,
           unrealizedPnL: pnl,
-          realizedPnL: 0,
+          realizedPnL: engineMargin.realizedPnL || 0,
           totalPnL: pnl,
           totalPnLPct: bal > 0 ? Number(((pnl / bal) * 100).toFixed(2)) : 0,
-          activePositions: [],
-          closedTrades: []
+          activePositions: engineMargin.activePositions || [],
+          closedTrades: engineMargin.closedTrades || []
         };
       } else {
         marginPortfolio = {
@@ -589,11 +601,11 @@ export class AutonomousAgentLoop {
           freeMargin: null,
           leverage: 500,
           unrealizedPnL: 0,
-          realizedPnL: 0,
+          realizedPnL: engineMargin.realizedPnL || 0,
           totalPnL: 0,
           totalPnLPct: 0,
-          activePositions: [],
-          closedTrades: [],
+          activePositions: engineMargin.activePositions || [],
+          closedTrades: engineMargin.closedTrades || [],
           statusMessage: 'MetaTrader 5 Margin Account Not Connected. Connect MT5 to view real balance and trade.'
         };
       }

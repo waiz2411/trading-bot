@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
 import { X, Check, AlertCircle, RefreshCw, Eye, EyeOff, ShieldCheck, Zap, Coins, Globe, Key, Server, Cpu, ChevronDown, ChevronUp, Cloud, Copy, Download, KeyRound, Radio, Flame } from 'lucide-react';
 
-export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab = 'BINANCE' }) {
+export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUpdated, initialTab = 'BINANCE' }) {
   const [activeTab, setActiveTab] = useState(initialTab || 'BINANCE'); // 'BINANCE' | 'MEXC' | 'MT5'
+
+  const notifyBrokersUpdated = () => {
+    if (onBrokerUpdated) onBrokerUpdated();
+    if (onUpdateBrokers) onUpdateBrokers();
+  };
 
   // Update activeTab if initialTab changes
   React.useEffect(() => {
@@ -132,7 +137,7 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
       });
       const data = await res.json();
       setBinanceResult(data);
-      if (onUpdateBrokers) onUpdateBrokers();
+      notifyBrokersUpdated();
     } catch (err) {
       setBinanceResult({ success: false, error: err.message });
     } finally {
@@ -172,7 +177,7 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
       });
       const data = await res.json();
       setMexcResult(data);
-      if (onUpdateBrokers) onUpdateBrokers();
+      notifyBrokersUpdated();
     } catch (err) {
       setMexcResult({ success: false, error: err.message });
     } finally {
@@ -186,6 +191,8 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
     setMt5Testing(true);
     setMt5Result(null);
 
+    const targetGateway = mt5Gateway || 'https://taken-background-implemented-constitute.trycloudflare.com';
+
     try {
       // First save config
       await fetch('/api/broker/mt5/config', {
@@ -196,7 +203,7 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
           login: mt5Login,
           password: mt5Password,
           server: mt5Server,
-          gatewayUrl: mt5Gateway || 'http://localhost:5001',
+          gatewayUrl: targetGateway,
           metaApiToken: metaApiToken.trim()
         })
       });
@@ -210,13 +217,13 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
           login: mt5Login,
           password: mt5Password,
           server: mt5Server,
-          gatewayUrl: mt5Gateway || 'http://localhost:5001',
+          gatewayUrl: targetGateway,
           metaApiToken: metaApiToken.trim()
         })
       });
       const data = await res.json();
       setMt5Result(data);
-      if (onUpdateBrokers) onUpdateBrokers();
+      notifyBrokersUpdated();
     } catch (err) {
       setMt5Result({ success: false, error: err.message });
     } finally {
@@ -1030,6 +1037,18 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, initialTab
                         <span className="text-slate-400 block text-[9px] uppercase">Server</span>
                         <span className="font-bold text-white truncate block">{mt5Result.accountInfo.server || mt5Server}</span>
                       </div>
+                    </div>
+                  )}
+                  {mt5Result.algoTradingEnabled === false && (
+                    <div className="mt-3 p-2.5 rounded-lg bg-rose-950/80 border border-rose-500/50 text-rose-200 text-xs font-sans space-y-1">
+                      <div className="font-bold flex items-center gap-1.5 text-rose-300">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        <span>Action Required in MetaTrader 5 on AWS:</span>
+                      </div>
+                      <p>
+                        "Algo Trading" is turned <strong>OFF</strong> in your MetaTrader 5 terminal window.
+                        Please click the <strong>"Algo Trading"</strong> button in the top toolbar of MetaTrader 5 (or press <strong>Ctrl + E</strong>) so it turns green to allow automated bot trades to execute!
+                      </p>
                     </div>
                   )}
                 </div>

@@ -41,6 +41,26 @@ def status():
             'error': f'Failed to fetch account info: {mt5.last_error()}'
         }), 400
 
+    terminal_info = mt5.terminal_info()
+    algo_allowed = bool(terminal_info.trade_allowed) if terminal_info else True
+
+    # Retrieve live open positions
+    open_positions = []
+    positions = mt5.positions_get()
+    if positions:
+        for p in positions:
+            open_positions.append({
+                'ticket': p.ticket,
+                'symbol': p.symbol,
+                'type': 'BUY' if p.type == mt5.ORDER_TYPE_BUY else 'SELL',
+                'volume': float(p.volume),
+                'priceOpen': float(p.price_open),
+                'sl': float(p.sl) if p.sl else 0.0,
+                'tp': float(p.tp) if p.tp else 0.0,
+                'profit': float(p.profit),
+                'comment': p.comment
+            })
+
     return jsonify({
         'success': True,
         'login': account_info.login,
@@ -51,18 +71,29 @@ def status():
         'leverage': int(account_info.leverage),
         'currency': account_info.currency,
         'company': account_info.company,
-        'server': account_info.server
+        'server': account_info.server,
+        'algoTradingEnabled': algo_allowed,
+        'positions': open_positions
     })
 
 @app.route('/api/mt5/order', methods=['POST'])
 def place_order():
     data = request.json or {}
     symbol = data.get('symbol', 'BTCUSD')
-    side = data.get('side', 'BUY').upper()
+    side = (data.get('side') or data.get('action') or 'BUY').upper()
     volume = float(data.get('volume', 0.01))
     sl = data.get('sl')
     tp = data.get('tp')
     comment = data.get('comment', 'NexusQuant Scalp')
+
+    terminal_info = mt5.terminal_info()
+    if terminal_info and not terminal_info.trade_allowed:
+        return jsonify({
+            'success': False,
+            'retcode': 10027,
+            'comment': 'AutoTrading disabled by client',
+            'error': "MetaTrader 5 'Algo Trading' is disabled. Please click the 'Algo Trading' button in your MetaTrader 5 toolbar on AWS (or press Ctrl+E) to allow automated trades."
+        }), 400
 
     target_sym = symbol
     if mt5.symbol_info(target_sym) is None:
