@@ -84,7 +84,7 @@ export class AuthService {
       };
     }
 
-const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://abu-solve-changing-cards.trycloudflare.com';
+const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://coastal-assured-laid-final.trycloudflare.com';
 
     if (!this.users['test@gmail.com']) {
       this.users['test@gmail.com'] = {
@@ -107,13 +107,13 @@ const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://abu-solve-c
             lastChecked: null
           },
           mt5: {
-            connected: true,
+            connected: false,
             login: '474621142',
             password: 'Test@123',
             server: 'Exness-MT5Trial15',
             gatewayUrl: LIVE_MT5_GATEWAY_URL,
             syncToken: 'NQ-SYNC-TEST002',
-            status: 'CONNECTED',
+            status: 'DISCONNECTED',
             lastChecked: new Date().toISOString()
           }
         }
@@ -127,26 +127,25 @@ const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://abu-solve-c
         user.isAutoTradingEnabled = true;
         user.activeAccount = 'MARGIN';
         if (!user.brokerConnections) user.brokerConnections = {};
-        user.brokerConnections.mt5 = {
-          connected: true,
-          login: '474621142',
-          password: 'Test@123',
-          server: 'Exness-MT5Trial15',
-          gatewayUrl: LIVE_MT5_GATEWAY_URL,
-          syncToken: user.brokerConnections.mt5?.syncToken || 'NQ-SYNC-TEST002',
-          status: 'CONNECTED',
-          lastChecked: new Date().toISOString(),
-          accountInfo: {
-            balance: 60.53,
-            equity: 58.92,
-            margin: 9.03,
-            freeMargin: 49.89,
-            leverage: 500,
-            currency: 'USD',
-            company: 'Exness Technologies Ltd',
-            server: 'Exness-MT5Trial15'
+        if (!user.brokerConnections.mt5) {
+          user.brokerConnections.mt5 = {
+            connected: false,
+            login: '474621142',
+            password: 'Test@123',
+            server: 'Exness-MT5Trial15',
+            gatewayUrl: LIVE_MT5_GATEWAY_URL,
+            syncToken: 'NQ-SYNC-TEST002',
+            status: 'DISCONNECTED',
+            lastChecked: new Date().toISOString()
+          };
+        } else {
+          if (!user.brokerConnections.mt5.login) user.brokerConnections.mt5.login = '474621142';
+          if (!user.brokerConnections.mt5.password) user.brokerConnections.mt5.password = 'Test@123';
+          if (!user.brokerConnections.mt5.server) user.brokerConnections.mt5.server = 'Exness-MT5Trial15';
+          if (!user.brokerConnections.mt5.gatewayUrl || user.brokerConnections.mt5.gatewayUrl.includes('abu-solve')) {
+            user.brokerConnections.mt5.gatewayUrl = LIVE_MT5_GATEWAY_URL;
           }
-        };
+        }
       }
       if (user.isAutoTradingEnabled === undefined) {
         user.isAutoTradingEnabled = false;
@@ -156,7 +155,7 @@ const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://abu-solve-c
       }
       if (!user.brokerConnections) user.brokerConnections = {};
       if (!user.brokerConnections.mt5) user.brokerConnections.mt5 = {};
-      if (!user.brokerConnections.mt5.gatewayUrl || user.brokerConnections.mt5.gatewayUrl.includes('localhost')) {
+      if (!user.brokerConnections.mt5.gatewayUrl || user.brokerConnections.mt5.gatewayUrl.includes('abu-solve')) {
         user.brokerConnections.mt5.gatewayUrl = LIVE_MT5_GATEWAY_URL;
       }
       if (!user.brokerConnections.mexc) {

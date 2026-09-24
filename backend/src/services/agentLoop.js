@@ -82,9 +82,9 @@ export class AutonomousAgentLoop {
           if (user.brokerConnections.mt5) {
             const activeGw = mt5Connector.gatewayUrl;
             const userGw = user.brokerConnections.mt5.gatewayUrl;
-            const gwToUse = (userGw && !userGw.includes('localhost'))
+            const gwToUse = (userGw && !userGw.includes('abu-solve'))
               ? userGw
-              : ((activeGw && !activeGw.includes('localhost')) ? activeGw : (process.env.MT5_GATEWAY_URL || activeGw));
+              : (activeGw || process.env.MT5_GATEWAY_URL || 'http://localhost:5001');
 
             mt5Connector.configure({
               login: user.brokerConnections.mt5.login || '',
@@ -642,7 +642,8 @@ export class AutonomousAgentLoop {
       }
 
       // A2. Live MT5 Broker 5-Minute Watchdog: Enforce strict 5m cap and sync real broker exits
-      if (this.currentMode === 'LIVE' && mt5Connector.connected) {
+      // ONLY active when bot is enabled AND only on bot-managed positions (protects manual trades)
+      if (this.currentMode === 'LIVE' && mt5Connector.connected && this.isAutoTradingEnabled) {
         const openPositions = Array.isArray(mt5Connector.openPositions) ? mt5Connector.openPositions : [];
         const handledTickets = new Set();
         const now = Date.now();
@@ -651,6 +652,11 @@ export class AutonomousAgentLoop {
           const ticket = p.ticket;
           if (!ticket || handledTickets.has(ticket)) continue;
           handledTickets.add(ticket);
+
+          // Only manage scalps opened by this agent
+          const isBotTrade = (p.magic === 241100) || 
+                             (p.comment && (p.comment.includes('Scalp') || p.comment.includes('NexusQuant')));
+          if (!isBotTrade) continue;
 
           if (!this.livePositionFirstSeen.has(ticket)) {
             this.livePositionFirstSeen.set(ticket, now);
@@ -803,34 +809,6 @@ export class AutonomousAgentLoop {
           }
         }
 
-        // Failsafe: if broker margin is engaged ($2 used) and PnL is active, ensure trade is visible
-        if (activePositionsList.length === 0 && liveMargin > 0) {
-          const estPrice = 84152.44 - (pnl / 0.01);
-          activePositionsList = [{
-            id: 'MT5-LIVE-1',
-            ticket: 'EXNESS-LIVE',
-            symbol: 'BTC',
-            name: 'BTC (Active Exness Scalp)',
-            category: 'Crypto',
-            side: 'SHORT',
-            entryPrice: 84152.44,
-            currentPrice: Number(estPrice.toFixed(2)),
-            stopLoss: null,
-            takeProfit: null,
-            units: 0.01,
-            notional: Number((0.01 * 84152.44).toFixed(2)),
-            unrealizedPnL: pnl,
-            unrealizedPnLPct: liveMargin > 0 ? Number(((pnl / liveMargin) * 100).toFixed(1)) : 0,
-            roePercent: liveMargin > 0 ? Number(((pnl / liveMargin) * 100).toFixed(1)) : 0,
-            leverage: mt5Status.accountInfo.leverage || 500,
-            margin: liveMargin,
-            maxHoldMinutes: 5,
-            openTime: new Date().toISOString(),
-            isLiveBrokerOrder: true,
-            comment: 'Active Exness Scalp'
-          }];
-        }
-
         // Live Realized PnL & Closed Deals isolated from demo paper trading
         const liveRealized = (mt5Status.realizedProfit !== undefined && mt5Status.realizedProfit !== null)
           ? mt5Status.realizedProfit
@@ -839,6 +817,13 @@ export class AutonomousAgentLoop {
         const liveClosed = (Array.isArray(mt5Status.closedDeals) && mt5Status.closedDeals.length > 0)
           ? mt5Status.closedDeals
           : (this.liveClosedTrades || []);
+
+        const winCount = liveClosed.filter(t => (t.finalPnL || t.profit || 0) > 0.05).length;
+        const lossCount = liveClosed.filter(t => (t.finalPnL || t.profit || 0) < -0.05).length;
+        const decisive = winCount + lossCount;
+        const winRate = decisive > 0 ? Number(((winCount / decisive) * 100).toFixed(1)) : (liveClosed.length > 0 ? 100 : 0);
+        const totalPnLVal = Number((liveRealized + pnl).toFixed(2));
+        const totalPnLPctVal = bal > 0 ? Number(((totalPnLVal / bal) * 100).toFixed(2)) : 0;
 
         marginPortfolio = {
           isLive: true,
@@ -852,8 +837,12 @@ export class AutonomousAgentLoop {
           leverage: mt5Status.accountInfo.leverage || 500,
           unrealizedPnL: pnl,
           realizedPnL: liveRealized,
-          totalPnL: Number((liveRealized + pnl).toFixed(2)),
-          totalPnLPct: bal > 0 ? Number(((pnl / bal) * 100).toFixed(2)) : 0,
+          totalPnL: totalPnLVal,
+          totalPnLPct: totalPnLPctVal,
+          winRate,
+          winCount,
+          lossCount,
+          totalTrades: liveClosed.length,
           activePositions: activePositionsList,
           closedTrades: liveClosed
         };

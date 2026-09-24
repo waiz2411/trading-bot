@@ -495,21 +495,22 @@ app.post('/api/trades/close/:id', async (req, res) => {
       const symbol = pos ? pos.symbol : undefined;
       const profit = pos ? Number(Number(pos.profit || 0).toFixed(2)) : 0;
       const closeRes = await mt5Connector.closePosition({ ticket, symbol });
-      if (closeRes && closeRes.closed > 0) {
-        agentLoop.liveClosedTrades.unshift({
-          id,
-          ticket,
-          symbol: symbol || 'MT5',
-          side: pos ? (pos.type === 'BUY' ? 'LONG' : 'SHORT') : 'LIVE',
-          entryPrice: pos ? pos.priceOpen : 0,
-          exitPrice: pos ? pos.priceCurrent : 0,
-          units: pos ? pos.volume : 0.01,
-          finalPnL: profit,
-          exitReason: 'MANUAL_USER_EXIT',
-          exitTime: new Date().toISOString()
-        });
-        agentLoop.liveRealizedPnL = Number((agentLoop.liveRealizedPnL + profit).toFixed(2));
+      if (!closeRes || closeRes.closed === 0) {
+        return res.status(400).json({ error: closeRes?.error || `Failed to close MT5 position #${ticket} on broker terminal` });
       }
+      agentLoop.liveClosedTrades.unshift({
+        id,
+        ticket,
+        symbol: symbol || 'MT5',
+        side: pos ? (pos.type === 'BUY' ? 'LONG' : 'SHORT') : 'LIVE',
+        entryPrice: pos ? pos.priceOpen : 0,
+        exitPrice: pos ? pos.priceCurrent : 0,
+        units: pos ? pos.volume : 0.01,
+        finalPnL: profit,
+        exitReason: 'MANUAL_USER_EXIT',
+        exitTime: new Date().toISOString()
+      });
+      agentLoop.liveRealizedPnL = Number((agentLoop.liveRealizedPnL + profit).toFixed(2));
       agentLoop.log(`✋ Manual MT5 Exit: Ticket #${ticket} (Realized: ${profit >= 0 ? '+' : ''}$${profit})`, profit >= 0 ? 'SUCCESS' : 'INFO');
       return res.json({ success: true, closedTrade: { id, ticket, finalPnL: profit } });
     }
@@ -520,12 +521,37 @@ app.post('/api/trades/close/:id', async (req, res) => {
       closed = otherEngine.closePosition(id, null, 'MANUAL_USER_EXIT', 'Manual user exit via dashboard');
     }
     if (!closed) {
+      // Also check if id is a ticket directly without 'MT5-' prefix
+      const pos = (mt5Connector.openPositions || []).find(p => String(p.ticket) === String(id));
+      if (pos) {
+        const ticket = pos.ticket;
+        const profit = Number(Number(pos.profit || 0).toFixed(2));
+        const closeRes = await mt5Connector.closePosition({ ticket, symbol: pos.symbol });
+        if (!closeRes || closeRes.closed === 0) {
+          return res.status(400).json({ error: closeRes?.error || `Failed to close MT5 position #${ticket} on broker terminal` });
+        }
+        agentLoop.liveClosedTrades.unshift({
+          id: `MT5-${ticket}`,
+          ticket,
+          symbol: pos.symbol || 'MT5',
+          side: pos.type === 'BUY' ? 'LONG' : 'SHORT',
+          entryPrice: pos.priceOpen || 0,
+          exitPrice: pos.priceCurrent || 0,
+          units: pos.volume || 0.01,
+          finalPnL: profit,
+          exitReason: 'MANUAL_USER_EXIT',
+          exitTime: new Date().toISOString()
+        });
+        agentLoop.liveRealizedPnL = Number((agentLoop.liveRealizedPnL + profit).toFixed(2));
+        agentLoop.log(`✋ Manual MT5 Exit: Ticket #${ticket} (Realized: ${profit >= 0 ? '+' : ''}$${profit})`, profit >= 0 ? 'SUCCESS' : 'INFO');
+        return res.json({ success: true, closedTrade: { id: `MT5-${ticket}`, ticket, finalPnL: profit } });
+      }
       return res.status(404).json({ error: 'Trade not found or already closed' });
     }
 
     // If running live MT5, also close on broker terminal
-    if (agentLoop.currentMode === 'LIVE' && mt5Connector.connected) {
-      mt5Connector.closePosition({ symbol: closed.symbol, ticket: closed.ticket }).catch(() => {});
+    if (agentLoop.currentMode === 'LIVE' && mt5Connector.connected && closed.ticket) {
+      await mt5Connector.closePosition({ symbol: closed.symbol, ticket: closed.ticket }).catch(() => {});
     }
 
     agentLoop.log(

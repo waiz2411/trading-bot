@@ -43,40 +43,82 @@ const OPERATOR_MASTER_TOKEN = 'eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI0
 
 export class MT5Connector {
   constructor() {
-    this.login = '474621142';
-    this.password = 'Test@123';
-    this.server = 'Exness-MT5Trial15';
-    this.gatewayUrl = process.env.MT5_GATEWAY_URL || 'https://abu-solve-changing-cards.trycloudflare.com';
+    this.login = '';
+    this.password = '';
+    this.server = '';
+    this.gatewayUrl = process.env.MT5_GATEWAY_URL || '';
     this.metaApiToken = process.env.META_API_TOKEN || '';
     this.metaApiAccountId = '';
-    this.connectionType = 'GATEWAY'; // Default to Cloud Gateway Bridge
-    this.connected = true;
-    this.status = 'CONNECTED';
+    this.connectionType = 'GATEWAY';
+    this.connected = false;
+    this.status = 'DISCONNECTED';
     this.algoTradingEnabled = true;
     this.lastChecked = new Date().toISOString();
     this.latencyMs = 0;
     this.openPositions = [];
     this.realizedProfit = 0;
     this.closedDeals = [];
-    this.eaSessions = new Map(); // syncToken -> { syncToken, login, server, accountInfo, pendingOrders, lastHeartbeat }
+    this.eaSessions = new Map();
     this.accountInfo = {
-      balance: 60.53,
-      equity: 58.92,
-      margin: 9.03,
-      freeMargin: 49.89,
+      balance: 0,
+      equity: 0,
+      margin: 0,
+      freeMargin: 0,
       leverage: 500,
       currency: 'USD',
-      company: 'Exness Technologies Ltd',
-      server: 'Exness-MT5Trial15'
+      company: '',
+      server: ''
     };
     this.telemetryIntervalId = null;
     this.startTelemetryPolling();
+    this.discoverActiveGateway().catch(() => {});
+  }
+
+  async discoverActiveGateway() {
+    const candidates = [];
+    if (this.gatewayUrl) candidates.push(this.gatewayUrl);
+    if (process.env.MT5_GATEWAY_URL) candidates.push(process.env.MT5_GATEWAY_URL);
+    candidates.push('http://127.0.0.1:5001');
+    candidates.push('http://localhost:5001');
+
+    // Also check if remote Render backend has an auto-registered tunnel
+    try {
+      const res = await fetch('https://trading-bot-test-z6bi.onrender.com/api/broker/mt5/gateway-url', {
+        signal: AbortSignal.timeout(2500)
+      }).catch(() => null);
+      if (res && res.ok) {
+        const d = await res.json().catch(() => ({}));
+        if (d.gatewayUrl && !candidates.includes(d.gatewayUrl)) {
+          candidates.push(d.gatewayUrl);
+        }
+      }
+    } catch (_) {}
+
+    const uniqueCandidates = [...new Set(candidates.filter(Boolean))];
+
+    for (const url of uniqueCandidates) {
+      const cleanUrl = url.trim().replace(/\/+$/, '');
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const healthRes = await fetch(`${cleanUrl}/health`, { signal: controller.signal }).catch(() => null);
+        clearTimeout(timeoutId);
+        if (healthRes && healthRes.ok) {
+          const hData = await healthRes.json().catch(() => ({}));
+          if (hData.bridge || hData.status === 'ONLINE') {
+            this.gatewayUrl = cleanUrl;
+            return cleanUrl;
+          }
+        }
+      } catch (_) {}
+    }
+    return this.gatewayUrl;
   }
 
   startTelemetryPolling(intervalMs = 2500) {
     if (this.telemetryIntervalId) return;
     this.telemetryIntervalId = setInterval(async () => {
-      if (this.gatewayUrl && !this.gatewayUrl.includes('localhost') && this.login && this.server) {
+      if (this.gatewayUrl || this.login || this.connected) {
         await this.tryGatewayConnection().catch(() => {});
       }
     }, intervalMs);
@@ -89,10 +131,8 @@ export class MT5Connector {
     if (login) this.login = login.toString().trim();
     if (password !== undefined) this.password = password.trim();
     if (server) this.server = server.trim();
-    if (gatewayUrl && !gatewayUrl.includes('localhost')) {
-      this.gatewayUrl = gatewayUrl.trim();
-    } else if (!this.gatewayUrl || this.gatewayUrl.includes('localhost')) {
-      this.gatewayUrl = process.env.MT5_GATEWAY_URL || 'https://abu-solve-changing-cards.trycloudflare.com';
+    if (gatewayUrl && typeof gatewayUrl === 'string' && gatewayUrl.trim()) {
+      this.gatewayUrl = gatewayUrl.trim().replace(/\/+$/, '');
     }
     if (metaApiToken !== undefined && metaApiToken.trim()) {
       this.metaApiToken = metaApiToken.trim();
@@ -112,10 +152,8 @@ export class MT5Connector {
       this.status = this.login && this.server ? 'STANDBY' : 'DISCONNECTED';
     }
 
-    // Auto-ping cloud gateway in background to keep balance and status updated
-    if (this.gatewayUrl && !this.gatewayUrl.includes('localhost') && this.login && this.server) {
-      this.tryGatewayConnection().catch(() => {});
-    }
+    // Ping gateway in background to verify immediately
+    this.tryGatewayConnection().catch(() => {});
 
     return this.getStatus();
   }
@@ -205,78 +243,82 @@ export class MT5Connector {
     }
 
     const startTime = Date.now();
-    const token = this.metaApiToken || process.env.META_API_TOKEN;
-    const hasCloudGateway = Boolean(this.gatewayUrl && !this.gatewayUrl.includes('localhost'));
 
-    // ====================================================
-    // PATH 1: CLOUD GATEWAY BRIDGE (AWS / Cloudflare Tunnel)
-    // ====================================================
-    if (hasCloudGateway) {
-      const gwRes = await this.tryGatewayConnection(startTime);
-      if (gwRes && gwRes.connected) {
-        return gwRes;
+    // 1. Ensure we have an active gateway URL
+    if (!this.gatewayUrl) {
+      await this.discoverActiveGateway();
+    }
+
+    const gwRes = await this.tryGatewayConnection(startTime);
+    if (gwRes && gwRes.connected) {
+      return gwRes;
+    }
+
+    // If initial gateway attempt failed, discover and try once more
+    const freshGw = await this.discoverActiveGateway();
+    if (freshGw && freshGw !== this.gatewayUrl) {
+      this.gatewayUrl = freshGw;
+      const retryGw = await this.tryGatewayConnection(startTime);
+      if (retryGw && retryGw.connected) {
+        return retryGw;
       }
     }
 
-    // ====================================================
-    // PATH 2: METAAPI CLOUD REST INTEGRATION (100% Cloud SaaS)
-    // ====================================================
-    if (token) {
+    // 2. Only if explicit MetaApi token is configured and gateway is unavailable, try MetaApi
+    const token = this.metaApiToken;
+    if (token && this.connectionType === 'METAAPI') {
       try {
         const metaResult = await this.connectViaMetaApi(token);
         this.latencyMs = Date.now() - startTime;
         return metaResult;
       } catch (err) {
         console.warn('MetaApi connection failed:', err.message);
-
-        // Fallback to Gateway before giving up
-        const gwFallback = await this.tryGatewayConnection(startTime);
-        if (gwFallback && gwFallback.connected) {
-          return gwFallback;
-        }
-
-        this.connected = false;
-        this.status = 'DISCONNECTED';
-        this.lastChecked = new Date().toISOString();
-        return {
-          success: false,
-          connected: false,
-          isTopUpRequired: Boolean(err.isTopUpRequired),
-          error: err.message,
-          connectionType: 'METAAPI'
-        };
       }
     }
 
-    // ====================================================
-    // PATH 3: DEFAULT GATEWAY BRIDGE (Local / Dedicated)
-    // ====================================================
-    return await this.tryGatewayConnection(startTime);
+    this.connected = false;
+    this.status = 'DISCONNECTED';
+    return gwRes || {
+      success: false,
+      connected: false,
+      error: `Could not reach MT5 Gateway Bridge. Make sure mt5_bridge.py is running on your machine or cloud VPS.`
+    };
   }
 
   async tryGatewayConnection(startTime = Date.now()) {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      if (!this.gatewayUrl) {
+        await this.discoverActiveGateway();
+      }
+      if (!this.gatewayUrl) {
+        return {
+          success: false,
+          connected: false,
+          error: 'No active MT5 Gateway URL found. Start mt5_bridge.py or enter Gateway URL in Broker settings.'
+        };
+      }
 
-      // Attempt 1: Query status with empty payload first to avoid triggering blocking network re-logins on MT5 terminal
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+      // Pass credentials if present so MT5 bridge authenticates into the requested account
+      const payload = (this.login && this.password && this.server)
+        ? { login: this.login, password: this.password, server: this.server }
+        : (this.login && this.server ? { login: this.login, server: this.server } : {});
+
       let res = await fetch(`${this.gatewayUrl}/api/mt5/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify(payload),
         signal: controller.signal
       }).catch(() => null);
 
-      // Attempt 2: If empty payload wasn't accepted, retry with configured credentials
+      // If failed with credentials, fallback query with empty payload in case terminal is already logged in
       if (!res || !res.ok) {
         res = await fetch(`${this.gatewayUrl}/api/mt5/status`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            login: this.login,
-            password: this.password,
-            server: this.server
-          }),
+          body: JSON.stringify({}),
           signal: controller.signal
         }).catch(() => null);
       }
@@ -326,12 +368,16 @@ export class MT5Connector {
         };
       }
 
-      const isLocalhost = this.gatewayUrl.includes('localhost') || this.gatewayUrl.includes('127.0.0.1');
-      const isCloudHosted = process.env.RENDER || process.env.NODE_ENV === 'production';
       let errorMessage = `Could not reach MT5 Gateway Bridge at ${this.gatewayUrl}.`;
-      if (isLocalhost && isCloudHosted) {
-        errorMessage = `Your website is running in the cloud on Render and cannot reach "localhost:5001" on your laptop directly. To connect your Exness account: provide your Cloud Gateway URL (e.g. https://xxx.trycloudflare.com).`;
+      if (res && !res.ok) {
+        try {
+          const errData = await res.json();
+          if (errData.error) errorMessage = errData.error;
+        } catch (_) {}
       }
+
+      // If currently failing, try background discovery for next attempt
+      this.discoverActiveGateway().catch(() => {});
 
       return {
         success: false,
@@ -609,7 +655,7 @@ export class MT5Connector {
 
   async closePosition({ symbol, ticket }) {
     if (!this.connected) {
-      return { success: false, error: 'MT5 is not connected' };
+      return { success: false, closed: 0, error: 'MT5 is not connected' };
     }
     try {
       const mt5Sym = symbol ? normalizeMt5Symbol(symbol) : null;
@@ -619,16 +665,19 @@ export class MT5Connector {
         body: JSON.stringify({ symbol: mt5Sym, ticket })
       }).catch(err => null);
 
-      if (res && res.ok) {
-        const data = await res.json();
-        if (data.closed > 0 && ticket) {
-          this.openPositions = (this.openPositions || []).filter(p => Number(p.ticket) !== Number(ticket));
+      if (res) {
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          if (data.closed > 0 && ticket) {
+            this.openPositions = (this.openPositions || []).filter(p => Number(p.ticket) !== Number(ticket));
+          }
+          return data;
         }
-        return data;
+        return { success: false, closed: 0, error: data.error || `MT5 close failed (HTTP ${res.status})` };
       }
-      return { success: false };
+      return { success: false, closed: 0, error: 'Failed to communicate with MT5 gateway' };
     } catch (err) {
-      return { success: false, error: err.message };
+      return { success: false, closed: 0, error: err.message };
     }
   }
 

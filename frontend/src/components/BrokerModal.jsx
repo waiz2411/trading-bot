@@ -775,41 +775,56 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
                     </div>
                   </div>
 
-                  {/* Automatic Cloud Gateway Bridge Indicator (Pre-Configured & Connected) */}
-                  <div className="rounded-xl bg-terminal-950/80 border border-terminal-border/80 text-[11px] font-mono p-3 space-y-2">
+                  {/* MT5 Gateway Bridge Configuration & Quick Selectors */}
+                  <div className="rounded-xl bg-terminal-950/80 border border-terminal-border/80 text-[11px] font-mono p-3 space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5 text-slate-300">
+                      <span className="flex items-center gap-1.5 text-slate-300 font-semibold">
                         <Server className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>AWS Cloud MT5 Gateway Bridge</span>
+                        <span>MT5 Gateway Bridge Target</span>
                       </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setShowGatewayInput(!showGatewayInput)}
-                          className="text-[10px] text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
-                        >
-                          {showGatewayInput ? 'Hide Gateway URL' : 'Gateway URL'}
-                        </button>
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                          LIVE CLOUD
-                        </span>
-                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        {mt5GatewayUrl && mt5GatewayUrl.includes('localhost') ? 'LOCAL BRIDGE' : 'CLOUD BRIDGE'}
+                      </span>
                     </div>
-                    {showGatewayInput && (
-                      <div className="pt-1.5 border-t border-terminal-border/50">
-                        <label className="text-[10px] text-slate-400 block mb-1">
-                          Cloud Gateway / Tunnel URL:
-                        </label>
-                        <input
-                          type="text"
-                          value={mt5GatewayUrl}
-                          onChange={(e) => setMt5GatewayUrl(e.target.value)}
-                          placeholder="https://...trycloudflare.com"
-                          className="w-full bg-terminal-900 border border-terminal-border rounded-lg px-2.5 py-1 text-[11px] text-emerald-300 font-mono focus:outline-none focus:border-indigo-500"
-                        />
-                      </div>
-                    )}
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setMt5GatewayUrl('https://coastal-assured-laid-final.trycloudflare.com')}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-all cursor-pointer ${
+                          mt5GatewayUrl && !mt5GatewayUrl.includes('localhost')
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
+                            : 'bg-terminal-900 text-slate-400 border-terminal-border hover:text-white'
+                        }`}
+                      >
+                        🌐 Cloud Tunnel Bridge
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMt5GatewayUrl('http://localhost:5001')}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-all cursor-pointer ${
+                          mt5GatewayUrl && mt5GatewayUrl.includes('localhost')
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 font-bold'
+                            : 'bg-terminal-900 text-slate-400 border-terminal-border hover:text-white'
+                        }`}
+                      >
+                        💻 Local PC (localhost:5001)
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-1">
+                        Active Bridge Gateway URL:
+                      </label>
+                      <input
+                        type="text"
+                        value={mt5GatewayUrl}
+                        onChange={(e) => setMt5GatewayUrl(e.target.value)}
+                        placeholder="http://localhost:5001 or https://...trycloudflare.com"
+                        className="w-full bg-terminal-900 border border-terminal-border rounded-lg px-2.5 py-1.5 text-[11px] text-emerald-300 font-mono focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
                   </div>
 
                   {/* Action Button */}

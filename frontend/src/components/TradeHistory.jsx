@@ -113,9 +113,21 @@ export default function TradeHistory({ closedTrades = [] }) {
           </thead>
           <tbody className="divide-y divide-terminal-border/60 text-xs font-mono">
             {closedTrades.map((trade, idx) => {
-              const isBE = trade.isBreakEven || trade.exitReason === 'BREAKEVEN_STOP_TRIGGER' || Math.abs(trade.finalPnL || 0) <= 0.08;
-              const isWin = !isBE && (trade.isWin || (trade.finalPnL || 0) > 0.08);
-              const isLong = trade.side === 'LONG';
+              const finalPnL = trade.finalPnL !== undefined ? Number(trade.finalPnL) : (trade.profit !== undefined ? Number(trade.profit) : 0);
+              const isBE = trade.isBreakEven || trade.exitReason === 'BREAKEVEN_STOP_TRIGGER' || Math.abs(finalPnL) <= 0.08;
+              const isWin = !isBE && (trade.isWin || finalPnL > 0.08);
+              const isLong = trade.side === 'LONG' || trade.side === 'BUY';
+              const sideLabel = trade.side === 'BUY' ? 'LONG' : (trade.side === 'SELL' ? 'SHORT' : trade.side);
+
+              const entryPrice = trade.entryPrice != null ? trade.entryPrice : trade.price;
+              const exitPrice = trade.exitPrice != null ? trade.exitPrice : trade.price;
+
+              const closeTimeRaw = trade.closeTime || trade.exitTime || (trade.time ? trade.time * 1000 : null);
+              const closeDate = closeTimeRaw ? new Date(closeTimeRaw) : null;
+              const isValidDate = closeDate && !isNaN(closeDate.getTime());
+              const formattedTime = isValidDate
+                ? `${closeDate.toLocaleDateString([], { month: 'numeric', day: 'numeric' })} ${closeDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+                : '—';
 
               return (
                 <tr key={trade.id || idx} className="hover:bg-terminal-800/30 transition-colors">
@@ -127,7 +139,7 @@ export default function TradeHistory({ closedTrades = [] }) {
                           ? 'bg-emerald-500/20 text-emerald-400'
                           : 'bg-rose-500/20 text-rose-400'
                       }`}>
-                        {trade.side}
+                        {sideLabel}
                       </span>
                       {trade.leverage && (
                         <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
@@ -135,18 +147,18 @@ export default function TradeHistory({ closedTrades = [] }) {
                         </span>
                       )}
                       <span className="font-bold text-white">{trade.symbol}</span>
-                      <span className="text-[10px] text-slate-500">({trade.category})</span>
+                      {trade.category && <span className="text-[10px] text-slate-500">({trade.category})</span>}
                     </div>
                   </td>
 
                   {/* Entry Price */}
                   <td className="py-3 px-4 text-right text-slate-300">
-                    ${trade.entryPrice?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                    {entryPrice != null ? `$${Number(entryPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}` : '—'}
                   </td>
 
                   {/* Exit Price */}
                   <td className="py-3 px-4 text-right text-white font-semibold">
-                    ${trade.exitPrice?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                    {exitPrice != null ? `$${Number(exitPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}` : '—'}
                   </td>
 
                   {/* Outcome */}
@@ -172,15 +184,17 @@ export default function TradeHistory({ closedTrades = [] }) {
                   {/* Realized PnL */}
                   <td className="py-3 px-4 text-right">
                     <div className={`font-bold ${isBE ? 'text-indigo-300' : isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {trade.finalPnL >= 0 ? '+' : ''}${trade.finalPnL?.toFixed(2)}
+                      {finalPnL >= 0 ? '+' : '-'}${Math.abs(finalPnL).toFixed(2)}
                     </div>
                     <div className="flex items-center justify-end gap-1 text-[10px]">
-                      <span className={isBE ? 'text-indigo-400/80' : isWin ? 'text-emerald-500/80' : 'text-rose-500/80'}>
-                        {trade.finalPnLPercent >= 0 ? '+' : ''}{trade.finalPnLPercent?.toFixed(2)}%
-                      </span>
-                      {trade.roePercent !== undefined && (
+                      {trade.finalPnLPercent != null && !isNaN(trade.finalPnLPercent) && (
+                        <span className={isBE ? 'text-indigo-400/80' : isWin ? 'text-emerald-500/80' : 'text-rose-500/80'}>
+                          {trade.finalPnLPercent >= 0 ? '+' : ''}{Number(trade.finalPnLPercent).toFixed(2)}%
+                        </span>
+                      )}
+                      {trade.roePercent != null && !isNaN(trade.roePercent) && (
                         <span className={`font-bold ${isBE ? 'text-indigo-300' : isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          ({trade.roePercent >= 0 ? '+' : ''}{trade.roePercent?.toFixed(1)}% ROE)
+                          ({trade.roePercent >= 0 ? '+' : ''}{Number(trade.roePercent).toFixed(1)}% ROE)
                         </span>
                       )}
                     </div>
@@ -188,7 +202,7 @@ export default function TradeHistory({ closedTrades = [] }) {
 
                   {/* Time */}
                   <td className="py-3 px-4 text-right text-slate-400 text-[11px]">
-                    {trade.closeTime ? new Date(trade.closeTime).toLocaleTimeString() : '—'}
+                    {formattedTime}
                   </td>
                 </tr>
               );

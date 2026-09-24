@@ -13,6 +13,9 @@ app = Flask(__name__)
 CORS(app)
 
 position_first_seen = {}
+last_deals_fetch_ts = 0
+cached_deals_history = []
+cached_total_realized_profit = 0.0
 
 def safe_float(val, default=0.0):
     if val is None:
@@ -59,15 +62,29 @@ def ensure_mt5(login=None, password=None, server=None):
 
     if login and server and password:
         login_int = int(login) if str(login).isdigit() else login
-        if curr_acc is None or str(curr_acc.login) != str(login):
+        server_str = str(server).strip()
+        needs_login = (
+            curr_acc is None or 
+            str(curr_acc.login) != str(login) or 
+            (getattr(curr_acc, 'server', None) and str(curr_acc.server).strip().lower() != server_str.lower())
+        )
+        if needs_login:
             print(f"[*] Switching/Logging into MT5 account #{login} on {server}...")
-            mt5.initialize(login=login_int, password=str(password), server=str(server))
+            ok = mt5.initialize(login=login_int, password=str(password), server=server_str)
+            if not ok:
+                print(f"[!] Login failed: {mt5.last_error()}")
+                return False
+            print(f"[OK] Successfully logged into account #{login} on {server}")
             prewarm_symbols()
-            return
+            return True
+        return True
 
     if term is None or curr_acc is None:
-        mt5.initialize()
-        prewarm_symbols()
+        ok = mt5.initialize()
+        if ok:
+            prewarm_symbols()
+        return ok
+    return True
 
 def find_broker_symbol(raw_sym):
     if not raw_sym:
@@ -161,13 +178,21 @@ def status():
     password = data.get('password')
     server = data.get('server')
 
-    ensure_mt5(login, password, server)
+    if login and password and server:
+        login_ok = ensure_mt5(login, password, server)
+        if not login_ok:
+            return jsonify({
+                'success': False,
+                'error': f'Failed to log into MT5 account #{login} on {server}: {mt5.last_error()}'
+            }), 400
+    else:
+        ensure_mt5()
 
     account_info = mt5.account_info()
     if account_info is None:
         return jsonify({
             'success': False,
-            'error': f'Failed to fetch account info: {mt5.last_error()}'
+            'error': f'Failed to fetch account info from MT5 terminal: {mt5.last_error()}'
         }), 400
 
     terminal_info = mt5.terminal_info()
@@ -248,42 +273,58 @@ def status():
     except Exception as e:
         print(f"[Status] Error fetching positions: {e}")
 
-    # Retrieve recent closed deals from broker history (last 30 days)
-    deals_history = []
-    total_realized_profit = 0.0
-    try:
-        from_date = datetime.datetime.now() - datetime.timedelta(days=30)
-        to_date = datetime.datetime.now() + datetime.timedelta(days=1)
-        deals = mt5.history_deals_get(from_date, to_date)
-        if deals:
-            for d in deals:
-                deal_type = safe_int(getattr(d, 'type', -1))
-                if deal_type in (mt5.DEAL_TYPE_BUY, mt5.DEAL_TYPE_SELL, 0, 1) and getattr(d, 'entry', None) in (mt5.DEAL_ENTRY_OUT, mt5.DEAL_ENTRY_INOUT, 1, 2):
-                    deal_profit = round(
-                        safe_float(getattr(d, 'profit', 0.0)) +
-                        safe_float(getattr(d, 'swap', 0.0)) +
-                        safe_float(getattr(d, 'commission', 0.0)),
-                        2
-                    )
-                    total_realized_profit += deal_profit
-                    deals_history.append({
-                        'id': f"MT5-{safe_int(d.ticket)}",
-                        'ticket': safe_int(d.ticket),
-                        'order': safe_int(getattr(d, 'order', d.ticket)),
-                        'positionId': safe_int(getattr(d, 'position_id', d.ticket)),
-                        'time': safe_int(getattr(d, 'time', 0)),
-                        'symbol': str(getattr(d, 'symbol', '') or ''),
-                        'side': 'BUY' if deal_type == mt5.DEAL_TYPE_BUY else 'SELL',
-                        'volume': safe_float(getattr(d, 'volume', 0.01)),
-                        'units': safe_float(getattr(d, 'volume', 0.01)),
-                        'price': safe_float(getattr(d, 'price', 0.0)),
-                        'profit': deal_profit,
-                        'finalPnL': deal_profit,
-                        'exitReason': 'BROKER_CLOSE',
-                        'comment': str(getattr(d, 'comment', '') or '')
-                    })
-    except Exception as e:
-        print(f"[Deals] Error retrieving deals history: {e}")
+    # Retrieve recent closed deals from broker history (with 25s cache to guarantee < 50ms responses)
+    global last_deals_fetch_ts, cached_deals_history, cached_total_realized_profit
+    now_ts = int(time.time())
+
+    if (now_ts - last_deals_fetch_ts > 25) or not cached_deals_history:
+        deals_history = []
+        total_realized_profit = 0.0
+        try:
+            from_date = datetime.datetime.now() - datetime.timedelta(days=14)
+            to_date = datetime.datetime.now() + datetime.timedelta(days=1)
+            deals = mt5.history_deals_get(from_date, to_date)
+            if deals:
+                for d in deals:
+                    deal_type = safe_int(getattr(d, 'type', -1))
+                    if deal_type in (mt5.DEAL_TYPE_BUY, mt5.DEAL_TYPE_SELL, 0, 1) and getattr(d, 'entry', None) in (mt5.DEAL_ENTRY_OUT, mt5.DEAL_ENTRY_INOUT, 1, 2):
+                        deal_profit = round(
+                            safe_float(getattr(d, 'profit', 0.0)) +
+                            safe_float(getattr(d, 'swap', 0.0)) +
+                            safe_float(getattr(d, 'commission', 0.0)),
+                            2
+                        )
+                        total_realized_profit += deal_profit
+                        deal_time = safe_int(getattr(d, 'time', 0))
+                        deal_price = safe_float(getattr(d, 'price', 0.0))
+                        deal_side = 'BUY' if deal_type == mt5.DEAL_TYPE_BUY else 'SELL'
+                        deals_history.append({
+                            'id': f"MT5-{safe_int(d.ticket)}",
+                            'ticket': safe_int(d.ticket),
+                            'order': safe_int(getattr(d, 'order', d.ticket)),
+                            'positionId': safe_int(getattr(d, 'position_id', d.ticket)),
+                            'time': deal_time,
+                            'exitTime': datetime.datetime.fromtimestamp(deal_time).isoformat() if deal_time > 0 else '',
+                            'symbol': str(getattr(d, 'symbol', '') or ''),
+                            'side': deal_side,
+                            'volume': safe_float(getattr(d, 'volume', 0.01)),
+                            'units': safe_float(getattr(d, 'volume', 0.01)),
+                            'price': deal_price,
+                            'entryPrice': deal_price,
+                            'exitPrice': deal_price,
+                            'profit': deal_profit,
+                            'finalPnL': deal_profit,
+                            'exitReason': 'BROKER_CLOSE',
+                            'comment': str(getattr(d, 'comment', '') or '')
+                        })
+                cached_deals_history = deals_history
+                cached_total_realized_profit = round(total_realized_profit, 2)
+                last_deals_fetch_ts = now_ts
+        except Exception as e:
+            print(f"[Deals] Error retrieving deals history: {e}")
+    else:
+        deals_history = cached_deals_history
+        total_realized_profit = cached_total_realized_profit
 
     # Log clean summary to terminal
     print(f"[Status] Acc #{account_info.login} ({account_info.server}): Bal=${account_info.balance:.2f}, Eq=${account_info.equity:.2f}, Margin=${account_info.margin:.2f} | Open={len(open_positions)} deals={len(deals_history)}")
@@ -380,13 +421,22 @@ def place_order():
                 raw_tp = price - min_dist
         safe_tp = round(raw_tp, digits)
 
+    vol_min = safe_float(getattr(symbol_info, 'volume_min', 0.01), default=0.01)
+    vol_max = safe_float(getattr(symbol_info, 'volume_max', 100.0), default=100.0)
+    vol_step = safe_float(getattr(symbol_info, 'volume_step', 0.01), default=0.01)
+    volume = max(vol_min, min(vol_max, volume))
+    if vol_step > 0:
+        volume = round(round(volume / vol_step) * vol_step, 2)
+
+    dev = 100 if any(k in target_sym.upper() for k in ['BTC', 'ETH', 'XAU', 'GOLD', 'USOIL', 'OIL', 'US30', 'US500']) else 50
+
     request_payload = {
         "action": mt5.TRADE_ACTION_DEAL,
         "symbol": target_sym,
         "volume": volume,
         "type": order_type,
         "price": price,
-        "deviation": 25,
+        "deviation": dev,
         "magic": 241100,
         "comment": comment,
         "type_time": mt5.ORDER_TIME_GTC,
@@ -416,12 +466,14 @@ def place_order():
             if result and result.retcode == mt5.TRADE_RETCODE_DONE:
                 break
 
-    if result.retcode != mt5.TRADE_RETCODE_DONE:
+    if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+        err_msg = result.comment if result else f'order_send failed: {mt5.last_error()}'
+        retcode = result.retcode if result else -1
         return jsonify({
             'success': False,
-            'retcode': result.retcode,
-            'comment': result.comment,
-            'error': f'Order failed: {result.comment} (code {result.retcode})'
+            'retcode': retcode,
+            'comment': err_msg,
+            'error': f'Order failed: {err_msg} (code {retcode})'
         }), 400
 
     pos_ticket = result.order
@@ -533,6 +585,7 @@ def close_order():
                 continue
             close_price = tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask
 
+            dev = 100 if any(k in str(pos.symbol).upper() for k in ['BTC', 'ETH', 'XAU', 'GOLD', 'USOIL', 'OIL', 'US30', 'US500']) else 50
             close_req = {
                 "action": mt5.TRADE_ACTION_DEAL,
                 "position": int(pos.ticket),
@@ -540,7 +593,7 @@ def close_order():
                 "volume": float(pos.volume),
                 "type": close_type,
                 "price": close_price,
-                "deviation": 25,
+                "deviation": dev,
                 "magic": 241100,
                 "comment": "NexusQuant Scalp Close",
                 "type_time": mt5.ORDER_TIME_GTC,
@@ -560,23 +613,33 @@ def close_order():
 RENDER_BACKEND = "https://trading-bot-test-z6bi.onrender.com"
 
 def register_tunnel_with_render(tunnel_url):
-    target = f"{RENDER_BACKEND}/api/broker/mt5/register-tunnel"
-    try:
-        import urllib.request
-        import json
-        req = urllib.request.Request(
-            target,
-            data=json.dumps({"url": tunnel_url}).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            if data.get("success"):
-                print(f"[OK] Successfully auto-registered Cloudflare Tunnel with Render: {tunnel_url}")
-                return True
-    except Exception as e:
-        print(f"[WARN] Failed to auto-register tunnel with Render: {e}")
-    return False
+    import os
+    import urllib.request
+    import json
+    backends = [
+        "http://localhost:5000",
+        os.environ.get("BACKEND_URL"),
+        RENDER_BACKEND
+    ]
+    registered_any = False
+    for base in backends:
+        if not base:
+            continue
+        target = f"{base.rstrip('/')}/api/broker/mt5/register-tunnel"
+        try:
+            req = urllib.request.Request(
+                target,
+                data=json.dumps({"url": tunnel_url}).encode("utf-8"),
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if data.get("success"):
+                    print(f"[OK] Successfully auto-registered Cloudflare Tunnel with {target}: {tunnel_url}")
+                    registered_any = True
+        except Exception:
+            pass
+    return registered_any
 
 def start_cloudflared_subservice():
     import os

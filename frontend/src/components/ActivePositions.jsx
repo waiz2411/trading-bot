@@ -142,40 +142,48 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
 
                   {/* Entry Price */}
                   <td className="py-3 px-4 text-right text-slate-300 font-semibold">
-                    ${pos.entryPrice?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                    {pos.entryPrice != null ? `$${Number(pos.entryPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}` : '—'}
                   </td>
 
                   {/* Current Live Price */}
                   <td className="py-3 px-4 text-right font-bold text-white">
-                    ${pos.currentPrice?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                    {pos.currentPrice != null ? `$${Number(pos.currentPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}` : '—'}
                   </td>
 
                   {/* Stop Loss (or Trailing Stop) */}
                   <td className="py-3 px-4 text-right">
-                    <div className={`flex items-center justify-end gap-1 ${
-                      pos.trailingStopActive
-                        ? 'text-emerald-400 font-bold'
-                        : pos.breakEvenLocked
-                        ? 'text-indigo-400 font-semibold'
-                        : 'text-rose-400'
-                    }`}>
-                      <Shield className="w-3 h-3 opacity-80" />
-                      <span>${pos.stopLoss?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
-                    </div>
+                    {pos.stopLoss && Number(pos.stopLoss) > 0 ? (
+                      <div className={`flex items-center justify-end gap-1 ${
+                        pos.trailingStopActive
+                          ? 'text-emerald-400 font-bold'
+                          : pos.breakEvenLocked
+                          ? 'text-indigo-400 font-semibold'
+                          : 'text-rose-400'
+                      }`}>
+                        <Shield className="w-3 h-3 opacity-80" />
+                        <span>${Number(pos.stopLoss).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-500">—</span>
+                    )}
                   </td>
 
                   {/* Take Profit */}
-                  <td className="py-3 px-4 text-right text-emerald-400 font-semibold">
-                    <div className="flex items-center justify-end gap-1">
-                      <Target className="w-3 h-3 opacity-60" />
-                      <span>${pos.takeProfit?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
-                    </div>
+                  <td className="py-3 px-4 text-right font-semibold">
+                    {pos.takeProfit && Number(pos.takeProfit) > 0 ? (
+                      <div className="flex items-center justify-end gap-1 text-emerald-400">
+                        <Target className="w-3 h-3 opacity-60" />
+                        <span>${Number(pos.takeProfit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-500">—</span>
+                    )}
                   </td>
 
                   {/* Est. Liquidation Price */}
                   <td className="py-3 px-4 text-right">
                     <div className="font-mono text-amber-400 font-semibold">
-                      ${pos.liquidationPrice ? pos.liquidationPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : '—'}
+                      {pos.liquidationPrice && Number(pos.liquidationPrice) > 0 ? `$${Number(pos.liquidationPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}` : '—'}
                     </div>
                     <div className="text-[10px] text-slate-500">Liq. Threshold</div>
                   </td>
