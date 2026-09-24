@@ -397,9 +397,9 @@ export class AutonomousAgentLoop {
           const openPositions = portfolioState.activePositions;
           const maxSlots = this.marginRiskManager.maxConcurrentTrades || 4;
           const maxCrypto = Math.max(2, Math.floor(maxSlots * 0.65)); // 2 for 2-3 slots, 3 for 4 slots, 4 for 6 slots, 5 for 8 slots
-          const maxForexCurrency = Math.max(2, Math.floor(maxSlots * 0.50)); // 2 for 2-4 slots, 3 for 6 slots, 4 for 8 slots
-          const maxCommodities = Math.max(1, Math.floor(maxSlots * 0.35));
-          const maxIndices = Math.max(1, Math.floor(maxSlots * 0.35));
+          const maxForexCurrency = Math.max(5, maxSlots); // Allow multiple global forex setups up to full slot capacity
+          const maxCommodities = Math.max(2, Math.floor(maxSlots * 0.50));
+          const maxIndices = Math.max(2, Math.floor(maxSlots * 0.50));
 
           const sameCategoryCount = openPositions.filter(p => p.category === asset.category).length;
           if (asset.category === 'Crypto' && sameCategoryCount >= maxCrypto) continue;
@@ -455,6 +455,21 @@ export class AutonomousAgentLoop {
                       liquidationPrice: riskEval.liquidationPrice
                     });
                     pos.ticket = ticket.ticket;
+
+                    // Immediately register the live broker ticket into mt5Connector.openPositions
+                    // so subsequent candidate evaluations in this cycle know this slot is used!
+                    if (!mt5Connector.openPositions) mt5Connector.openPositions = [];
+                    mt5Connector.openPositions.push({
+                      ticket: ticket.ticket,
+                      symbol: asset.symbol,
+                      type: signal.side === 'LONG' ? 'BUY' : 'SELL',
+                      volume: 0.01,
+                      priceOpen: fillPrice,
+                      priceCurrent: fillPrice,
+                      profit: 0.0,
+                      time: Math.floor(Date.now() / 1000),
+                      ageSeconds: 0
+                    });
 
                     this.log(
                       `📡 [MT5 LIVE] Scalp executed on Exness MT5! Ticket #${ticket.ticket} (${asset.symbol} ${signal.side} 0.01 lot @ $${fillPrice})`,

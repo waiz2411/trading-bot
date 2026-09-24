@@ -30,6 +30,29 @@ def safe_int(val, default=0):
     except (ValueError, TypeError):
         return default
 
+def is_tradable(s_info):
+    if s_info is None:
+        return False
+    # trade_mode == 0 is SYMBOL_TRADE_MODE_DISABLED
+    trade_mode = getattr(s_info, 'trade_mode', None)
+    if trade_mode is not None and trade_mode == 0:
+        return False
+    return True
+
+def prewarm_symbols():
+    common_syms = [
+        'EURUSDm', 'GBPUSDm', 'USDJPYm', 'AUDUSDm', 'USDCADm', 'USDCHFm', 'NZDUSDm',
+        'EURGBPm', 'EURJPYm', 'GBPJPYm', 'AUDJPYm', 'CADJPYm', 'CHFJPYm', 'EURCADm',
+        'XAUUSDm', 'XAGUSDm', 'BTCUSDm', 'ETHUSDm', 'BTCm', 'ETHm',
+        'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD',
+        'XAUUSD', 'BTCUSD', 'ETHUSD'
+    ]
+    for sym in common_syms:
+        try:
+            mt5.symbol_select(sym, True)
+        except Exception:
+            pass
+
 def ensure_mt5(login=None, password=None, server=None):
     term = mt5.terminal_info()
     curr_acc = mt5.account_info()
@@ -39,71 +62,81 @@ def ensure_mt5(login=None, password=None, server=None):
         if curr_acc is None or str(curr_acc.login) != str(login):
             print(f"[*] Switching/Logging into MT5 account #{login} on {server}...")
             mt5.initialize(login=login_int, password=str(password), server=str(server))
+            prewarm_symbols()
             return
 
     if term is None or curr_acc is None:
         mt5.initialize()
+        prewarm_symbols()
 
 def find_broker_symbol(raw_sym):
     if not raw_sym:
-        return 'EURUSD'
-    clean = str(raw_sym).upper().strip().replace('=', '').replace('X', '').replace('F', '').replace('/', '').replace('_', '').replace('-', '')
+        return 'EURUSDm'
+    clean = str(raw_sym).upper().strip()
+    if clean.endswith('=X') or clean.endswith('=F'):
+        clean = clean[:-2]
+    clean = clean.replace('=', '').replace('/', '').replace('_', '').replace('-', '').replace('^', '')
     if clean.endswith('USDT'):
         clean = clean[:-1]  # BTCUSDT -> BTCUSD
 
-    # 1. Exact raw or clean match
-    for cand in [raw_sym, clean]:
+    # 1. First, check tradable standard suffix variations (m=Exness standard, c=cent, raw, etc.)
+    # Exness standard accounts almost always use the 'm' suffix for active trading!
+    for cand in [clean + 'm', clean + 'M', clean, raw_sym, clean + 'c', clean + '.raw', clean + '_i']:
         s_info = mt5.symbol_info(cand)
-        if s_info is not None:
+        if is_tradable(s_info):
             if not s_info.visible:
                 mt5.symbol_select(cand, True)
             return cand
 
     # 2. Crypto short names (e.g. BTC, ETH on Exness)
     if clean.startswith('BTC'):
-        for cand in ['BTC', 'BTCUSD', 'BTC/USD', 'BTCUSDm', 'BTCm', 'BTCUSDT']:
+        for cand in ['BTCUSDm', 'BTCm', 'BTC', 'BTCUSD', 'BTC/USD', 'BTCUSDT']:
             s_info = mt5.symbol_info(cand)
-            if s_info is not None:
+            if is_tradable(s_info):
                 if not s_info.visible:
                     mt5.symbol_select(cand, True)
                 return cand
     if clean.startswith('ETH'):
-        for cand in ['ETH', 'ETHUSD', 'ETH/USD', 'ETHUSDm', 'ETHm', 'ETHUSDT']:
+        for cand in ['ETHUSDm', 'ETHm', 'ETH', 'ETHUSD', 'ETH/USD', 'ETHUSDT']:
             s_info = mt5.symbol_info(cand)
-            if s_info is not None:
+            if is_tradable(s_info):
                 if not s_info.visible:
                     mt5.symbol_select(cand, True)
                 return cand
 
-    # 3. Forex / Commodities with slashes (e.g. EUR/USD, GBP/USD, XAU/USD)
+    # 3. Gold / Silver commodities
+    if clean.startswith('GC') or clean.startswith('XAU'):
+        for cand in ['XAUUSDm', 'XAUUSD', 'GOLDm', 'GOLD']:
+            s_info = mt5.symbol_info(cand)
+            if is_tradable(s_info):
+                if not s_info.visible:
+                    mt5.symbol_select(cand, True)
+                return cand
+
+    # 4. Slashes for Forex (EUR/USD)
     if len(clean) == 6:
         slash_cand = f"{clean[:3]}/{clean[3:]}"
         s_info = mt5.symbol_info(slash_cand)
-        if s_info is not None:
+        if is_tradable(s_info):
             if not s_info.visible:
                 mt5.symbol_select(slash_cand, True)
             return slash_cand
 
-    # 4. Standard broker suffixes (m=standard, c=cent, raw, etc.)
-    for suffix in ['m', 'c', '.raw', '_i', '.r', 'z', '_']:
-        cand = clean + suffix
-        s_info = mt5.symbol_info(cand)
-        if s_info is not None:
-            if not s_info.visible:
-                mt5.symbol_select(cand, True)
-            return cand
-
-    # 5. Dynamic search through all symbols in terminal catalog
+    # 5. Dynamic search through all symbols in terminal catalog for tradable match
     try:
         all_syms = mt5.symbols_get()
         if all_syms:
             for s in all_syms:
+                if getattr(s, 'trade_mode', None) == 0:
+                    continue
                 s_clean = s.name.upper().replace('/', '').replace('_', '').replace('.', '').replace('-', '')
-                if s_clean == clean or s_clean == clean + 'M' or s_clean == clean + 'C' or s_clean == clean + 'Z':
+                if s_clean == clean or s_clean == clean + 'M' or s_clean == clean + 'C':
                     if not s.visible:
                         mt5.symbol_select(s.name, True)
                     return s.name
             for s in all_syms:
+                if getattr(s, 'trade_mode', None) == 0:
+                    continue
                 s_clean = s.name.upper().replace('/', '').replace('_', '').replace('.', '').replace('-', '')
                 if (clean in s_clean and len(s_clean) <= len(clean) + 3) or (s_clean in clean and len(clean) <= len(s_clean) + 3):
                     if not s.visible:
@@ -112,7 +145,7 @@ def find_broker_symbol(raw_sym):
     except Exception as e:
         print(f"[Symbols] Error searching symbol catalog: {e}")
 
-    return clean
+    return clean + 'm' if len(clean) == 6 else clean
 
 @app.route('/health', methods=['GET'])
 def health():
@@ -303,25 +336,20 @@ def place_order():
 
     if not symbol_info.visible:
         mt5.symbol_select(target_sym, True)
-        time.sleep(0.08)
-
-    tick = mt5.symbol_info_tick(target_sym)
-    if tick is None:
         time.sleep(0.1)
+
+    tick = None
+    for _ in range(15):
         tick = mt5.symbol_info_tick(target_sym)
-    if tick is None:
+        if tick is not None and getattr(tick, 'bid', 0) > 0 and getattr(tick, 'ask', 0) > 0:
+            break
+        time.sleep(0.1)
+
+    if tick is None or getattr(tick, 'bid', 0) <= 0 or getattr(tick, 'ask', 0) <= 0:
         return jsonify({'success': False, 'error': f'Cannot get live tick for {target_sym}'}), 400
 
     order_type = mt5.ORDER_TYPE_BUY if side == 'BUY' else mt5.ORDER_TYPE_SELL
     price = tick.ask if side == 'BUY' else tick.bid
-
-    filling_mode = mt5.ORDER_FILLING_IOC
-    if symbol_info.filling_mode & 1:
-        filling_mode = mt5.ORDER_FILLING_FOK
-    elif symbol_info.filling_mode & 2:
-        filling_mode = mt5.ORDER_FILLING_IOC
-    else:
-        filling_mode = mt5.ORDER_FILLING_RETURN
 
     digits = symbol_info.digits
     point = symbol_info.point
@@ -358,25 +386,35 @@ def place_order():
         "volume": volume,
         "type": order_type,
         "price": price,
-        "deviation": 20,
+        "deviation": 25,
         "magic": 241100,
         "comment": comment,
         "type_time": mt5.ORDER_TIME_GTC,
-        "type_filling": filling_mode,
     }
     if safe_sl is not None:
         request_payload["sl"] = safe_sl
     if safe_tp is not None:
         request_payload["tp"] = safe_tp
 
-    result = mt5.order_send(request_payload)
+    filling_modes = [mt5.ORDER_FILLING_IOC, mt5.ORDER_FILLING_RETURN, mt5.ORDER_FILLING_FOK]
+    if symbol_info.filling_mode & 1:
+        filling_modes = [mt5.ORDER_FILLING_FOK, mt5.ORDER_FILLING_IOC, mt5.ORDER_FILLING_RETURN]
+    elif symbol_info.filling_mode & 2:
+        filling_modes = [mt5.ORDER_FILLING_IOC, mt5.ORDER_FILLING_RETURN, mt5.ORDER_FILLING_FOK]
 
-    # If rejected due to invalid stops (retcode 10016), retry without SL/TP and then set stops via SLTP action
-    # If rejected due to invalid stops (retcode 10016), retry without SL/TP and then set stops via SLTP action
-    if result.retcode == 10016:
-        request_payload.pop("sl", None)
-        request_payload.pop("tp", None)
+    result = None
+    for fm in filling_modes:
+        request_payload["type_filling"] = fm
         result = mt5.order_send(request_payload)
+        if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+            break
+        # If rejected due to invalid stops (retcode 10016), retry without SL/TP and then set stops via SLTP action
+        if result and result.retcode == 10016:
+            request_payload.pop("sl", None)
+            request_payload.pop("tp", None)
+            result = mt5.order_send(request_payload)
+            if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+                break
 
     if result.retcode != mt5.TRADE_RETCODE_DONE:
         return jsonify({
