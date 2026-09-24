@@ -685,6 +685,14 @@ def start_cloudflared_subservice():
                         print("=" * 60)
                         register_tunnel_with_render(tunnel_url)
 
+                        # Keep Render synced via periodic heartbeat every 60s
+                        def heartbeat():
+                            import time
+                            while True:
+                                time.sleep(60)
+                                register_tunnel_with_render(tunnel_url)
+                        threading.Thread(target=heartbeat, daemon=True).start()
+
         t = threading.Thread(target=monitor_tunnel, daemon=True)
         t.start()
         return proc

@@ -791,7 +791,17 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={() => setMt5GatewayUrl('https://coastal-assured-laid-final.trycloudflare.com')}
+                        onClick={async () => {
+                          try {
+                            const res = await fetch('/api/broker/mt5/gateway-url');
+                            const data = await res.json();
+                            if (data.success && data.gatewayUrl && !data.gatewayUrl.includes('localhost')) {
+                              setMt5GatewayUrl(data.gatewayUrl);
+                              return;
+                            }
+                          } catch (_) {}
+                          setMt5GatewayUrl('https://grid-air-telescope-object.trycloudflare.com');
+                        }}
                         className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-all cursor-pointer ${
                           mt5GatewayUrl && !mt5GatewayUrl.includes('localhost')
                             ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'

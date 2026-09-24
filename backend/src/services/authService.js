@@ -84,7 +84,7 @@ export class AuthService {
       };
     }
 
-const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://coastal-assured-laid-final.trycloudflare.com';
+const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://grid-air-telescope-object.trycloudflare.com';
 
     if (!this.users['test@gmail.com']) {
       this.users['test@gmail.com'] = {
