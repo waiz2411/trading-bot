@@ -16,7 +16,7 @@ export default function SettingsModal({
   const initialMargin = marginSettings || settings || {};
   const [riskPerTradePct, setRiskPerTradePct] = useState(initialMargin.riskPerTradePct || 1.5);
   const [maxConcurrentTrades, setMaxConcurrentTrades] = useState(initialMargin.maxConcurrentTrades || 6);
-  const [minConfidenceThreshold, setMinConfidenceThreshold] = useState(initialMargin.minConfidenceThreshold || 50);
+  const [minConfidenceThreshold, setMinConfidenceThreshold] = useState(initialMargin.minConfidenceThreshold || 90);
   const [targetRiskRewardRatio, setTargetRiskRewardRatio] = useState(initialMargin.targetRiskRewardRatio || 1.3);
   const [defaultLeverage, setDefaultLeverage] = useState(initialMargin.defaultLeverage || 500);
   const [maxTradesPerPair, setMaxTradesPerPair] = useState(initialMargin.maxTradesPerPair || 2);
@@ -25,7 +25,7 @@ export default function SettingsModal({
   const initialSpot = spotSettings || {};
   const [spotStopLossPct, setSpotStopLossPct] = useState(initialSpot.stopLossPct || 0.6);
   const [spotTakeProfitPct, setSpotTakeProfitPct] = useState(initialSpot.takeProfitPct || 0.78);
-  const [spotMinConfidence, setSpotMinConfidence] = useState(initialSpot.minConfidenceThreshold || 50);
+  const [spotMinConfidence, setSpotMinConfidence] = useState(initialSpot.minConfidenceThreshold || 90);
   const [spotMaxSlots, setSpotMaxSlots] = useState(initialSpot.maxSlots || 4);
   const [spotMaxTradesPerPair, setSpotMaxTradesPerPair] = useState(initialSpot.maxTradesPerPair || 2);
   const [spotMaxHoldMinutes, setSpotMaxHoldMinutes] = useState(initialSpot.maxHoldMinutes || 5);

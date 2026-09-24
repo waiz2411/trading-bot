@@ -24,9 +24,9 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
 
   const { currentPrice, ema9, ema21, ema50, ema200, rsi, macd, atr, bb } = technicals;
 
-  // Constructive baseline score (active market participation)
-  let longScore = 32;
-  let shortScore = 32;
+  // Balanced base score (requires genuine confluence to reach 80%–90%+)
+  let longScore = 15;
+  let shortScore = 15;
   const longReasons = [];
   const shortReasons = [];
 
@@ -39,30 +39,30 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   const isEmaBearish = ema9 && ema21 ? (currentPrice <= ema21 && ema9 <= ema21) : false;
 
   if (isEmaBullish) {
-    longScore += 16;
-    shortScore -= 10;
+    longScore += 20;
+    shortScore -= 12;
     longReasons.push('Micro Trend: Price & EMA 9 leading above EMA 21');
   } else if (isEmaBearish) {
-    shortScore += 16;
-    longScore -= 10;
+    shortScore += 20;
+    longScore -= 12;
     shortReasons.push('Micro Trend: Price & EMA 9 trailing below EMA 21');
   }
 
   if (ema50) {
     if (currentPrice >= ema50) {
-      longScore += 12;
+      longScore += 10;
       shortScore -= 8;
       if (ema200 && currentPrice >= ema200) {
-        longScore += 6;
-        shortScore -= 6;
+        longScore += 5;
+        shortScore -= 5;
         longReasons.push('Macro Trend: Price trading above EMA 50 & 200');
       }
     } else {
-      shortScore += 12;
+      shortScore += 10;
       longScore -= 8;
       if (ema200 && currentPrice <= ema200) {
-        shortScore += 6;
-        longScore -= 6;
+        shortScore += 5;
+        longScore -= 5;
         shortReasons.push('Macro Trend: Price trading below EMA 50 & 200');
       }
     }
@@ -72,15 +72,19 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   // 2. VALUE PULLBACK ZONE (EMA 21 Dynamic Bounce/Rejection)
   // ==========================================
   const distToEma21 = ema21 ? Math.abs(currentPrice - ema21) : Infinity;
-  if (distToEma21 <= minAtr * 1.2) {
+  if (distToEma21 <= minAtr * 1.3) {
     if (isEmaBullish && currentPrice >= ema21) {
-      longScore += 12;
+      longScore += 18;
       longReasons.push('Value Entry: Bullish pullback bouncing off EMA 21 dynamic support');
     }
     if (isEmaBearish && currentPrice <= ema21) {
-      shortScore += 12;
+      shortScore += 18;
       shortReasons.push('Value Entry: Bearish rally rejecting at EMA 21 dynamic resistance');
     }
+  } else if (distToEma21 > minAtr * 3.0) {
+    // Overextended away from moving average: penalize chasing
+    longScore -= 12;
+    shortScore -= 12;
   }
 
   // ==========================================
@@ -89,22 +93,20 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   if (bb) {
     // Upper Band Touch: Overbought Exhaustion -> High-probability SHORT reversal!
     if (currentPrice >= bb.upper) {
-      shortScore += 16;
-      longScore -= 14; // Prevent buying at the absolute ceiling
+      shortScore += 18;
+      longScore -= 22; // Prevent buying at the absolute ceiling
       shortReasons.push('Bollinger Reversal: Price touching Upper Band (Overbought exhaustion zone)');
     // Lower Band Touch: Oversold Discount -> High-probability LONG bounce!
     } else if (currentPrice <= bb.lower) {
-      longScore += 16;
-      shortScore -= 14; // Prevent shorting at the absolute floor
+      longScore += 18;
+      shortScore -= 22; // Prevent shorting at the absolute floor
       longReasons.push('Bollinger Reversal: Price touching Lower Band (Oversold bounce zone)');
-    // Mid-Band Trends: Expansion inside channels
-    } else if (currentPrice > bb.middle) {
-      longScore += 10;
-      shortScore -= 6;
+    // Mid-Band Channel Alignment
+    } else if (currentPrice > bb.middle && isEmaBullish) {
+      longScore += 8;
       longReasons.push('Bollinger Channel: Bullish expansion in upper half of band');
-    } else if (currentPrice < bb.middle) {
-      shortScore += 10;
-      longScore -= 6;
+    } else if (currentPrice < bb.middle && isEmaBearish) {
+      shortScore += 8;
       shortReasons.push('Bollinger Channel: Bearish expansion in lower half of band');
     }
   }
@@ -113,26 +115,24 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   // 4. RSI MOMENTUM & MEAN REVERSION (Sweet Spot & Overbought/Oversold)
   // ==========================================
   if (rsi !== null && rsi !== undefined) {
-    // Overbought (>68): Mean-reversion SHORT scalp
+    // Overbought (>68): Mean-reversion SHORT scalp, heavy penalty for LONG
     if (rsi >= 68) {
       shortScore += 18;
-      longScore -= 16;
+      longScore -= 25; // Never buy into overbought ceiling!
       shortReasons.push(`RSI Overbought (${rsi.toFixed(1)}): Exhaustion pullback favorable for short`);
-    // Oversold (<32): Mean-reversion LONG bounce
+    // Oversold (<32): Mean-reversion LONG bounce, heavy penalty for SHORT
     } else if (rsi <= 32) {
       longScore += 18;
-      shortScore -= 16;
+      shortScore -= 25; // Never short into oversold floor!
       longReasons.push(`RSI Oversold (${rsi.toFixed(1)}): Discount bounce favorable for long`);
-    // Bullish momentum runway (50 - 68)
-    } else if (rsi >= 50 && rsi < 68) {
-      longScore += 16;
-      shortScore -= 8;
-      longReasons.push(`RSI Bullish Runway (${rsi.toFixed(1)}): Healthy upward momentum`);
-    // Bearish momentum runway (32 - 50)
-    } else if (rsi > 32 && rsi < 50) {
-      shortScore += 16;
-      longScore -= 8;
-      shortReasons.push(`RSI Bearish Runway (${rsi.toFixed(1)}): Healthy downward momentum`);
+    // Bullish momentum runway (42 - 62): Optimal high-probability scalp zone
+    } else if (rsi >= 42 && rsi <= 62) {
+      longScore += 18;
+      longReasons.push(`RSI Sweet Zone (${rsi.toFixed(1)}): High-probability momentum runway`);
+    // Bearish momentum runway (38 - 58): Optimal short scalp zone
+    } else if (rsi >= 38 && rsi <= 58) {
+      shortScore += 18;
+      shortReasons.push(`RSI Sweet Zone (${rsi.toFixed(1)}): High-probability downward runway`);
     }
   }
 
@@ -149,22 +149,22 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
     const upperWick = lastCandle.high - Math.max(lastCandle.open, lastCandle.close);
 
     if (isGreen) {
-      longScore += 14;
-      shortScore -= 10;
+      longScore += 10;
+      shortScore -= 8;
       longReasons.push('Bullish Candle Impulse: Active buyer pressure');
       if (lowerWick >= body * 0.25) longScore += 5;
       if (prevIsGreen) {
-        longScore += 6;
+        longScore += 5;
         shortScore -= 4;
         longReasons.push('Consecutive Bullish Candles: Sustained buying momentum');
       }
     } else {
-      shortScore += 14;
-      longScore -= 10;
+      shortScore += 10;
+      longScore -= 8;
       shortReasons.push('Bearish Candle Impulse: Active seller pressure');
       if (upperWick >= body * 0.25) shortScore += 5;
       if (!prevIsGreen) {
-        shortScore += 6;
+        shortScore += 5;
         longScore -= 4;
         shortReasons.push('Consecutive Bearish Candles: Sustained selling momentum');
       }
@@ -176,23 +176,14 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   // ==========================================
   if (macd) {
     if (macd.histogram > 0) {
-      longScore += 12;
-      shortScore -= 10;
+      longScore += 10;
+      shortScore -= 8;
       longReasons.push('MACD: Positive bullish momentum acceleration');
     } else if (macd.histogram < 0) {
-      shortScore += 12;
-      longScore -= 10;
+      shortScore += 10;
+      longScore -= 8;
       shortReasons.push('MACD: Negative bearish momentum acceleration');
     }
-  }
-
-  // ==========================================
-  // 7. PRIME SCALP ASSET PRIORITY
-  // ==========================================
-  const PRIME_SCALP_SYMBOLS = ['GC=F', 'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'GBPJPY=X', 'EURJPY=X', 'AUDUSD=X', 'BTC-USD', 'BTCUSD', 'SOL-USD', 'DOGE-USD'];
-  if (PRIME_SCALP_SYMBOLS.includes(asset.symbol)) {
-    if (longScore > shortScore) longScore += 6;
-    else if (shortScore > longScore) shortScore += 6;
   }
 
   // Directional filter
@@ -205,42 +196,62 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   const finalShortConfidence = Math.max(0, Math.min(100, Math.round(shortScore)));
   const finalLongConfidence = Math.max(0, Math.min(100, Math.round(longScore)));
 
-  // SCALPING STRIKE ZONE GEOMETRY (Strict 1:1.3 Risk-to-Reward Ratio):
-  let stopPct = 0.0025; // 0.25% baseline
-  const targetRR = 1.30; // Strictly 1:1.3 Risk-to-Reward ratio
+  // ==========================================
+  // SCALPING STRIKE ZONE GEOMETRY (Strict 1.5% Balance Risk & 1:1.3 R:R Ratio)
+  // ==========================================
+  const targetRR = options.targetRiskRewardRatio !== undefined ? Number(options.targetRiskRewardRatio) : 1.30;
+  const riskPct = options.riskPerTradePct !== undefined ? Number(options.riskPerTradePct) : 1.5;
+  const balance = Number(options.balance || options.accountBalance || 51.68);
+  const dollarRisk = Number((balance * (riskPct / 100)).toFixed(2)); // exactly 1.5% of balance (e.g. $0.78 on $51.68)
+  const decimals = asset.decimals !== undefined ? asset.decimals : 4;
 
+  let stopDistance;
   if (asset.category === 'Crypto') {
-    stopPct = 0.0035; // 0.35% for fast crypto micro-scalps
+    // 0.01 lot of BTC has contract size 1 -> 0.01 * priceDistance = dollarRisk -> priceDistance = dollarRisk / 0.01
+    stopDistance = Number((dollarRisk / 0.01).toFixed(2));
   } else if (asset.category === 'Forex') {
-    stopPct = 0.0015; // 0.15% for forex (15 pips)
-  } else if (asset.category === 'Commodities' || asset.category === 'Indices') {
-    stopPct = 0.0020; // 0.20% for commodities & indices
+    if (asset.symbol.includes('JPY')) {
+      // 0.01 lot (1000 units), 1 pip = 0.01 JPY -> priceDistance = (dollarRisk / 1000) * currentPrice
+      stopDistance = Number(((dollarRisk / 1000) * currentPrice).toFixed(3));
+    } else {
+      // 0.01 lot (1000 units), 1 pip = 0.0001 -> priceDistance = dollarRisk / 1000
+      stopDistance = Number((dollarRisk / 1000).toFixed(5));
+    }
+  } else if (asset.symbol.includes('GC') || asset.symbol.includes('XAU')) {
+    // Gold: 0.01 lot = 1 oz. $1 move = $1.00
+    stopDistance = Number((dollarRisk / 1.0).toFixed(2));
+  } else {
+    // Fallback: 0.20% default or dollar risk
+    stopDistance = Number((currentPrice * 0.0020).toFixed(decimals));
   }
 
-  const baseStopDist = Number((currentPrice * stopPct).toFixed(asset.decimals || 4));
-  const atrStopDist = atr ? Number((atr * 0.85).toFixed(asset.decimals || 4)) : baseStopDist;
-  const stopDistance = Math.max(baseStopDist, atrStopDist);
-  const targetDistance = Number((stopDistance * targetRR).toFixed(asset.decimals || 4));
+  // Ensure minimum tick distance so broker doesn't reject as zero distance
+  const minPipDist = currentPrice * 0.0004;
+  if (stopDistance < minPipDist) {
+    stopDistance = Number(minPipDist.toFixed(decimals));
+  }
+
+  const targetDistance = Number((stopDistance * targetRR).toFixed(decimals));
   const effectiveRR = Number((targetDistance / stopDistance).toFixed(2));
 
-  // Active Scalping Threshold (Default 48% for fast, frequent executions across 78 pairs)
-  const SNIPER_THRESHOLD = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 48;
+  // Active Scalping Threshold (Defaults to user configured threshold, e.g. 90%)
+  const SNIPER_THRESHOLD = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 90;
 
-  // Clear directional edge requirement (prevent coin-flipping or taking conflicting signals)
+  // Clear directional edge requirement (must be >= threshold and have >= 4% lead over opposite side)
   const isLongWinning = finalLongConfidence >= SNIPER_THRESHOLD && (
     tradeDirection === 'LONG_ONLY' || 
-    (tradeDirection === 'BOTH' && finalLongConfidence > finalShortConfidence)
+    (tradeDirection === 'BOTH' && finalLongConfidence >= finalShortConfidence + 4)
   );
 
   const isShortWinning = finalShortConfidence >= SNIPER_THRESHOLD && (
     tradeDirection === 'SHORT_ONLY' || 
-    (tradeDirection === 'BOTH' && finalShortConfidence > finalLongConfidence)
+    (tradeDirection === 'BOTH' && finalShortConfidence >= finalLongConfidence + 4)
   );
 
   // 1. Check LONG Scalp Setup (Prioritize whichever has the true directional lead)
   if (tradeDirection !== 'SHORT_ONLY' && isLongWinning) {
-    const stopLoss = Number((currentPrice - stopDistance).toFixed(asset.decimals || 4));
-    const takeProfit = Number((currentPrice + targetDistance).toFixed(asset.decimals || 4));
+    const stopLoss = Number((currentPrice - stopDistance).toFixed(decimals));
+    const takeProfit = Number((currentPrice + targetDistance).toFixed(decimals));
 
     return {
       action: 'STRONG_BUY',
@@ -262,8 +273,8 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
 
   // 2. Check SHORT Scalp Setup
   if (tradeDirection !== 'LONG_ONLY' && isShortWinning) {
-    const stopLoss = Number((currentPrice + stopDistance).toFixed(asset.decimals || 4));
-    const takeProfit = Number((currentPrice - targetDistance).toFixed(asset.decimals || 4));
+    const stopLoss = Number((currentPrice + stopDistance).toFixed(decimals));
+    const takeProfit = Number((currentPrice - targetDistance).toFixed(decimals));
 
     return {
       action: 'STRONG_SELL',

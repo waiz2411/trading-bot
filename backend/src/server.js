@@ -397,7 +397,7 @@ app.post('/api/agent/settings', (req, res) => {
     const { account, stopLossPct, takeProfitPct, ...otherSettings } = req.body;
     const targetAccount = (account || agentLoop.activeAccount).toUpperCase();
 
-    if (targetAccount === 'SPOT' || stopLossPct !== undefined || takeProfitPct !== undefined) {
+    if (targetAccount === 'SPOT') {
       agentLoop.updateSpotSettings({ stopLossPct, takeProfitPct, ...otherSettings });
       res.json({ success: true, spotSettings: agentLoop.spotRiskManager, settings: agentLoop.getDashboardData().riskSettings });
     } else {

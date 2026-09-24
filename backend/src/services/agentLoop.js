@@ -17,7 +17,7 @@ export class AutonomousAgentLoop {
     this.marginRiskManager = new RiskManager({
       riskPerTradePct: 1.5,
       maxConcurrentTrades: 6,
-      minConfidenceThreshold: 50,
+      minConfidenceThreshold: 90, // Strict 90% threshold for high win-rate sniper scalps
       tradeDirection: 'BOTH',
       tradingStyle: 'SCALPING',
       defaultLeverage: 500,
@@ -33,7 +33,7 @@ export class AutonomousAgentLoop {
       stopLossPct: 0.6, // 0.6% Stop Loss default
       takeProfitPct: 0.78, // 0.78% Take Profit (strict 1:1.3 R:R)
       maxHoldMinutes: 5, // Strict 5-minute maximum holding cap
-      minConfidenceThreshold: 50
+      minConfidenceThreshold: 90
     };
     this.spotTradingEngine = new PaperTradingEngine(25, 'SPOT');
 
@@ -48,6 +48,7 @@ export class AutonomousAgentLoop {
     this.liveRealizedPnL = 0;
     this.liveClosedTrades = [];
     this.livePositionFirstSeen = new Map();
+    this.liveTradePeaks = new Map();
 
     this.log('⚡ Autonomous Agent initialized: Dual-Account Engine (Margin Scalper 500x + Pure Spot 100% Crypto). Bot is OFF by default.');
   }
@@ -274,6 +275,9 @@ export class AutonomousAgentLoop {
       const technicalsMap = {};
       const scanResults = [];
       const marginRiskSettings = this.marginRiskManager.getSettings();
+      marginRiskSettings.balance = this.currentMode === 'LIVE'
+        ? Number(mt5Connector.accountInfo?.balance || 51.68)
+        : this.marginTradingEngine.balance;
 
       const validSpotBuys = [];
       const validMarginSignals = [];
@@ -641,21 +645,30 @@ export class AutonomousAgentLoop {
         }
       }
 
-      // A2. Live MT5 Broker 5-Minute Watchdog: Enforce strict 5m cap and sync real broker exits
-      // ONLY active when bot is enabled AND only on bot-managed positions (protects manual trades)
+      // A2. Live MT5 Broker Scalp Watchdog: Active PnL Guardian, Profit Banking & Expiry Watchdog
+      // Actively enforces 1.5% balance loss cap, 1:1.3 R:R take profit, break-even locks, trailing stops, and fast scalp exits
       if (this.currentMode === 'LIVE' && mt5Connector.connected && this.isAutoTradingEnabled) {
         const openPositions = Array.isArray(mt5Connector.openPositions) ? mt5Connector.openPositions : [];
         const handledTickets = new Set();
         const now = Date.now();
+        const liveBal = Number(mt5Connector.accountInfo?.balance || 51.68);
+        const riskPct = this.marginRiskManager.riskPerTradePct || 1.5;
+        const targetRR = this.marginRiskManager.targetRiskRewardRatio || 1.3;
+
+        // Exact dollar risk and target for this account (e.g. $0.78 loss cap, $1.01 target profit on $51.68)
+        const maxAllowedLoss = Number((liveBal * (riskPct / 100)).toFixed(2));
+        const targetProfit = Number((maxAllowedLoss * targetRR).toFixed(2));
 
         for (const p of openPositions) {
           const ticket = p.ticket;
           if (!ticket || handledTickets.has(ticket)) continue;
           handledTickets.add(ticket);
 
-          // Only manage scalps opened by this agent
+          // Manage scalps opened by this agent or via web app
+          const knownBotTicket = (this.marginTradingEngine?.activePositions || []).some(ap => Number(ap.ticket) === Number(ticket));
           const isBotTrade = (p.magic === 241100) || 
-                             (p.comment && (p.comment.includes('Scalp') || p.comment.includes('NexusQuant')));
+                             (p.comment && (p.comment.toLowerCase().includes('scalp') || p.comment.toLowerCase().includes('nexusquant'))) ||
+                             knownBotTicket;
           if (!isBotTrade) continue;
 
           if (!this.livePositionFirstSeen.has(ticket)) {
@@ -667,13 +680,62 @@ export class AutonomousAgentLoop {
           const posTimeAgeMs = p.time ? Math.max(0, now - (p.time * 1000)) : 0;
           const actualAgeMs = Math.max(wallAgeMs, bridgeAgeMs, posTimeAgeMs);
 
-          if (actualAgeMs >= 300000) {
-            this.log(`⏱️ [MT5 LIVE] 5-minute scalp expiry triggered for Ticket #${ticket} (${p.symbol}, open for ${Math.round(actualAgeMs / 60000)}m). Auto-closing on Exness MT5...`, 'WARN');
+          const currentProfit = Number(Number(p.profit || 0).toFixed(2));
+
+          // Track peak profit reached for high-win-rate break-even and trailing protection
+          const prevPeak = this.liveTradePeaks.get(ticket) || 0;
+          const currentPeak = Math.max(prevPeak, currentProfit);
+          this.liveTradePeaks.set(ticket, currentPeak);
+
+          let exitReason = null;
+          let exitMessage = null;
+          let logLevel = 'INFO';
+
+          // 1. Loss cap at 1.5% of balance (Close immediately as loss reaches it)
+          if (currentProfit <= -maxAllowedLoss) {
+            exitReason = 'STOP_LOSS_TRIGGER';
+            exitMessage = `🛡️ [MT5 LIVE] Loss cap reached (-$${Math.abs(currentProfit)} / max -$${maxAllowedLoss}). Closing Ticket #${ticket} on Exness MT5...`;
+            logLevel = 'WARN';
+          }
+          // 2. Take Profit at 1:1.3 R:R Target (Bank profit immediately)
+          else if (currentProfit >= targetProfit) {
+            exitReason = 'TAKE_PROFIT_TRIGGER';
+            exitMessage = `🎯 [MT5 LIVE] Target Profit 1:1.3 hit (+${currentProfit} >= +$${targetProfit}) on Ticket #${ticket} (${p.symbol})! Banking gain...`;
+            logLevel = 'SUCCESS';
+          }
+          // 3. Break-Even Stop Protection: If scalp reached >= 50% of target (e.g. +$0.50) and drops back to zero ($0.02 or less)
+          else if (currentPeak >= targetProfit * 0.50 && currentProfit <= 0.02) {
+            exitReason = 'BREAKEVEN_STOP_TRIGGER';
+            exitMessage = `🔒 [MT5 LIVE] Break-even protection: Ticket #${ticket} peaked at +$${currentPeak.toFixed(2)}, pulled back to $${currentProfit.toFixed(2)}. Closing with zero loss!`;
+            logLevel = 'INFO';
+          }
+          // 4. Trailing Profit Lock: If scalp reached >= 80% of target and drops below 40% of target
+          else if (currentPeak >= targetProfit * 0.80 && currentProfit < targetProfit * 0.40) {
+            exitReason = 'TRAILING_STOP_TRIGGER';
+            exitMessage = `🛡️ [MT5 LIVE] Trailing profit lock: Ticket #${ticket} peaked at +$${currentPeak.toFixed(2)}, locking in +$${currentProfit.toFixed(2)}!`;
+            logLevel = 'SUCCESS';
+          }
+          // 5. Fast 2-Minute Scalp Profit Exit: If scalp is >= 2 minutes old and has >= 60% of target profit
+          else if (actualAgeMs >= 120000 && currentProfit >= targetProfit * 0.60) {
+            exitReason = 'MOMENTUM_EXHAUSTION_EXIT';
+            exitMessage = `⚡ [MT5 LIVE] Fast 2-minute scalp bank: Ticket #${ticket} locked +$${currentProfit.toFixed(2)} in ${Math.round(actualAgeMs / 1000)}s!`;
+            logLevel = 'SUCCESS';
+          }
+          // 6. Strict 5-Minute Maximum Holding Cap (Never hold long trades, short scalps only)
+          else if (actualAgeMs >= 300000) {
+            exitReason = 'TIME_LIMIT_EXIT';
+            exitMessage = `⏱️ [MT5 LIVE] 5-minute scalp expiry triggered for Ticket #${ticket} (${p.symbol}, open ${Math.round(actualAgeMs / 60000)}m). Realized: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`;
+            logLevel = currentProfit >= 0 ? 'SUCCESS' : 'INFO';
+          }
+
+          if (exitReason) {
+            this.log(exitMessage, logLevel);
             mt5Connector.closePosition({ symbol: p.symbol, ticket }).then(res => {
               if (res && res.closed > 0) {
                 this.livePositionFirstSeen.delete(ticket);
+                this.liveTradePeaks.delete(ticket);
                 const brokerProfit = Number(Number(p.profit || 0).toFixed(2));
-                this.log(`📡 [MT5 LIVE] Expired scalp closed on Exness MT5 (Ticket #${ticket}). Realized P/L: ${brokerProfit >= 0 ? '+' : ''}$${brokerProfit}`, brokerProfit >= 0 ? 'SUCCESS' : 'INFO');
+                this.log(`📡 [MT5 LIVE] Scalp Ticket #${ticket} successfully closed on Exness MT5 (${exitReason}). Realized P/L: ${brokerProfit >= 0 ? '+' : ''}$${brokerProfit}`, brokerProfit >= 0 ? 'SUCCESS' : 'WARN');
                 this.liveClosedTrades.unshift({
                   id: `MT5-${ticket}`,
                   ticket,
@@ -683,13 +745,17 @@ export class AutonomousAgentLoop {
                   exitPrice: p.priceCurrent,
                   units: p.volume,
                   finalPnL: brokerProfit,
-                  exitReason: 'TIME_LIMIT_EXIT',
+                  exitReason,
                   exitTime: new Date().toISOString()
                 });
                 this.liveRealizedPnL = Number((this.liveRealizedPnL + brokerProfit).toFixed(2));
                 this.marginTradingEngine.activePositions = (this.marginTradingEngine.activePositions || []).filter(ap => ap.ticket !== ticket);
+                // Asset cooldown: 4 cycles on stop loss, 2 cycles on profit
+                this.assetCooldowns.set(p.symbol, exitReason === 'STOP_LOSS_TRIGGER' ? 4 : 2);
               }
-            }).catch(() => {});
+            }).catch(err => {
+              this.log(`⚠️ [MT5 LIVE] Failed to close Ticket #${ticket}: ${err.message}`, 'WARN');
+            });
           }
         }
 
@@ -698,6 +764,7 @@ export class AutonomousAgentLoop {
         for (const [t] of this.livePositionFirstSeen.entries()) {
           if (!currentOpenTickets.has(t)) {
             this.livePositionFirstSeen.delete(t);
+            this.liveTradePeaks.delete(t);
           }
         }
       }

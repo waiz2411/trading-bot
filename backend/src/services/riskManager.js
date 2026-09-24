@@ -10,7 +10,7 @@ export class RiskManager {
     this.maxConcurrentTrades = options.maxConcurrentTrades || 6; // Active multi-scalp positions
     this.maxPositionAllocationPct = options.maxPositionAllocationPct || 25; // Max 25% notional per asset for spot
     this.maxDailyDrawdownPct = options.maxDailyDrawdownPct || 5.0; // Circuit breaker at 5% daily loss
-    this.minConfidenceThreshold = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 48; // Active 48% threshold for frequent scalps
+    this.minConfidenceThreshold = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 90; // Default 90% threshold for sniper scalps
     this.tradeDirection = options.tradeDirection || 'BOTH'; // 'BOTH' | 'SHORT_ONLY' | 'LONG_ONLY'
     this.tradingStyle = options.tradingStyle || 'SCALPING'; // 'SCALPING' | 'SWING'
     this.targetRiskRewardRatio = 1.3; // Strictly 1:1.3 Risk-to-Reward ratio
@@ -26,7 +26,7 @@ export class RiskManager {
       this.maxConcurrentTrades = Math.max(1, Math.min(10, parseInt(newSettings.maxConcurrentTrades, 10)));
     }
     if (newSettings.minConfidenceThreshold !== undefined) {
-      this.minConfidenceThreshold = Math.max(40, Math.min(95, parseInt(newSettings.minConfidenceThreshold, 10)));
+      this.minConfidenceThreshold = Math.max(40, Math.min(99, parseInt(newSettings.minConfidenceThreshold, 10)));
     }
     if (newSettings.tradeDirection !== undefined) {
       this.tradeDirection = newSettings.tradeDirection;
