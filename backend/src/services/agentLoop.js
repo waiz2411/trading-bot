@@ -661,8 +661,8 @@ export class AutonomousAgentLoop {
         const riskPct = this.marginRiskManager.riskPerTradePct || 1.5;
         const targetRR = this.marginRiskManager.targetRiskRewardRatio || 1.3;
 
-        // Exact dollar risk and target for this account (e.g. $0.78 loss cap, $1.01 target profit on $51.68)
-        const maxAllowedLoss = Number((liveBal * (riskPct / 100)).toFixed(2));
+        // Exact dollar risk and target for this account (1.5% of balance, min $0.75 buffer for 0.01 lot spread)
+        const maxAllowedLoss = Math.max(0.75, Number((liveBal * (riskPct / 100)).toFixed(2)));
         const targetProfit = Number((maxAllowedLoss * targetRR).toFixed(2));
 
         for (const p of openPositions) {

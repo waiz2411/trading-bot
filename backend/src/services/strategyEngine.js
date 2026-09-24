@@ -214,7 +214,7 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   const targetRR = options.targetRiskRewardRatio !== undefined ? Number(options.targetRiskRewardRatio) : 1.30;
   const riskPct = options.riskPerTradePct !== undefined ? Number(options.riskPerTradePct) : 1.5;
   const balance = Number(options.balance || options.accountBalance || 51.68);
-  const dollarRisk = Number((balance * (riskPct / 100)).toFixed(2)); // exactly 1.5% of balance (e.g. $0.78 on $51.68)
+  const dollarRisk = Math.max(0.75, Number((balance * (riskPct / 100)).toFixed(2))); // 1.5% of balance (min $0.75 buffer for 0.01 lot spread)
   const decimals = asset.decimals !== undefined ? asset.decimals : 4;
 
   let stopDistance;
