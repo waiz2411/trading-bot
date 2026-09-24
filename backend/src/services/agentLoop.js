@@ -297,6 +297,12 @@ export class AutonomousAgentLoop {
                             asset.category === 'Indices' ||
                             asset.symbol === 'BTC-USD' || asset.symbol === 'BTCUSD';
 
+        // Disqualify exotic high-spread currencies that destroy scalp win rates
+        const SPREAD_DISQUALIFIED = ['ZAR', 'TRY', 'MXN', 'SGD', 'HKD', 'SEK', 'NOK', 'RUB'];
+        if (SPREAD_DISQUALIFIED.some(bad => asset.symbol.includes(bad))) {
+          continue;
+        }
+
         let signal = null;
         if (isMt5Symbol) {
           signal = evaluateStrategyConfluence(asset, technicals, marginRiskSettings);
@@ -691,8 +697,9 @@ export class AutonomousAgentLoop {
           let exitMessage = null;
           let logLevel = 'INFO';
 
-          // 1. Loss cap at 1.5% of balance (Close immediately as loss reaches it)
-          if (currentProfit <= -maxAllowedLoss) {
+          // 1. Loss cap at 1.5% of balance (Cut loss if price hits stop level, with 12s initial spread grace)
+          const isPastSpreadGrace = actualAgeMs >= 12000;
+          if ((isPastSpreadGrace && currentProfit <= -maxAllowedLoss) || currentProfit <= -(maxAllowedLoss * 1.5)) {
             exitReason = 'STOP_LOSS_TRIGGER';
             exitMessage = `🛡️ [MT5 LIVE] Loss cap reached (-$${Math.abs(currentProfit)} / max -$${maxAllowedLoss}). Closing Ticket #${ticket} on Exness MT5...`;
             logLevel = 'WARN';

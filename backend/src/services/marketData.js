@@ -76,44 +76,37 @@ export class MarketDataService {
       else if (item.symbol === 'ARB-USD') { defaultPrice = 0.5550; volatility = 0.006; }
       else if (item.symbol === 'SEI-USD') { defaultPrice = 0.4250; volatility = 0.007; }
       else if (item.symbol === 'PENDLE-USD') { defaultPrice = 4.150; volatility = 0.007; }
-      // Forex defaults
-      else if (item.symbol === 'EURUSD=X') { defaultPrice = 1.0850; volatility = 0.0010; }
-      else if (item.symbol === 'GBPUSD=X') { defaultPrice = 1.2950; volatility = 0.0012; }
-      else if (item.symbol === 'USDJPY=X') { defaultPrice = 152.40; volatility = 0.0012; }
-      else if (item.symbol === 'AUDUSD=X') { defaultPrice = 0.6550; volatility = 0.0012; }
-      else if (item.symbol === 'USDCAD=X') { defaultPrice = 1.3850; volatility = 0.0012; }
-      else if (item.symbol === 'USDCHF=X') { defaultPrice = 0.8650; volatility = 0.0011; }
-      else if (item.symbol === 'NZDUSD=X') { defaultPrice = 0.5890; volatility = 0.0012; }
-      else if (item.symbol === 'EURGBP=X') { defaultPrice = 0.8380; volatility = 0.0010; }
-      else if (item.symbol === 'EURJPY=X') { defaultPrice = 165.35; volatility = 0.0014; }
-      else if (item.symbol === 'GBPJPY=X') { defaultPrice = 197.35; volatility = 0.0015; }
-      else if (item.symbol === 'AUDJPY=X') { defaultPrice = 99.80; volatility = 0.0014; }
-      else if (item.symbol === 'CADJPY=X') { defaultPrice = 110.05; volatility = 0.0013; }
-      else if (item.symbol === 'CHFJPY=X') { defaultPrice = 176.20; volatility = 0.0013; }
-      else if (item.symbol === 'NZDJPY=X') { defaultPrice = 89.75; volatility = 0.0014; }
-      else if (item.symbol === 'EURAUD=X') { defaultPrice = 1.6565; volatility = 0.0013; }
-      else if (item.symbol === 'EURCAD=X') { defaultPrice = 1.5030; volatility = 0.0012; }
-      else if (item.symbol === 'GBPAUD=X') { defaultPrice = 1.9770; volatility = 0.0014; }
-      else if (item.symbol === 'GBPCAD=X') { defaultPrice = 1.7940; volatility = 0.0013; }
-      else if (item.symbol === 'AUDNZD=X') { defaultPrice = 1.1120; volatility = 0.0011; }
-      else if (item.symbol === 'EURCHF=X') { defaultPrice = 0.9450; volatility = 0.0010; }
-      else if (item.symbol === 'EURNZD=X') { defaultPrice = 1.7750; volatility = 0.0014; }
-      else if (item.symbol === 'GBPCHF=X') { defaultPrice = 1.1250; volatility = 0.0014; }
-      else if (item.symbol === 'GBPNZD=X') { defaultPrice = 2.1150; volatility = 0.0016; }
-      else if (item.symbol === 'AUDCAD=X') { defaultPrice = 0.9080; volatility = 0.0012; }
-      else if (item.symbol === 'AUDCHF=X') { defaultPrice = 0.5670; volatility = 0.0012; }
-      else if (item.symbol === 'CADCHF=X') { defaultPrice = 0.6250; volatility = 0.0012; }
-      else if (item.symbol === 'NZDCAD=X') { defaultPrice = 0.8160; volatility = 0.0012; }
-      else if (item.symbol === 'NZDCHF=X') { defaultPrice = 0.5090; volatility = 0.0012; }
-      else if (item.symbol === 'USDZAR=X') { defaultPrice = 17.65; volatility = 0.0022; }
-      else if (item.symbol === 'USDTRY=X') { defaultPrice = 34.20; volatility = 0.0025; }
-      else if (item.symbol === 'USDMXN=X') { defaultPrice = 19.35; volatility = 0.0020; }
-      else if (item.symbol === 'USDSGD=X') { defaultPrice = 1.3050; volatility = 0.0010; }
-      else if (item.symbol === 'USDHKD=X') { defaultPrice = 7.7850; volatility = 0.0005; }
-      else if (item.symbol === 'USDSEK=X') { defaultPrice = 10.25; volatility = 0.0015; }
-      else if (item.symbol === 'USDNOK=X') { defaultPrice = 10.60; volatility = 0.0016; }
-      // Commodities & Indices defaults
-      else if (item.symbol === 'GC=F') { defaultPrice = 2635.00; volatility = 0.0020; }
+      // Forex defaults (Calibrated to live institutional market levels)
+      else if (item.symbol === 'EURUSD=X') { defaultPrice = 1.1370; volatility = 0.0010; }
+      else if (item.symbol === 'GBPUSD=X') { defaultPrice = 1.3220; volatility = 0.0012; }
+      else if (item.symbol === 'USDJPY=X') { defaultPrice = 158.85; volatility = 0.0012; }
+      else if (item.symbol === 'AUDUSD=X') { defaultPrice = 0.7025; volatility = 0.0012; }
+      else if (item.symbol === 'USDCAD=X') { defaultPrice = 1.4115; volatility = 0.0012; }
+      else if (item.symbol === 'USDCHF=X') { defaultPrice = 0.8275; volatility = 0.0011; }
+      else if (item.symbol === 'NZDUSD=X') { defaultPrice = 0.5670; volatility = 0.0012; }
+      else if (item.symbol === 'EURGBP=X') { defaultPrice = 0.8600; volatility = 0.0010; }
+      else if (item.symbol === 'EURJPY=X') { defaultPrice = 180.50; volatility = 0.0014; }
+      else if (item.symbol === 'GBPJPY=X') { defaultPrice = 209.90; volatility = 0.0015; }
+      else if (item.symbol === 'AUDJPY=X') { defaultPrice = 111.50; volatility = 0.0014; }
+      else if (item.symbol === 'CADJPY=X') { defaultPrice = 112.50; volatility = 0.0013; }
+      else if (item.symbol === 'CHFJPY=X') { defaultPrice = 191.90; volatility = 0.0013; }
+      else if (item.symbol === 'NZDJPY=X') { defaultPrice = 90.05; volatility = 0.0014; }
+      else if (item.symbol === 'EURAUD=X') { defaultPrice = 1.6180; volatility = 0.0013; }
+      else if (item.symbol === 'EURCAD=X') { defaultPrice = 1.6050; volatility = 0.0012; }
+      else if (item.symbol === 'GBPAUD=X') { defaultPrice = 1.8810; volatility = 0.0014; }
+      else if (item.symbol === 'GBPCAD=X') { defaultPrice = 1.8660; volatility = 0.0013; }
+      else if (item.symbol === 'AUDNZD=X') { defaultPrice = 1.2380; volatility = 0.0011; }
+      else if (item.symbol === 'EURCHF=X') { defaultPrice = 0.9410; volatility = 0.0010; }
+      else if (item.symbol === 'EURNZD=X') { defaultPrice = 2.0050; volatility = 0.0014; }
+      else if (item.symbol === 'GBPCHF=X') { defaultPrice = 1.0940; volatility = 0.0014; }
+      else if (item.symbol === 'GBPNZD=X') { defaultPrice = 2.3310; volatility = 0.0016; }
+      else if (item.symbol === 'AUDCAD=X') { defaultPrice = 0.9915; volatility = 0.0012; }
+      else if (item.symbol === 'AUDCHF=X') { defaultPrice = 0.5810; volatility = 0.0012; }
+      else if (item.symbol === 'CADCHF=X') { defaultPrice = 0.5860; volatility = 0.0012; }
+      else if (item.symbol === 'NZDCAD=X') { defaultPrice = 0.8000; volatility = 0.0012; }
+      else if (item.symbol === 'NZDCHF=X') { defaultPrice = 0.4690; volatility = 0.0012; }
+      // Commodities & Indices defaults (Calibrated to live institutional market levels)
+      else if (item.symbol === 'GC=F') { defaultPrice = 4295.00; volatility = 0.0020; }
       else if (item.symbol === 'SI=F') { defaultPrice = 31.20; volatility = 0.0030; }
       else if (item.symbol === 'CL=F') { defaultPrice = 70.50; volatility = 0.0035; }
       else if (item.symbol === 'BZ=F') { defaultPrice = 74.20; volatility = 0.0035; }
@@ -243,82 +236,85 @@ export class MarketDataService {
     }
   }
 
-  async fetchForexRates() {
-    try {
-      const res = await fetch('https://open.er-api.com/v6/latest/USD', {
-        signal: AbortSignal.timeout(4000)
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      const rates = data.rates;
-      if (!rates) return;
+  async fetchForexYahoo() {
+    const symbolsToFetch = [
+      'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X', 
+      'USDCHF=X', 'NZDUSD=X', 'EURGBP=X', 'EURJPY=X', 'GBPJPY=X',
+      'AUDJPY=X', 'CADJPY=X', 'CHFJPY=X', 'EURAUD=X', 'EURCAD=X',
+      'GBPAUD=X', 'GBPCAD=X', 'AUDNZD=X', 'EURCHF=X', 'EURNZD=X',
+      'GBPCHF=X', 'GBPNZD=X', 'AUDCAD=X', 'AUDCHF=X', 'CADCHF=X',
+      'NZDCAD=X', 'NZDCHF=X',
+      'GC=F', 'SI=F', 'CL=F'
+    ];
 
-      for (const item of WATCHLIST) {
-        if (item.category !== 'Forex') continue;
-        const base = item.baseAsset;
-        const quote = item.quoteAsset;
-        const baseRate = rates[base] || (base === 'USD' ? 1.0 : null);
-        const quoteRate = rates[quote] || (quote === 'USD' ? 1.0 : null);
+    const fetchSingle = async (sym) => {
+      const cached = marketCache.get(sym);
+      if (!cached) return;
+      try {
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=1m`;
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+          signal: AbortSignal.timeout(3500)
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const result = data.chart?.result?.[0];
+        if (!result) return;
 
-        if (!baseRate || !quoteRate) continue;
-        const fxPrice = quoteRate / baseRate;
-        const cached = marketCache.get(item.symbol);
-        if (cached) {
-          const newPrice = Number(fxPrice.toFixed(cached.decimals));
-          cached.price = newPrice;
-          cached.isLiveFeed = true;
-          cached.lastLiveTime = Date.now();
+        const meta = result.meta;
+        const timestamps = result.timestamp || [];
+        const quote = result.indicators?.quote?.[0] || {};
+        const livePrice = meta?.regularMarketPrice || cached.price;
 
-          // Calibrate baseline historical candles to real live Forex rate so RSI is natural
-          if (!cached.isLiveCalibrated) {
-            const firstCandlePrice = cached.candles[0]?.close || newPrice;
-            const ratio = newPrice / firstCandlePrice;
-            if (Math.abs(ratio - 1) > 0.003) {
-              for (const c of cached.candles) {
-                c.open = Number((c.open * ratio).toFixed(cached.decimals));
-                c.close = Number((c.close * ratio).toFixed(cached.decimals));
-                c.high = Number((c.high * ratio).toFixed(cached.decimals));
-                c.low = Number((c.low * ratio).toFixed(cached.decimals));
-              }
-            }
-            cached.isLiveCalibrated = true;
-          }
-
-          const candles = cached.candles;
-          const now = Date.now();
-          if (!cached.candleStartTime) cached.candleStartTime = now;
-
-          if (now - cached.candleStartTime >= 60000) {
-            cached.candleStartTime = now;
-            candles.push({
-              time: new Date(now).toISOString(),
-              open: newPrice,
-              high: newPrice,
-              low: newPrice,
-              close: newPrice,
-              volume: 10000
+        const realCandles = [];
+        for (let i = 0; i < timestamps.length; i++) {
+          const o = quote.open?.[i];
+          const h = quote.high?.[i];
+          const l = quote.low?.[i];
+          const c = quote.close?.[i];
+          const v = quote.volume?.[i] || 1000;
+          if (o != null && h != null && l != null && c != null) {
+            realCandles.push({
+              time: new Date(timestamps[i] * 1000).toISOString(),
+              open: Number(Number(o).toFixed(cached.decimals)),
+              high: Number(Number(h).toFixed(cached.decimals)),
+              low: Number(Number(l).toFixed(cached.decimals)),
+              close: Number(Number(c).toFixed(cached.decimals)),
+              volume: v
             });
-            if (candles.length > 70) candles.shift();
-          } else {
-            const lastCandle = candles[candles.length - 1];
-            lastCandle.close = newPrice;
-            lastCandle.high = Math.max(lastCandle.high, newPrice);
-            lastCandle.low = Math.min(lastCandle.low, newPrice);
           }
         }
+
+        if (realCandles.length >= 15) {
+          cached.candles = realCandles.slice(-70);
+          cached.price = Number(Number(livePrice).toFixed(cached.decimals));
+          if (meta.regularMarketDayHigh) cached.high24h = Number(Number(meta.regularMarketDayHigh).toFixed(cached.decimals));
+          if (meta.regularMarketDayLow) cached.low24h = Number(Number(meta.regularMarketDayLow).toFixed(cached.decimals));
+          if (meta.chartPreviousClose && livePrice) {
+            cached.change24h = Number((((livePrice - meta.chartPreviousClose) / meta.chartPreviousClose) * 100).toFixed(2));
+          }
+          cached.isLiveFeed = true;
+          cached.lastLiveTime = Date.now();
+        }
+      } catch (_) {
+        // Fallback gracefully without breaking other assets
       }
-    } catch (err) {
-      // Safe fallback
+    };
+
+    // Concurrently fetch in batches of 6 to be gentle on network latency
+    for (let i = 0; i < symbolsToFetch.length; i += 6) {
+      const batch = symbolsToFetch.slice(i, i + 6);
+      await Promise.allSettled(batch.map(fetchSingle));
     }
   }
 
   // Realistic natural 2-way micro ticks (mean-reverting, oscillating between up and down)
-  // Only applies to simulated non-API assets (Commodities, Indices) or when live feeds are unavailable
+  // Only applies to non-API assets (Indices) or when live feeds are unavailable
   simulateMicroTicks() {
     const now = Date.now();
     for (const [symbol, item] of marketCache.entries()) {
       // Skip assets actively receiving real-time live data to prevent price jitter & immediate entry loss
-      if (item.isLiveFeed && item.lastLiveTime && (now - item.lastLiveTime < 15000)) {
+      if (item.isLiveFeed && item.lastLiveTime && (now - item.lastLiveTime < 30000)) {
         continue;
       }
 
@@ -370,7 +366,7 @@ export class MarketDataService {
   async updateAll() {
     await Promise.allSettled([
       this.fetchCryptoBinance(),
-      this.fetchForexRates()
+      this.fetchForexYahoo()
     ]);
     this.simulateMicroTicks();
     this.lastUpdated = new Date().toISOString();

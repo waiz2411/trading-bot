@@ -24,165 +24,177 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
 
   const { currentPrice, ema9, ema21, ema50, ema200, rsi, macd, atr, bb } = technicals;
 
-  // Balanced base score (requires genuine confluence to reach 80%–90%+)
-  let longScore = 15;
-  let shortScore = 15;
+  let longScore = 0;
+  let shortScore = 0;
   const longReasons = [];
   const shortReasons = [];
 
-  const minAtr = atr || (currentPrice * (asset.category === 'Forex' ? 0.0025 : 0.005));
+  const minAtr = atr || (currentPrice * (asset.category === 'Forex' ? 0.0010 : 0.0030));
 
   // ==========================================
-  // 1. TREND ALIGNMENT (EMA 9, 21, 50, 200)
+  // 1. TREND REGIME LOCKING (Never Trade Counter-Trend)
   // ==========================================
-  const isEmaBullish = ema9 && ema21 ? (currentPrice >= ema21 && ema9 >= ema21) : false;
-  const isEmaBearish = ema9 && ema21 ? (currentPrice <= ema21 && ema9 <= ema21) : false;
+  const isEmaUptrend = ema9 && ema21 && ema50 ? (ema9 >= ema21 && ema21 >= ema50) : false;
+  const isEmaDowntrend = ema9 && ema21 && ema50 ? (ema9 <= ema21 && ema21 <= ema50) : false;
+  const isAboveEma50 = ema50 ? (currentPrice >= ema50) : true;
+  const isBelowEma50 = ema50 ? (currentPrice <= ema50) : true;
 
-  if (isEmaBullish) {
-    longScore += 20;
-    shortScore -= 12;
-    longReasons.push('Micro Trend: Price & EMA 9 leading above EMA 21');
-  } else if (isEmaBearish) {
-    shortScore += 20;
-    longScore -= 12;
-    shortReasons.push('Micro Trend: Price & EMA 9 trailing below EMA 21');
-  }
-
-  if (ema50) {
-    if (currentPrice >= ema50) {
-      longScore += 10;
-      shortScore -= 8;
-      if (ema200 && currentPrice >= ema200) {
-        longScore += 5;
-        shortScore -= 5;
-        longReasons.push('Macro Trend: Price trading above EMA 50 & 200');
-      }
-    } else {
-      shortScore += 10;
-      longScore -= 8;
-      if (ema200 && currentPrice <= ema200) {
-        shortScore += 5;
-        longScore -= 5;
-        shortReasons.push('Macro Trend: Price trading below EMA 50 & 200');
-      }
+  // Bullish Trend Regime: Trend is UP
+  if (isEmaUptrend && isAboveEma50) {
+    longScore += 25;
+    shortScore = 0; // Strictly disqualify shorting into strong uptrend
+    longReasons.push('Verified Bullish Trend: EMA 9 >= 21 >= 50');
+    if (ema200 && currentPrice >= ema200) {
+      longScore += 5;
+      longReasons.push('Macro Trend: Price trading above EMA 200');
+    }
+  } 
+  // Bearish Trend Regime: Trend is DOWN
+  else if (isEmaDowntrend && isBelowEma50) {
+    shortScore += 25;
+    longScore = 0; // Strictly disqualify buying into strong downtrend
+    shortReasons.push('Verified Bearish Trend: EMA 9 <= 21 <= 50');
+    if (ema200 && currentPrice <= ema200) {
+      shortScore += 5;
+      shortReasons.push('Macro Trend: Price trading below EMA 200');
+    }
+  } 
+  // Transitional / Early Trend
+  else if (ema9 && ema21 && currentPrice) {
+    if (ema9 > ema21 && currentPrice > ema21) {
+      longScore += 15;
+      longReasons.push('Micro Uptrend: EMA 9 leading above EMA 21');
+    } else if (ema9 < ema21 && currentPrice < ema21) {
+      shortScore += 15;
+      shortReasons.push('Micro Downtrend: EMA 9 leading below EMA 21');
     }
   }
 
   // ==========================================
-  // 2. VALUE PULLBACK ZONE (EMA 21 Dynamic Bounce/Rejection)
+  // 2. VALUE PULLBACK ZONE (Buy Dips, Sell Rallies)
   // ==========================================
   const distToEma21 = ema21 ? Math.abs(currentPrice - ema21) : Infinity;
-  if (distToEma21 <= minAtr * 1.3) {
-    if (isEmaBullish && currentPrice >= ema21) {
-      longScore += 18;
-      longReasons.push('Value Entry: Bullish pullback bouncing off EMA 21 dynamic support');
+  const isAtEma21Pocket = distToEma21 <= minAtr * 1.2;
+
+  // In Bullish Trend: Reward pullback into EMA 21 support
+  if (longScore > 0) {
+    if (isAtEma21Pocket && currentPrice >= ema21 * 0.998) {
+      longScore += 22;
+      longReasons.push('Value Entry: Bullish pullback into EMA 21 support pocket');
+    } else if (distToEma21 > minAtr * 2.2 && currentPrice > ema21) {
+      longScore -= 25; // Overextended, NEVER chase green candles!
     }
-    if (isEmaBearish && currentPrice <= ema21) {
-      shortScore += 18;
-      shortReasons.push('Value Entry: Bearish rally rejecting at EMA 21 dynamic resistance');
-    }
-  } else if (distToEma21 > minAtr * 3.0) {
-    // Overextended away from moving average: penalize chasing
-    longScore -= 12;
-    shortScore -= 12;
   }
 
-  // ==========================================
-  // 3. BOLLINGER BAND VOLATILITY & MEAN REVERSION
-  // ==========================================
-  if (bb) {
-    // Upper Band Touch: Overbought Exhaustion -> High-probability SHORT reversal!
-    if (currentPrice >= bb.upper) {
-      shortScore += 18;
-      longScore -= 22; // Prevent buying at the absolute ceiling
-      shortReasons.push('Bollinger Reversal: Price touching Upper Band (Overbought exhaustion zone)');
-    // Lower Band Touch: Oversold Discount -> High-probability LONG bounce!
-    } else if (currentPrice <= bb.lower) {
-      longScore += 18;
-      shortScore -= 22; // Prevent shorting at the absolute floor
-      longReasons.push('Bollinger Reversal: Price touching Lower Band (Oversold bounce zone)');
-    // Mid-Band Channel Alignment
-    } else if (currentPrice > bb.middle && isEmaBullish) {
-      longScore += 8;
-      longReasons.push('Bollinger Channel: Bullish expansion in upper half of band');
-    } else if (currentPrice < bb.middle && isEmaBearish) {
-      shortScore += 8;
-      shortReasons.push('Bollinger Channel: Bearish expansion in lower half of band');
+  // In Bearish Trend: Reward counter-rally into EMA 21 resistance
+  if (shortScore > 0) {
+    if (isAtEma21Pocket && currentPrice <= ema21 * 1.002) {
+      shortScore += 22;
+      shortReasons.push('Value Entry: Bearish rally into EMA 21 resistance pocket');
+    } else if (distToEma21 > minAtr * 2.2 && currentPrice < ema21) {
+      shortScore -= 25; // Overextended, NEVER chase red candles!
     }
   }
 
   // ==========================================
-  // 4. RSI MOMENTUM & MEAN REVERSION (Sweet Spot & Overbought/Oversold)
-  // ==========================================
-  if (rsi !== null && rsi !== undefined) {
-    // Overbought (>68): Mean-reversion SHORT scalp, heavy penalty for LONG
-    if (rsi >= 68) {
-      shortScore += 18;
-      longScore -= 25; // Never buy into overbought ceiling!
-      shortReasons.push(`RSI Overbought (${rsi.toFixed(1)}): Exhaustion pullback favorable for short`);
-    // Oversold (<32): Mean-reversion LONG bounce, heavy penalty for SHORT
-    } else if (rsi <= 32) {
-      longScore += 18;
-      shortScore -= 25; // Never short into oversold floor!
-      longReasons.push(`RSI Oversold (${rsi.toFixed(1)}): Discount bounce favorable for long`);
-    // Bullish momentum runway (42 - 62): Optimal high-probability scalp zone
-    } else if (rsi >= 42 && rsi <= 62) {
-      longScore += 18;
-      longReasons.push(`RSI Sweet Zone (${rsi.toFixed(1)}): High-probability momentum runway`);
-    // Bearish momentum runway (38 - 58): Optimal short scalp zone
-    } else if (rsi >= 38 && rsi <= 58) {
-      shortScore += 18;
-      shortReasons.push(`RSI Sweet Zone (${rsi.toFixed(1)}): High-probability downward runway`);
-    }
-  }
-
-  // ==========================================
-  // 5. CANDLESTICK CONFIRMATION
+  // 3. CANDLESTICK REJECTION & ABSORPTION
   // ==========================================
   if (asset.candles && asset.candles.length >= 2) {
     const lastCandle = asset.candles[asset.candles.length - 1];
     const prevCandle = asset.candles[asset.candles.length - 2];
-    const isGreen = lastCandle.close >= lastCandle.open;
-    const prevIsGreen = prevCandle ? prevCandle.close >= prevCandle.open : isGreen;
+    const range = Math.max(0.00001, lastCandle.high - lastCandle.low);
     const body = Math.abs(lastCandle.close - lastCandle.open);
     const lowerWick = Math.min(lastCandle.open, lastCandle.close) - lastCandle.low;
     const upperWick = lastCandle.high - Math.max(lastCandle.open, lastCandle.close);
+    const lowerRatio = lowerWick / range;
+    const upperRatio = upperWick / range;
+    const isGreen = lastCandle.close >= lastCandle.open;
 
-    if (isGreen) {
-      longScore += 10;
-      shortScore -= 8;
-      longReasons.push('Bullish Candle Impulse: Active buyer pressure');
-      if (lowerWick >= body * 0.25) longScore += 5;
-      if (prevIsGreen) {
-        longScore += 5;
-        shortScore -= 4;
-        longReasons.push('Consecutive Bullish Candles: Sustained buying momentum');
+    if (longScore > 0) {
+      // Pin bar / Hammer rejection wick
+      if (lowerRatio >= 0.35) {
+        longScore += 20;
+        longReasons.push('Bullish Pin Bar: Lower wick confirms buyer absorption');
+      } else if (isGreen && prevCandle && prevCandle.close <= prevCandle.open) {
+        longScore += 12;
+        longReasons.push('Bullish Reversal: Dip bought back up aggressively');
       }
-    } else {
-      shortScore += 10;
-      longScore -= 8;
-      shortReasons.push('Bearish Candle Impulse: Active seller pressure');
-      if (upperWick >= body * 0.25) shortScore += 5;
-      if (!prevIsGreen) {
-        shortScore += 5;
-        longScore -= 4;
-        shortReasons.push('Consecutive Bearish Candles: Sustained selling momentum');
+      // Heavy upper wick in uptrend indicates seller capping
+      if (upperRatio >= 0.40) {
+        longScore -= 20;
+      }
+    }
+
+    if (shortScore > 0) {
+      // Shooting star / inverted rejection wick
+      if (upperRatio >= 0.35) {
+        shortScore += 20;
+        shortReasons.push('Bearish Pin Bar: Upper wick confirms seller rejection');
+      } else if (!isGreen && prevCandle && prevCandle.close >= prevCandle.open) {
+        shortScore += 12;
+        shortReasons.push('Bearish Reversal: Counter-rally rejected by sellers');
+      }
+      // Heavy lower wick in downtrend indicates buyer bounce
+      if (lowerRatio >= 0.40) {
+        shortScore -= 20;
       }
     }
   }
 
   // ==========================================
-  // 6. MACD MOMENTUM CONFIRMATION
+  // 4. RSI RUNWAY & HEADROOM
+  // ==========================================
+  if (rsi !== null && rsi !== undefined) {
+    if (longScore > 0) {
+      if (rsi >= 40 && rsi <= 58) {
+        longScore += 15;
+        longReasons.push(`RSI Reset Zone (${rsi.toFixed(1)}): Pullback reset with upside runway`);
+      } else if (rsi < 36) {
+        longScore += 15;
+        longReasons.push(`RSI Deep Discount (${rsi.toFixed(1)}): Oversold bounce potential`);
+      } else if (rsi >= 66) {
+        longScore -= 30; // Danger zone!
+      }
+    }
+
+    if (shortScore > 0) {
+      if (rsi >= 42 && rsi <= 60) {
+        shortScore += 15;
+        shortReasons.push(`RSI Reset Zone (${rsi.toFixed(1)}): Rally reset with downside runway`);
+      } else if (rsi > 64) {
+        shortScore += 15;
+        shortReasons.push(`RSI Deep Premium (${rsi.toFixed(1)}): Overbought rejection potential`);
+      } else if (rsi <= 34) {
+        shortScore -= 30; // Danger zone!
+      }
+    }
+  }
+
+  // ==========================================
+  // 5. MACD MOMENTUM CONFIRMATION
   // ==========================================
   if (macd) {
-    if (macd.histogram > 0) {
+    if (longScore > 0 && macd.histogram > 0) {
       longScore += 10;
-      shortScore -= 8;
-      longReasons.push('MACD: Positive bullish momentum acceleration');
-    } else if (macd.histogram < 0) {
+      longReasons.push('MACD Momentum: Positive expansion supporting bullish scalp');
+    }
+    if (shortScore > 0 && macd.histogram < 0) {
       shortScore += 10;
-      longScore -= 8;
-      shortReasons.push('MACD: Negative bearish momentum acceleration');
+      shortReasons.push('MACD Momentum: Negative expansion supporting bearish scalp');
+    }
+  }
+
+  // ==========================================
+  // 6. BOLLINGER BANDS
+  // ==========================================
+  if (bb) {
+    if (longScore > 0 && currentPrice <= bb.middle) {
+      longScore += 8;
+      longReasons.push('Bollinger Value: Buying in lower half of volatility band');
+    }
+    if (shortScore > 0 && currentPrice >= bb.middle) {
+      shortScore += 8;
+      shortReasons.push('Bollinger Value: Shorting in upper half of volatility band');
     }
   }
 
