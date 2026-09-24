@@ -480,9 +480,27 @@ app.post('/api/trades/close/:id', async (req, res) => {
     // Check if this is a direct MT5 broker order ticket
     if (id.startsWith('MT5-')) {
       const ticket = id.replace('MT5-', '');
-      const closeRes = await mt5Connector.closePosition({ ticket });
-      agentLoop.log(`✋ Manual MT5 Exit: Ticket #${ticket}`, 'INFO');
-      return res.json({ success: true, closedTrade: { id, ticket, finalPnL: 0 } });
+      const pos = (mt5Connector.openPositions || []).find(p => String(p.ticket) === String(ticket));
+      const symbol = pos ? pos.symbol : undefined;
+      const profit = pos ? Number(Number(pos.profit || 0).toFixed(2)) : 0;
+      const closeRes = await mt5Connector.closePosition({ ticket, symbol });
+      if (closeRes && closeRes.closed > 0) {
+        agentLoop.liveClosedTrades.unshift({
+          id,
+          ticket,
+          symbol: symbol || 'MT5',
+          side: pos ? (pos.type === 'BUY' ? 'LONG' : 'SHORT') : 'LIVE',
+          entryPrice: pos ? pos.priceOpen : 0,
+          exitPrice: pos ? pos.priceCurrent : 0,
+          units: pos ? pos.volume : 0.01,
+          finalPnL: profit,
+          exitReason: 'MANUAL_USER_EXIT',
+          exitTime: new Date().toISOString()
+        });
+        agentLoop.liveRealizedPnL = Number((agentLoop.liveRealizedPnL + profit).toFixed(2));
+      }
+      agentLoop.log(`✋ Manual MT5 Exit: Ticket #${ticket} (Realized: ${profit >= 0 ? '+' : ''}$${profit})`, profit >= 0 ? 'SUCCESS' : 'INFO');
+      return res.json({ success: true, closedTrade: { id, ticket, finalPnL: profit } });
     }
 
     let closed = agentLoop.tradingEngine.closePosition(id, null, 'MANUAL_USER_EXIT', 'Manual user exit via dashboard');

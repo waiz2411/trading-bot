@@ -56,6 +56,8 @@ export class MT5Connector {
     this.lastChecked = new Date().toISOString();
     this.latencyMs = 0;
     this.openPositions = [];
+    this.realizedProfit = 0;
+    this.closedDeals = [];
     this.eaSessions = new Map(); // syncToken -> { syncToken, login, server, accountInfo, pendingOrders, lastHeartbeat }
     this.accountInfo = {
       balance: 10.0,
@@ -186,6 +188,8 @@ export class MT5Connector {
       algoTradingEnabled: this.algoTradingEnabled ?? true,
       accountInfo: this.accountInfo,
       openPositions: this.openPositions || [],
+      realizedProfit: this.realizedProfit !== undefined ? this.realizedProfit : 0,
+      closedDeals: this.closedDeals || [],
       activeEaSessions: this.eaSessions.size
     };
   }
@@ -293,6 +297,12 @@ export class MT5Connector {
         }
         if (Array.isArray(data.positions)) {
           this.openPositions = data.positions;
+        }
+        if (data.realizedProfit !== undefined && data.realizedProfit !== null) {
+          this.realizedProfit = Number(data.realizedProfit);
+        }
+        if (Array.isArray(data.closedDeals)) {
+          this.closedDeals = data.closedDeals;
         }
         this.accountInfo = {
           balance: Number(data.balance || 0),
@@ -611,6 +621,9 @@ export class MT5Connector {
 
       if (res && res.ok) {
         const data = await res.json();
+        if (data.closed > 0 && ticket) {
+          this.openPositions = (this.openPositions || []).filter(p => Number(p.ticket) !== Number(ticket));
+        }
         return data;
       }
       return { success: false };
