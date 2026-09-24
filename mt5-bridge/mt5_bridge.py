@@ -3,6 +3,8 @@ MetaTrader 5 Python Gateway Bridge for NexusQuant
 Runs a local HTTP REST microservice on port 5001 that bridges
 NexusQuant requests directly to your locally installed MetaTrader 5 terminal.
 """
+import time
+import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import MetaTrader5 as mt5
@@ -10,13 +12,42 @@ import MetaTrader5 as mt5
 app = Flask(__name__)
 CORS(app)
 
+def safe_float(val, default=0.0):
+    if val is None:
+        return default
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
+def safe_int(val, default=0):
+    if val is None:
+        return default
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return default
+
+def ensure_mt5(login=None, password=None, server=None):
+    term = mt5.terminal_info()
+    curr_acc = mt5.account_info()
+
+    if login and server and password:
+        login_int = int(login) if str(login).isdigit() else login
+        if curr_acc is None or str(curr_acc.login) != str(login):
+            print(f"[*] Switching/Logging into MT5 account #{login} on {server}...")
+            mt5.initialize(login=login_int, password=str(password), server=str(server))
+            return
+
+    if term is None or curr_acc is None:
+        mt5.initialize()
+
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ONLINE', 'bridge': 'MT5-Python-Bridge', 'port': 5001})
 
 @app.route('/api/mt5/status', methods=['GET', 'POST'])
 def status():
-    mt5.initialize()
     data = {}
     if request.is_json and request.json:
         data = request.json
@@ -25,12 +56,7 @@ def status():
     password = data.get('password')
     server = data.get('server')
 
-    if login and server and password:
-        login_int = int(login) if str(login).isdigit() else login
-        current_acc = mt5.account_info()
-        # Only re-initialize if not already logged into this account
-        if current_acc is None or str(current_acc.login) != str(login):
-            mt5.initialize(login=login_int, password=str(password), server=str(server))
+    ensure_mt5(login, password, server)
 
     account_info = mt5.account_info()
     if account_info is None:
@@ -42,27 +68,63 @@ def status():
     terminal_info = mt5.terminal_info()
     algo_allowed = bool(terminal_info.trade_allowed) if terminal_info else True
 
-    # Retrieve live open positions
+    # Retrieve live open positions with multi-attempt fallback
     open_positions = []
+    positions = None
     try:
-        positions = mt5.positions_get()
+        for attempt in range(3):
+            positions = mt5.positions_get()
+            if positions is not None and len(positions) > 0:
+                break
+            # Try with group filter
+            positions = mt5.positions_get(group="*")
+            if positions is not None and len(positions) > 0:
+                break
+            time.sleep(0.06)
+
+        if positions is None:
+            # Check if total positions is reported by terminal
+            tot = mt5.positions_total()
+            print(f"[Positions] positions_get returned None (positions_total={tot}). MT5 last error: {mt5.last_error()}")
+        elif len(positions) == 0:
+            tot = mt5.positions_total()
+            if tot and tot > 0:
+                print(f"[Positions] positions_total={tot} but positions_get was empty. Retrying...")
+                time.sleep(0.1)
+                positions = mt5.positions_get(group="*") or mt5.positions_get()
+
         if positions:
+            now_ts = int(time.time())
             for p in positions:
-                broker_profit = round(float(p.profit) + float(getattr(p, 'swap', 0.0)), 2)
-                open_positions.append({
-                    'ticket': int(p.ticket),
-                    'symbol': str(p.symbol),
-                    'type': 'BUY' if p.type == mt5.ORDER_TYPE_BUY else 'SELL',
-                    'volume': float(p.volume),
-                    'priceOpen': float(p.price_open),
-                    'priceCurrent': float(getattr(p, 'price_current', p.price_open)),
-                    'sl': float(p.sl) if p.sl else 0.0,
-                    'tp': float(p.tp) if p.tp else 0.0,
-                    'profit': broker_profit,
-                    'time': int(getattr(p, 'time', 0)),
-                    'timeMsc': int(getattr(p, 'time_msc', 0)),
-                    'comment': str(p.comment)
-                })
+                try:
+                    p_profit = safe_float(getattr(p, 'profit', 0.0))
+                    p_swap = safe_float(getattr(p, 'swap', 0.0))
+                    broker_profit = round(p_profit + p_swap, 2)
+                    open_price = safe_float(getattr(p, 'price_open', 0.0))
+                    curr_price = safe_float(getattr(p, 'price_current', 0.0), default=open_price)
+                    raw_symbol = str(getattr(p, 'symbol', '') or '')
+                    pos_type = safe_int(getattr(p, 'type', 0))
+                    side_str = 'BUY' if pos_type in (mt5.ORDER_TYPE_BUY, 0) else 'SELL'
+                    pos_time = safe_int(getattr(p, 'time', 0))
+                    age_seconds = max(0, now_ts - pos_time) if pos_time > 0 else 0
+
+                    open_positions.append({
+                        'ticket': safe_int(getattr(p, 'ticket', 0)),
+                        'symbol': raw_symbol,
+                        'type': side_str,
+                        'volume': safe_float(getattr(p, 'volume', 0.01)),
+                        'priceOpen': open_price,
+                        'priceCurrent': curr_price,
+                        'sl': safe_float(getattr(p, 'sl', 0.0)),
+                        'tp': safe_float(getattr(p, 'tp', 0.0)),
+                        'profit': broker_profit,
+                        'time': pos_time,
+                        'timeMsc': safe_int(getattr(p, 'time_msc', 0)),
+                        'ageSeconds': age_seconds,
+                        'comment': str(getattr(p, 'comment', '') or '')
+                    })
+                except Exception as pos_err:
+                    print(f"[Positions] Error parsing position: {pos_err}")
     except Exception as e:
         print(f"[Status] Error fetching positions: {e}")
 
@@ -70,53 +132,64 @@ def status():
     deals_history = []
     total_realized_profit = 0.0
     try:
-        import datetime
         from_date = datetime.datetime.now() - datetime.timedelta(days=7)
         deals = mt5.history_deals_get(from_date, datetime.datetime.now())
         if deals:
             for d in deals:
                 if getattr(d, 'entry', None) in (mt5.DEAL_ENTRY_OUT, mt5.DEAL_ENTRY_INOUT, 1, 2):
-                    deal_profit = round(float(getattr(d, 'profit', 0.0)) + float(getattr(d, 'swap', 0.0)) + float(getattr(d, 'commission', 0.0)), 2)
+                    deal_profit = round(
+                        safe_float(getattr(d, 'profit', 0.0)) +
+                        safe_float(getattr(d, 'swap', 0.0)) +
+                        safe_float(getattr(d, 'commission', 0.0)),
+                        2
+                    )
                     total_realized_profit += deal_profit
                     deals_history.append({
-                        'id': f"MT5-{d.ticket}",
-                        'ticket': int(d.ticket),
-                        'order': int(getattr(d, 'order', d.ticket)),
-                        'positionId': int(getattr(d, 'position_id', d.ticket)),
-                        'time': int(getattr(d, 'time', 0)),
-                        'symbol': str(d.symbol),
-                        'side': 'BUY' if getattr(d, 'type', 0) == mt5.DEAL_TYPE_BUY else 'SELL',
-                        'volume': float(getattr(d, 'volume', 0.01)),
-                        'units': float(getattr(d, 'volume', 0.01)),
-                        'price': float(getattr(d, 'price', 0.0)),
+                        'id': f"MT5-{safe_int(d.ticket)}",
+                        'ticket': safe_int(d.ticket),
+                        'order': safe_int(getattr(d, 'order', d.ticket)),
+                        'positionId': safe_int(getattr(d, 'position_id', d.ticket)),
+                        'time': safe_int(getattr(d, 'time', 0)),
+                        'symbol': str(getattr(d, 'symbol', '') or ''),
+                        'side': 'BUY' if safe_int(getattr(d, 'type', 0)) == mt5.DEAL_TYPE_BUY else 'SELL',
+                        'volume': safe_float(getattr(d, 'volume', 0.01)),
+                        'units': safe_float(getattr(d, 'volume', 0.01)),
+                        'price': safe_float(getattr(d, 'price', 0.0)),
                         'profit': deal_profit,
                         'finalPnL': deal_profit,
                         'exitReason': 'BROKER_CLOSE',
-                        'comment': str(getattr(d, 'comment', ''))
+                        'comment': str(getattr(d, 'comment', '') or '')
                     })
     except Exception as e:
         print(f"[Deals] Error retrieving deals history: {e}")
 
+    # Log clean summary to terminal
+    print(f"[Status] Acc #{account_info.login} ({account_info.server}): Bal=${account_info.balance:.2f}, Eq=${account_info.equity:.2f}, Margin=${account_info.margin:.2f} | Open={len(open_positions)} deals={len(deals_history)}")
+    if open_positions:
+        for op in open_positions:
+            print(f"   -> #{op['ticket']}: {op['symbol']} {op['type']} {op['volume']} lots @ {op['priceOpen']} | PnL: ${op['profit']}")
+
     return jsonify({
         'success': True,
         'login': account_info.login,
-        'balance': float(account_info.balance),
-        'equity': float(account_info.equity),
-        'margin': float(account_info.margin),
-        'freeMargin': float(account_info.margin_free),
-        'leverage': int(account_info.leverage),
-        'currency': account_info.currency,
-        'company': account_info.company,
-        'server': account_info.server,
+        'balance': safe_float(account_info.balance),
+        'equity': safe_float(account_info.equity),
+        'margin': safe_float(account_info.margin),
+        'freeMargin': safe_float(account_info.margin_free),
+        'leverage': safe_int(account_info.leverage, 500),
+        'currency': str(getattr(account_info, 'currency', 'USD')),
+        'company': str(getattr(account_info, 'company', 'Exness')),
+        'server': str(getattr(account_info, 'server', '')),
         'algoTradingEnabled': algo_allowed,
         'positions': open_positions,
         'realizedProfit': round(total_realized_profit, 2),
-        'closedDeals': deals_history
+        'closedDeals': deals_history,
+        'serverTime': int(time.time())
     })
 
 @app.route('/api/mt5/order', methods=['POST'])
 def place_order():
-    mt5.initialize()
+    ensure_mt5()
     data = request.json or {}
     symbol = data.get('symbol', 'BTCUSD')
     side = (data.get('side') or data.get('action') or 'BUY').upper()
@@ -277,7 +350,7 @@ def place_order():
 
 @app.route('/api/mt5/close', methods=['POST'])
 def close_order():
-    mt5.initialize()
+    ensure_mt5()
     data = request.json or {}
     symbol = data.get('symbol')
     ticket = data.get('ticket')

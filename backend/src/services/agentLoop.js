@@ -79,11 +79,17 @@ export class AutonomousAgentLoop {
             });
           }
           if (user.brokerConnections.mt5) {
+            const activeGw = mt5Connector.gatewayUrl;
+            const userGw = user.brokerConnections.mt5.gatewayUrl;
+            const gwToUse = (activeGw && !activeGw.includes('localhost') && !activeGw.includes('taken-background'))
+              ? activeGw
+              : ((userGw && !userGw.includes('localhost') && !userGw.includes('taken-background')) ? userGw : (activeGw || process.env.MT5_GATEWAY_URL));
+
             mt5Connector.configure({
               login: user.brokerConnections.mt5.login || '',
               password: user.brokerConnections.mt5.password || '',
               server: user.brokerConnections.mt5.server || '',
-              gatewayUrl: user.brokerConnections.mt5.gatewayUrl || process.env.MT5_GATEWAY_URL || 'https://taken-background-implemented-constitute.trycloudflare.com',
+              gatewayUrl: gwToUse,
               connected: user.brokerConnections.mt5.connected,
               status: user.brokerConnections.mt5.status,
               accountInfo: user.brokerConnections.mt5.accountInfo
@@ -629,10 +635,11 @@ export class AutonomousAgentLoop {
           if (!ticket || handledTickets.has(ticket)) continue;
           handledTickets.add(ticket);
 
-          const openTimeMs = p.time ? (p.time * 1000) : (p.openTime ? new Date(p.openTime).getTime() : 0);
-          const actualAgeMs = openTimeMs > 0 ? (Date.now() - openTimeMs) : 0;
+          const actualAgeMs = p.ageSeconds !== undefined
+            ? (p.ageSeconds * 1000)
+            : (p.time ? Math.max(0, Date.now() - (p.time * 1000)) : (p.openTime ? Math.max(0, Date.now() - new Date(p.openTime).getTime()) : 0));
 
-          if (actualAgeMs >= 300000) {
+          if (actualAgeMs >= 300000 && actualAgeMs < 86400000) {
             this.log(`⏱️ [MT5 LIVE] 5-minute scalp expiry triggered for Ticket #${ticket} (${p.symbol}, open for ${Math.round(actualAgeMs / 60000)}m). Auto-closing on Exness MT5...`, 'WARN');
             mt5Connector.closePosition({ symbol: p.symbol, ticket }).then(res => {
               if (res && res.closed > 0) {
@@ -723,7 +730,10 @@ export class AutonomousAgentLoop {
           const livePrice = p.priceCurrent || p.priceOpen;
           const openTimeStr = p.time ? new Date(p.time * 1000).toISOString() : new Date().toISOString();
           const leverage = mt5Status.accountInfo.leverage || 500;
-          const marginEst = Number((p.volume * 100000 / leverage).toFixed(2));
+          const symUpper = (p.symbol || '').toUpperCase();
+          const isForex = (symUpper.length === 6 || symUpper.includes('/')) && !symUpper.includes('BTC') && !symUpper.includes('ETH') && !symUpper.includes('XAU') && !symUpper.includes('GOLD');
+          const notionalVal = Number((p.volume * (isForex ? 100000 : livePrice)).toFixed(2));
+          const marginEst = Number((notionalVal / leverage).toFixed(2));
           const pnlVal = p.profit !== undefined ? Number(Number(p.profit).toFixed(2)) : 0;
           const roe = marginEst > 0 ? Number(((pnlVal / marginEst) * 100).toFixed(1)) : 0;
 
@@ -732,14 +742,14 @@ export class AutonomousAgentLoop {
             ticket: p.ticket,
             symbol: p.symbol,
             name: p.symbol,
-            category: p.symbol.startsWith('BTC') || p.symbol.startsWith('ETH') ? 'Crypto' : 'Forex',
+            category: symUpper.includes('BTC') || symUpper.includes('ETH') ? 'Crypto' : (symUpper.includes('XAU') ? 'Commodity' : 'Forex'),
             side: p.type === 'BUY' ? 'LONG' : 'SHORT',
             entryPrice: p.priceOpen,
             currentPrice: livePrice,
             stopLoss: p.sl || null,
             takeProfit: p.tp || null,
             units: p.volume,
-            notional: Number((p.volume * (p.symbol.includes('USD') ? 100000 : livePrice)).toFixed(2)),
+            notional: notionalVal,
             unrealizedPnL: pnlVal,
             unrealizedPnLPct: roe,
             roePercent: roe,
@@ -747,10 +757,20 @@ export class AutonomousAgentLoop {
             margin: marginEst,
             maxHoldMinutes: 5,
             openTime: openTimeStr,
+            ageSeconds: p.ageSeconds,
             isLiveBrokerOrder: true,
             comment: p.comment
           };
         });
+
+        // Resolve active positions: broker terminal positions are authoritative
+        let activePositionsList = terminalPositions;
+        if (activePositionsList.length === 0 && this.marginTradingEngine) {
+          const engineWithTicket = (this.marginTradingEngine.activePositions || []).filter(p => !!p.ticket);
+          if (engineWithTicket.length > 0) {
+            activePositionsList = engineWithTicket;
+          }
+        }
 
         // Live Realized PnL & Closed Deals isolated from demo paper trading
         const liveRealized = (mt5Status.realizedProfit !== undefined && mt5Status.realizedProfit !== null)
@@ -775,7 +795,7 @@ export class AutonomousAgentLoop {
           realizedPnL: liveRealized,
           totalPnL: Number((liveRealized + pnl).toFixed(2)),
           totalPnLPct: bal > 0 ? Number(((pnl / bal) * 100).toFixed(2)) : 0,
-          activePositions: terminalPositions,
+          activePositions: activePositionsList,
           closedTrades: liveClosed
         };
       } else {

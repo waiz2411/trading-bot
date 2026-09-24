@@ -138,6 +138,17 @@ app.post('/api/broker/mt5/register-tunnel', (req, res) => {
       const cleanUrl = url.trim().replace(/\/+$/, '');
       mt5Connector.gatewayUrl = cleanUrl;
       console.log(`[MT5 Bridge] Registered public gateway URL: ${cleanUrl}`);
+
+      // Propagate registered gateway URL across user profiles to prevent overwrite
+      if (authService.users) {
+        for (const u of Object.values(authService.users)) {
+          if (u.brokerConnections && u.brokerConnections.mt5) {
+            u.brokerConnections.mt5.gatewayUrl = cleanUrl;
+          }
+        }
+        authService.saveUsers();
+      }
+
       mt5Connector.tryGatewayConnection().catch(() => {});
       return res.json({ success: true, gatewayUrl: cleanUrl });
     }
