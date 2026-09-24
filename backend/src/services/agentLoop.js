@@ -47,6 +47,7 @@ export class AutonomousAgentLoop {
     this.spotCooldowns = new Map();
     this.liveRealizedPnL = 0;
     this.liveClosedTrades = [];
+    this.livePositionFirstSeen = new Map();
 
     this.log('⚡ Autonomous Agent initialized: Dual-Account Engine (Margin Scalper 500x + Pure Spot 100% Crypto). Bot is OFF by default.');
   }
@@ -81,9 +82,9 @@ export class AutonomousAgentLoop {
           if (user.brokerConnections.mt5) {
             const activeGw = mt5Connector.gatewayUrl;
             const userGw = user.brokerConnections.mt5.gatewayUrl;
-            const gwToUse = (activeGw && !activeGw.includes('localhost') && !activeGw.includes('taken-background'))
-              ? activeGw
-              : ((userGw && !userGw.includes('localhost') && !userGw.includes('taken-background')) ? userGw : (activeGw || process.env.MT5_GATEWAY_URL));
+            const gwToUse = (userGw && !userGw.includes('localhost'))
+              ? userGw
+              : ((activeGw && !activeGw.includes('localhost')) ? activeGw : (process.env.MT5_GATEWAY_URL || activeGw));
 
             mt5Connector.configure({
               login: user.brokerConnections.mt5.login || '',
@@ -629,20 +630,27 @@ export class AutonomousAgentLoop {
       if (this.currentMode === 'LIVE' && mt5Connector.connected) {
         const openPositions = Array.isArray(mt5Connector.openPositions) ? mt5Connector.openPositions : [];
         const handledTickets = new Set();
+        const now = Date.now();
 
         for (const p of openPositions) {
           const ticket = p.ticket;
           if (!ticket || handledTickets.has(ticket)) continue;
           handledTickets.add(ticket);
 
-          const actualAgeMs = p.ageSeconds !== undefined
-            ? (p.ageSeconds * 1000)
-            : (p.time ? Math.max(0, Date.now() - (p.time * 1000)) : (p.openTime ? Math.max(0, Date.now() - new Date(p.openTime).getTime()) : 0));
+          if (!this.livePositionFirstSeen.has(ticket)) {
+            this.livePositionFirstSeen.set(ticket, now);
+          }
 
-          if (actualAgeMs >= 300000 && actualAgeMs < 86400000) {
+          const wallAgeMs = now - (this.livePositionFirstSeen.get(ticket) || now);
+          const bridgeAgeMs = (p.ageSeconds !== undefined ? p.ageSeconds : 0) * 1000;
+          const posTimeAgeMs = p.time ? Math.max(0, now - (p.time * 1000)) : 0;
+          const actualAgeMs = Math.max(wallAgeMs, bridgeAgeMs, posTimeAgeMs);
+
+          if (actualAgeMs >= 300000) {
             this.log(`⏱️ [MT5 LIVE] 5-minute scalp expiry triggered for Ticket #${ticket} (${p.symbol}, open for ${Math.round(actualAgeMs / 60000)}m). Auto-closing on Exness MT5...`, 'WARN');
             mt5Connector.closePosition({ symbol: p.symbol, ticket }).then(res => {
               if (res && res.closed > 0) {
+                this.livePositionFirstSeen.delete(ticket);
                 const brokerProfit = Number(Number(p.profit || 0).toFixed(2));
                 this.log(`📡 [MT5 LIVE] Expired scalp closed on Exness MT5 (Ticket #${ticket}). Realized P/L: ${brokerProfit >= 0 ? '+' : ''}$${brokerProfit}`, brokerProfit >= 0 ? 'SUCCESS' : 'INFO');
                 this.liveClosedTrades.unshift({
@@ -661,6 +669,14 @@ export class AutonomousAgentLoop {
                 this.marginTradingEngine.activePositions = (this.marginTradingEngine.activePositions || []).filter(ap => ap.ticket !== ticket);
               }
             }).catch(() => {});
+          }
+        }
+
+        // Clean up tickets that are no longer open
+        const currentOpenTickets = new Set(openPositions.map(p => p.ticket));
+        for (const [t] of this.livePositionFirstSeen.entries()) {
+          if (!currentOpenTickets.has(t)) {
+            this.livePositionFirstSeen.delete(t);
           }
         }
       }

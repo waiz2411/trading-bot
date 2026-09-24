@@ -12,6 +12,8 @@ import MetaTrader5 as mt5
 app = Flask(__name__)
 CORS(app)
 
+position_first_seen = {}
+
 def safe_float(val, default=0.0):
     if val is None:
         return default
@@ -168,6 +170,10 @@ def status():
             now_ts = int(time.time())
             for p in positions:
                 try:
+                    ticket_id = safe_int(getattr(p, 'ticket', 0))
+                    if ticket_id not in position_first_seen:
+                        position_first_seen[ticket_id] = now_ts
+
                     p_profit = safe_float(getattr(p, 'profit', 0.0))
                     p_swap = safe_float(getattr(p, 'swap', 0.0))
                     broker_profit = round(p_profit + p_swap, 2)
@@ -177,10 +183,20 @@ def status():
                     pos_type = safe_int(getattr(p, 'type', 0))
                     side_str = 'BUY' if pos_type in (mt5.ORDER_TYPE_BUY, 0) else 'SELL'
                     pos_time = safe_int(getattr(p, 'time', 0))
-                    age_seconds = max(0, now_ts - pos_time) if pos_time > 0 else 0
+
+                    # Accurate age: compare against broker tick time or wall-clock tracking
+                    ref_tick = mt5.symbol_info_tick(raw_symbol) if raw_symbol else None
+                    server_now = safe_int(getattr(ref_tick, 'time', 0))
+                    if server_now > 0 and pos_time > 0:
+                        calc_age = max(0, server_now - pos_time)
+                    else:
+                        calc_age = max(0, now_ts - pos_time) if pos_time > 0 else 0
+
+                    wall_age = max(0, now_ts - position_first_seen[ticket_id])
+                    age_seconds = max(calc_age, wall_age)
 
                     open_positions.append({
-                        'ticket': safe_int(getattr(p, 'ticket', 0)),
+                        'ticket': ticket_id,
                         'symbol': raw_symbol,
                         'type': side_str,
                         'volume': safe_float(getattr(p, 'volume', 0.01)),
@@ -199,15 +215,17 @@ def status():
     except Exception as e:
         print(f"[Status] Error fetching positions: {e}")
 
-    # Retrieve recent closed deals from broker history (last 7 days)
+    # Retrieve recent closed deals from broker history (last 30 days)
     deals_history = []
     total_realized_profit = 0.0
     try:
-        from_date = datetime.datetime.now() - datetime.timedelta(days=7)
-        deals = mt5.history_deals_get(from_date, datetime.datetime.now())
+        from_date = datetime.datetime.now() - datetime.timedelta(days=30)
+        to_date = datetime.datetime.now() + datetime.timedelta(days=1)
+        deals = mt5.history_deals_get(from_date, to_date)
         if deals:
             for d in deals:
-                if getattr(d, 'entry', None) in (mt5.DEAL_ENTRY_OUT, mt5.DEAL_ENTRY_INOUT, 1, 2):
+                deal_type = safe_int(getattr(d, 'type', -1))
+                if deal_type in (mt5.DEAL_TYPE_BUY, mt5.DEAL_TYPE_SELL, 0, 1) and getattr(d, 'entry', None) in (mt5.DEAL_ENTRY_OUT, mt5.DEAL_ENTRY_INOUT, 1, 2):
                     deal_profit = round(
                         safe_float(getattr(d, 'profit', 0.0)) +
                         safe_float(getattr(d, 'swap', 0.0)) +
@@ -222,7 +240,7 @@ def status():
                         'positionId': safe_int(getattr(d, 'position_id', d.ticket)),
                         'time': safe_int(getattr(d, 'time', 0)),
                         'symbol': str(getattr(d, 'symbol', '') or ''),
-                        'side': 'BUY' if safe_int(getattr(d, 'type', 0)) == mt5.DEAL_TYPE_BUY else 'SELL',
+                        'side': 'BUY' if deal_type == mt5.DEAL_TYPE_BUY else 'SELL',
                         'volume': safe_float(getattr(d, 'volume', 0.01)),
                         'units': safe_float(getattr(d, 'volume', 0.01)),
                         'price': safe_float(getattr(d, 'price', 0.0)),
@@ -424,7 +442,17 @@ def close_order():
     symbol = data.get('symbol')
     ticket = data.get('ticket')
 
-    positions = mt5.positions_get()
+    positions = None
+    target_ticket = int(ticket) if (ticket and str(ticket).isdigit()) else None
+
+    if target_ticket is not None:
+        positions = mt5.positions_get(ticket=target_ticket)
+    if (positions is None or len(positions) == 0) and symbol:
+        target_sym = find_broker_symbol(symbol)
+        positions = mt5.positions_get(symbol=target_sym)
+    if positions is None or len(positions) == 0:
+        positions = mt5.positions_get()
+
     if positions is None or len(positions) == 0:
         return jsonify({'success': True, 'closed': 0, 'message': 'No open positions found.'})
 
@@ -432,7 +460,6 @@ def close_order():
         return str(s).upper().replace('/', '').replace('_', '').replace('.', '').replace('-M', '').replace('M', '').replace('=X', '')
 
     target_norm = normalize_sym(symbol) if symbol else None
-    target_ticket = int(ticket) if (ticket and str(ticket).isdigit()) else None
 
     closed_count = 0
     for pos in positions:
@@ -447,6 +474,9 @@ def close_order():
 
         close_type = mt5.ORDER_TYPE_SELL if pos.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY
 
+        # Make sure symbol is selected and visible
+        mt5.symbol_select(pos.symbol, True)
+
         # Try multiple filling modes until successful
         filling_modes = [mt5.ORDER_FILLING_IOC, mt5.ORDER_FILLING_RETURN, mt5.ORDER_FILLING_FOK]
         sym_info = mt5.symbol_info(pos.symbol)
@@ -458,6 +488,9 @@ def close_order():
 
         for fm in filling_modes:
             tick = mt5.symbol_info_tick(pos.symbol)
+            if tick is None:
+                time.sleep(0.06)
+                tick = mt5.symbol_info_tick(pos.symbol)
             if tick is None:
                 continue
             close_price = tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask
@@ -479,6 +512,7 @@ def close_order():
             if res and res.retcode == mt5.TRADE_RETCODE_DONE:
                 closed_count += 1
                 print(f"[Close] Position #{pos.ticket} ({pos.symbol}) closed successfully with filling mode {fm}.")
+                position_first_seen.pop(int(pos.ticket), None)
                 break
             else:
                 print(f"[Close] Position #{pos.ticket} attempt failed (mode {fm}, retcode {getattr(res, 'retcode', 'None')}: {getattr(res, 'comment', 'error')})")

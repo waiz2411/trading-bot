@@ -46,7 +46,7 @@ export class MT5Connector {
     this.login = '474621142';
     this.password = 'Test@123';
     this.server = 'Exness-MT5Trial15';
-    this.gatewayUrl = process.env.MT5_GATEWAY_URL || 'https://taken-background-implemented-constitute.trycloudflare.com';
+    this.gatewayUrl = process.env.MT5_GATEWAY_URL || 'https://abu-solve-changing-cards.trycloudflare.com';
     this.metaApiToken = process.env.META_API_TOKEN || '';
     this.metaApiAccountId = '';
     this.connectionType = 'GATEWAY'; // Default to Cloud Gateway Bridge
@@ -60,10 +60,10 @@ export class MT5Connector {
     this.closedDeals = [];
     this.eaSessions = new Map(); // syncToken -> { syncToken, login, server, accountInfo, pendingOrders, lastHeartbeat }
     this.accountInfo = {
-      balance: 10.0,
-      equity: 8.5,
-      margin: 0,
-      freeMargin: 8.5,
+      balance: 60.53,
+      equity: 58.92,
+      margin: 9.03,
+      freeMargin: 49.89,
       leverage: 500,
       currency: 'USD',
       company: 'Exness Technologies Ltd',
@@ -92,7 +92,7 @@ export class MT5Connector {
     if (gatewayUrl && !gatewayUrl.includes('localhost')) {
       this.gatewayUrl = gatewayUrl.trim();
     } else if (!this.gatewayUrl || this.gatewayUrl.includes('localhost')) {
-      this.gatewayUrl = process.env.MT5_GATEWAY_URL || 'https://taken-background-implemented-constitute.trycloudflare.com';
+      this.gatewayUrl = process.env.MT5_GATEWAY_URL || 'https://abu-solve-changing-cards.trycloudflare.com';
     }
     if (metaApiToken !== undefined && metaApiToken.trim()) {
       this.metaApiToken = metaApiToken.trim();

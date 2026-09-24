@@ -25,8 +25,8 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   const { currentPrice, ema9, ema21, ema50, ema200, rsi, macd, atr, bb } = technicals;
 
   // Constructive baseline score (active market participation)
-  let longScore = 25;
-  let shortScore = 25;
+  let longScore = 32;
+  let shortScore = 32;
   const longReasons = [];
   const shortReasons = [];
 
@@ -84,54 +84,55 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   }
 
   // ==========================================
-  // 3. BOLLINGER BAND VOLATILITY (Trend & Momentum Following)
+  // 3. BOLLINGER BAND VOLATILITY & MEAN REVERSION
   // ==========================================
   if (bb) {
-    // Upper half = Bullish channel expansion; Lower half = Bearish channel expansion
-    if (currentPrice > bb.middle) {
-      longScore += 12;
-      shortScore -= 10;
+    // Upper Band Touch: Overbought Exhaustion -> High-probability SHORT reversal!
+    if (currentPrice >= bb.upper) {
+      shortScore += 16;
+      longScore -= 14; // Prevent buying at the absolute ceiling
+      shortReasons.push('Bollinger Reversal: Price touching Upper Band (Overbought exhaustion zone)');
+    // Lower Band Touch: Oversold Discount -> High-probability LONG bounce!
+    } else if (currentPrice <= bb.lower) {
+      longScore += 16;
+      shortScore -= 14; // Prevent shorting at the absolute floor
+      longReasons.push('Bollinger Reversal: Price touching Lower Band (Oversold bounce zone)');
+    // Mid-Band Trends: Expansion inside channels
+    } else if (currentPrice > bb.middle) {
+      longScore += 10;
+      shortScore -= 6;
       longReasons.push('Bollinger Channel: Bullish expansion in upper half of band');
     } else if (currentPrice < bb.middle) {
-      shortScore += 12;
-      longScore -= 10;
+      shortScore += 10;
+      longScore -= 6;
       shortReasons.push('Bollinger Channel: Bearish expansion in lower half of band');
-    }
-
-    // Walking the bands: Breakouts / Thrusts (Trend momentum, NEVER counter-trade)
-    if (currentPrice >= bb.upper) {
-      longScore += 12;
-      shortScore -= 18; // NEVER short an upper band breakout
-      longReasons.push('Upper Band Breakout: Strong bullish volatility thrust');
-    } else if (currentPrice <= bb.lower) {
-      shortScore += 12;
-      longScore -= 18; // NEVER buy a lower band breakdown
-      shortReasons.push('Lower Band Breakdown: Strong bearish volatility cascade');
     }
   }
 
   // ==========================================
-  // 4. RSI MOMENTUM & DIRECTIONAL SWEET SPOT
+  // 4. RSI MOMENTUM & MEAN REVERSION (Sweet Spot & Overbought/Oversold)
   // ==========================================
   if (rsi !== null && rsi !== undefined) {
-    if (rsi >= 50 && rsi <= 68) {
-      longScore += 18;
-      shortScore -= 12;
-      longReasons.push(`RSI Bullish Momentum (${rsi.toFixed(1)}): Healthy upward runway`);
-    } else if (rsi > 68) {
-      // Strong bullish velocity: support long, strictly forbid counter-trend shorting
-      longScore += 14;
-      shortScore -= 20;
-      longReasons.push(`RSI High Velocity (${rsi.toFixed(1)}): Strong bullish power`);
-    } else if (rsi >= 32 && rsi < 50) {
+    // Overbought (>68): Mean-reversion SHORT scalp
+    if (rsi >= 68) {
       shortScore += 18;
-      longScore -= 12;
-      shortReasons.push(`RSI Bearish Momentum (${rsi.toFixed(1)}): Active downward pressure`);
-    } else if (rsi < 32) {
-      // Strong bearish cascade: support short, strictly forbid counter-trend buying
-      shortScore += 14;
-      longScore -= 20;
-      shortReasons.push(`RSI Downward Cascade (${rsi.toFixed(1)}): Strong bearish selling`);
+      longScore -= 16;
+      shortReasons.push(`RSI Overbought (${rsi.toFixed(1)}): Exhaustion pullback favorable for short`);
+    // Oversold (<32): Mean-reversion LONG bounce
+    } else if (rsi <= 32) {
+      longScore += 18;
+      shortScore -= 16;
+      longReasons.push(`RSI Oversold (${rsi.toFixed(1)}): Discount bounce favorable for long`);
+    // Bullish momentum runway (50 - 68)
+    } else if (rsi >= 50 && rsi < 68) {
+      longScore += 16;
+      shortScore -= 8;
+      longReasons.push(`RSI Bullish Runway (${rsi.toFixed(1)}): Healthy upward momentum`);
+    // Bearish momentum runway (32 - 50)
+    } else if (rsi > 32 && rsi < 50) {
+      shortScore += 16;
+      longScore -= 8;
+      shortReasons.push(`RSI Bearish Runway (${rsi.toFixed(1)}): Healthy downward momentum`);
     }
   }
 
@@ -222,8 +223,8 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   const targetDistance = Number((stopDistance * targetRR).toFixed(asset.decimals || 4));
   const effectiveRR = Number((targetDistance / stopDistance).toFixed(2));
 
-  // Active Scalping Threshold (Default 50% for fast, frequent executions across 78 pairs)
-  const SNIPER_THRESHOLD = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 50;
+  // Active Scalping Threshold (Default 48% for fast, frequent executions across 78 pairs)
+  const SNIPER_THRESHOLD = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 48;
 
   // Clear directional edge requirement (prevent coin-flipping or taking conflicting signals)
   const isLongWinning = finalLongConfidence >= SNIPER_THRESHOLD && (

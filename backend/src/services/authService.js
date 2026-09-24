@@ -84,7 +84,7 @@ export class AuthService {
       };
     }
 
-const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://taken-background-implemented-constitute.trycloudflare.com';
+const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://abu-solve-changing-cards.trycloudflare.com';
 
     if (!this.users['test@gmail.com']) {
       this.users['test@gmail.com'] = {
@@ -137,10 +137,10 @@ const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://taken-backg
           status: 'CONNECTED',
           lastChecked: new Date().toISOString(),
           accountInfo: {
-            balance: 10.0,
-            equity: 8.5,
-            margin: 0,
-            freeMargin: 8.5,
+            balance: 60.53,
+            equity: 58.92,
+            margin: 9.03,
+            freeMargin: 49.89,
             leverage: 500,
             currency: 'USD',
             company: 'Exness Technologies Ltd',
