@@ -42,6 +42,76 @@ def ensure_mt5(login=None, password=None, server=None):
     if term is None or curr_acc is None:
         mt5.initialize()
 
+def find_broker_symbol(raw_sym):
+    if not raw_sym:
+        return 'EURUSD'
+    clean = str(raw_sym).upper().strip().replace('=', '').replace('X', '').replace('F', '').replace('/', '').replace('_', '').replace('-', '')
+    if clean.endswith('USDT'):
+        clean = clean[:-1]  # BTCUSDT -> BTCUSD
+
+    # 1. Exact raw or clean match
+    for cand in [raw_sym, clean]:
+        s_info = mt5.symbol_info(cand)
+        if s_info is not None:
+            if not s_info.visible:
+                mt5.symbol_select(cand, True)
+            return cand
+
+    # 2. Crypto short names (e.g. BTC, ETH on Exness)
+    if clean.startswith('BTC'):
+        for cand in ['BTC', 'BTCUSD', 'BTC/USD', 'BTCUSDm', 'BTCm', 'BTCUSDT']:
+            s_info = mt5.symbol_info(cand)
+            if s_info is not None:
+                if not s_info.visible:
+                    mt5.symbol_select(cand, True)
+                return cand
+    if clean.startswith('ETH'):
+        for cand in ['ETH', 'ETHUSD', 'ETH/USD', 'ETHUSDm', 'ETHm', 'ETHUSDT']:
+            s_info = mt5.symbol_info(cand)
+            if s_info is not None:
+                if not s_info.visible:
+                    mt5.symbol_select(cand, True)
+                return cand
+
+    # 3. Forex / Commodities with slashes (e.g. EUR/USD, GBP/USD, XAU/USD)
+    if len(clean) == 6:
+        slash_cand = f"{clean[:3]}/{clean[3:]}"
+        s_info = mt5.symbol_info(slash_cand)
+        if s_info is not None:
+            if not s_info.visible:
+                mt5.symbol_select(slash_cand, True)
+            return slash_cand
+
+    # 4. Standard broker suffixes (m=standard, c=cent, raw, etc.)
+    for suffix in ['m', 'c', '.raw', '_i', '.r', 'z', '_']:
+        cand = clean + suffix
+        s_info = mt5.symbol_info(cand)
+        if s_info is not None:
+            if not s_info.visible:
+                mt5.symbol_select(cand, True)
+            return cand
+
+    # 5. Dynamic search through all symbols in terminal catalog
+    try:
+        all_syms = mt5.symbols_get()
+        if all_syms:
+            for s in all_syms:
+                s_clean = s.name.upper().replace('/', '').replace('_', '').replace('.', '').replace('-', '')
+                if s_clean == clean or s_clean == clean + 'M' or s_clean == clean + 'C' or s_clean == clean + 'Z':
+                    if not s.visible:
+                        mt5.symbol_select(s.name, True)
+                    return s.name
+            for s in all_syms:
+                s_clean = s.name.upper().replace('/', '').replace('_', '').replace('.', '').replace('-', '')
+                if (clean in s_clean and len(s_clean) <= len(clean) + 3) or (s_clean in clean and len(clean) <= len(s_clean) + 3):
+                    if not s.visible:
+                        mt5.symbol_select(s.name, True)
+                    return s.name
+    except Exception as e:
+        print(f"[Symbols] Error searching symbol catalog: {e}")
+
+    return clean
+
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ONLINE', 'bridge': 'MT5-Python-Bridge', 'port': 5001})
@@ -82,16 +152,17 @@ def status():
                 break
             time.sleep(0.06)
 
-        if positions is None:
-            # Check if total positions is reported by terminal
-            tot = mt5.positions_total()
-            print(f"[Positions] positions_get returned None (positions_total={tot}). MT5 last error: {mt5.last_error()}")
-        elif len(positions) == 0:
-            tot = mt5.positions_total()
-            if tot and tot > 0:
-                print(f"[Positions] positions_total={tot} but positions_get was empty. Retrying...")
-                time.sleep(0.1)
-                positions = mt5.positions_get(group="*") or mt5.positions_get()
+        tot = mt5.positions_total()
+        if (positions is None or len(positions) == 0) and tot and tot > 0:
+            print(f"[Positions] positions_total={tot} but positions_get was empty. Scanning common symbols...")
+            for sym_name in ['BTC', 'BTCUSD', 'BTC/USD', 'BTCUSDm', 'EURUSD', 'EUR/USD', 'EURUSDm', 'GBPUSD', 'GBP/USD', 'XAUUSD', 'XAU/USD', 'AUDUSD', 'AUD/USD']:
+                try:
+                    sym_pos = mt5.positions_get(symbol=sym_name)
+                    if sym_pos and len(sym_pos) > 0:
+                        positions = (positions or ()) + sym_pos
+                        print(f"[Positions] Found {len(sym_pos)} open positions for symbol='{sym_name}'")
+                except Exception:
+                    pass
 
         if positions:
             now_ts = int(time.time())
@@ -207,21 +278,19 @@ def place_order():
             'error': "MetaTrader 5 'Algo Trading' is disabled. Please click the 'Algo Trading' button in your MetaTrader 5 toolbar on AWS (or press Ctrl+E) to allow automated trades."
         }), 400
 
-    target_sym = symbol
-    if mt5.symbol_info(target_sym) is None:
-        for suffix in ['m', 'c', '.raw', '_i', '.r']:
-            if mt5.symbol_info(target_sym + suffix) is not None:
-                target_sym = target_sym + suffix
-                break
-
-    symbol_info = mt5.symbol_info(target_sym)
+    target_sym = find_broker_symbol(symbol)
+    symbol_info = mt5.symbol_info(target_sym) if target_sym else None
     if symbol_info is None:
-        return jsonify({'success': False, 'error': f'Symbol {symbol} (or with suffix) not found in Market Watch'}), 400
+        return jsonify({'success': False, 'error': f'Symbol {symbol} (resolved: {target_sym}) not found in broker catalog'}), 400
 
     if not symbol_info.visible:
         mt5.symbol_select(target_sym, True)
+        time.sleep(0.08)
 
     tick = mt5.symbol_info_tick(target_sym)
+    if tick is None:
+        time.sleep(0.1)
+        tick = mt5.symbol_info_tick(target_sym)
     if tick is None:
         return jsonify({'success': False, 'error': f'Cannot get live tick for {target_sym}'}), 400
 
