@@ -291,10 +291,13 @@ export class AutonomousAgentLoop {
         const isMarginCooldown = (this.assetCooldowns.get(asset.symbol) || 0) > 0;
         const isSpotCooldown = (this.spotCooldowns.get(asset.symbol) || 0) > 0;
 
-        // 3A. Margin Scalper Confluence: Strict Low-Spread Institutional Universe for 80%+ Win Rate
-        // Only trade high-liquidity, tight-spread majors & Gold. Strictly no CFD indices, crypto, or high-spread crosses!
+        // 3A. Margin Scalper Confluence: High-Liquidity Low-Spread Forex & Gold Universe
+        // Covers all 20 major and high-liquidity cross pairs on Exness standard accounts
         const MT5_INSTITUTIONAL_MAJORS = new Set([
-          'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X', 'EURJPY=X', 'GC=F'
+          'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X', 'USDCHF=X', 'NZDUSD=X',
+          'EURGBP=X', 'EURJPY=X', 'GBPJPY=X', 'AUDJPY=X', 'CADJPY=X', 'CHFJPY=X',
+          'EURAUD=X', 'EURCAD=X', 'GBPAUD=X', 'GBPCAD=X', 'AUDCAD=X', 'AUDNZD=X',
+          'GC=F'
         ]);
         const isMt5Symbol = MT5_INSTITUTIONAL_MAJORS.has(asset.symbol);
 
@@ -654,11 +657,9 @@ export class AutonomousAgentLoop {
         const now = Date.now();
         const liveBal = Number(mt5Connector.accountInfo?.balance || 51.68);
         const riskPct = this.marginRiskManager.riskPerTradePct || 1.5;
-        const targetRR = this.marginRiskManager.targetRiskRewardRatio || 1.3;
-
-        // Exact dollar risk and target for this account (1.5% of balance, min $0.75 buffer for 0.01 lot spread)
-        const maxAllowedLoss = Math.max(0.75, Number((liveBal * (riskPct / 100)).toFixed(2)));
-        const targetProfit = Number((maxAllowedLoss * targetRR).toFixed(2));
+        // Micro-Scalp Geometry: Fast micro-targets (+0.30 to +0.55) & tight stops (-0.45 to -0.50)
+        const microTargetProfit = Math.min(0.55, Math.max(0.35, Number((liveBal * (riskPct / 100) * 0.35).toFixed(2))));
+        const microMaxLoss = Math.min(0.50, Math.max(0.40, Number((liveBal * (riskPct / 100) * 0.35).toFixed(2))));
 
         for (const p of openPositions) {
           const ticket = p.ticket;
@@ -692,29 +693,34 @@ export class AutonomousAgentLoop {
           let exitMessage = null;
           let logLevel = 'INFO';
 
-          // 1. Loss cap at 1.5% of balance (Cut loss if price reaches -1.5% stop loss level, with 15s initial spread grace)
-          const isPastSpreadGrace = actualAgeMs >= 15000;
-          if ((isPastSpreadGrace && currentProfit <= -maxAllowedLoss) || currentProfit <= -(maxAllowedLoss * 1.5)) {
+          // 1. FAST MICRO-TARGET TAKE PROFIT (+0.30 or higher): Bank green profit immediately!
+          if (currentProfit >= 0.30 || currentProfit >= microTargetProfit) {
+            exitReason = 'TAKE_PROFIT_TRIGGER';
+            exitMessage = `🎯 [MT5 LIVE] Micro Scalp Target hit (+${currentProfit}) on Ticket #${ticket} (${p.symbol})! Banking gain...`;
+            logLevel = 'SUCCESS';
+          }
+          // 2. FAST TRAILING STOP LOCK: If scalp reached >= +0.18 and drops to +0.07, lock in green win!
+          else if (currentPeak >= 0.18 && currentProfit <= 0.08 && currentProfit >= 0.02) {
+            exitReason = 'TRAILING_STOP_TRIGGER';
+            exitMessage = `🛡️ [MT5 LIVE] Trailing micro lock: Ticket #${ticket} peaked at +$${currentPeak.toFixed(2)}, locking in +$${currentProfit.toFixed(2)}!`;
+            logLevel = 'SUCCESS';
+          }
+          // 3. FAST 90-SECOND MOMENTUM BANK: If scalp is >= 90s old and in positive profit (+0.15 or more), bank it!
+          else if (actualAgeMs >= 90000 && currentProfit >= 0.15) {
+            exitReason = 'MOMENTUM_EXHAUSTION_EXIT';
+            exitMessage = `⚡ [MT5 LIVE] Fast momentum bank: Ticket #${ticket} locked +$${currentProfit.toFixed(2)} in ${Math.round(actualAgeMs / 1000)}s!`;
+            logLevel = 'SUCCESS';
+          }
+          // 4. TIGHT STOP LOSS (-0.45 max): Cut loss cleanly, NEVER allow -$1.50 or -$3.00 bleed!
+          else if (actualAgeMs >= 15000 && currentProfit <= -microMaxLoss) {
             exitReason = 'STOP_LOSS_TRIGGER';
-            exitMessage = `🛡️ [MT5 LIVE] Loss cap reached (-$${Math.abs(currentProfit)} / max -$${maxAllowedLoss}). Closing Ticket #${ticket} on Exness MT5...`;
+            exitMessage = `🛡️ [MT5 LIVE] Tight micro stop triggered (-$${Math.abs(currentProfit)} / max -$${microMaxLoss}). Closing Ticket #${ticket} on Exness MT5...`;
             logLevel = 'WARN';
           }
-          // 2. Take Profit at 1:1.3 R:R Target (Bank profit immediately)
-          else if (currentProfit >= targetProfit) {
-            exitReason = 'TAKE_PROFIT_TRIGGER';
-            exitMessage = `🎯 [MT5 LIVE] Target Profit 1:1.3 hit (+${currentProfit} >= +$${targetProfit}) on Ticket #${ticket} (${p.symbol})! Banking gain...`;
-            logLevel = 'SUCCESS';
-          }
-          // 3. Trailing Profit Lock: If scalp reached >= 75% of target and pulls back, lock in green
-          else if (currentPeak >= targetProfit * 0.75 && currentProfit <= targetProfit * 0.45 && currentProfit >= 0.15) {
-            exitReason = 'TRAILING_STOP_TRIGGER';
-            exitMessage = `🛡️ [MT5 LIVE] Trailing profit lock: Ticket #${ticket} peaked at +$${currentPeak.toFixed(2)}, locking in +$${currentProfit.toFixed(2)}!`;
-            logLevel = 'SUCCESS';
-          }
-          // 4. Maximum Safety Time Expiry (30 minutes - allows full price movement to TP/SL without premature closure)
-          else if (actualAgeMs >= 1800000) {
+          // 5. MAXIMUM 5-MINUTE SCALP CAP: Never let a scalp hold for 30 minutes!
+          else if (actualAgeMs >= 300000) {
             exitReason = 'TIME_LIMIT_EXIT';
-            exitMessage = `⏱️ [MT5 LIVE] 30-minute scalp expiry triggered for Ticket #${ticket} (${p.symbol}). Realized: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`;
+            exitMessage = `⏱️ [MT5 LIVE] 5-minute scalp expiry for Ticket #${ticket} (${p.symbol}). Realized: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`;
             logLevel = currentProfit >= 0 ? 'SUCCESS' : 'INFO';
           }
 
