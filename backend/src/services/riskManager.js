@@ -10,10 +10,10 @@ export class RiskManager {
     this.maxConcurrentTrades = options.maxConcurrentTrades || 8; // Full 8-slot multi-scalp capacity
     this.maxPositionAllocationPct = options.maxPositionAllocationPct || 25; // Max 25% notional per asset for spot
     this.maxDailyDrawdownPct = options.maxDailyDrawdownPct || 5.0; // Circuit breaker at 5% daily loss
-    this.minConfidenceThreshold = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 80; // High win-rate sniper threshold (80%+)
+    this.minConfidenceThreshold = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 75; // Sniper scalps (75%+)
     this.tradeDirection = options.tradeDirection || 'BOTH'; // 'BOTH' | 'SHORT_ONLY' | 'LONG_ONLY'
     this.tradingStyle = options.tradingStyle || 'SCALPING'; // 'SCALPING' | 'SWING'
-    this.targetRiskRewardRatio = 2.5; // Asymmetric 1:2.5 Risk-to-Reward ratio
+    this.targetRiskRewardRatio = 1.3; // High-Frequency 1:1.3 Risk-to-Reward ratio
     this.defaultLeverage = 500; // Strictly 500x leverage
     this.maxTradesPerPair = options.maxTradesPerPair || 1; // Strictly 1 trade per pair (no averaging down)
   }
