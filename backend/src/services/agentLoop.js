@@ -292,12 +292,12 @@ export class AutonomousAgentLoop {
         const isMarginCooldown = (this.assetCooldowns.get(asset.symbol) || 0) > 0;
         const isSpotCooldown = (this.spotCooldowns.get(asset.symbol) || 0) > 0;
 
-        // 3A. Margin Scalper Confluence: 20 High-Liquidity Low-Spread Forex Majors & Crosses
-        // Provides broad high-frequency opportunity to fill all user-configured slots (up to 8 slots)
+        // 3A. Margin Scalper Confluence: High-Momentum Low-Spread Forex Majors & Volatile Crosses
+        // Excludes slow-moving, high-spread pairs (EURGBP, AUDNZD) to maximize win rate
         const MT5_INSTITUTIONAL_MAJORS = new Set([
           'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X', 'USDCHF=X', 'NZDUSD=X',
-          'EURJPY=X', 'GBPJPY=X', 'AUDJPY=X', 'CADJPY=X', 'CHFJPY=X', 'NZDJPY=X',
-          'EURGBP=X', 'EURAUD=X', 'EURCAD=X', 'GBPAUD=X', 'GBPCAD=X', 'AUDCAD=X', 'AUDNZD=X'
+          'CHFJPY=X', 'EURJPY=X', 'GBPJPY=X', 'AUDJPY=X', 'CADJPY=X', 'NZDJPY=X',
+          'GBPCAD=X', 'EURCAD=X', 'GBPAUD=X', 'EURAUD=X'
         ]);
         const isMt5Symbol = MT5_INSTITUTIONAL_MAJORS.has(asset.symbol);
 
@@ -356,7 +356,12 @@ export class AutonomousAgentLoop {
         // Rank all candidate setups across global markets by confidence score!
         validMarginSignals.sort((a, b) => b.signal.confidence - a.signal.confidence);
 
-        for (const { asset, signal } of validMarginSignals) {
+        // Stagger trade entries by at least 12 seconds to prevent clumping of all 8 trades on a single millisecond tick
+        const timeSinceLastMarginTrade = Date.now() - (this.lastTradeOpenedAt || 0);
+        const canOpenNextSlot = timeSinceLastMarginTrade >= 12000;
+
+        if (canOpenNextSlot) {
+          for (const { asset, signal } of validMarginSignals) {
           const portfolioState = this.marginTradingEngine.getPortfolioState();
 
           if (this.currentMode === 'LIVE') {
@@ -464,8 +469,7 @@ export class AutonomousAgentLoop {
                       'SUCCESS'
                     );
                     this.lastTradeOpenedAt = Date.now();
-                    // Small async spacing between consecutive broker calls to prevent socket congestion
-                    await new Promise(r => setTimeout(r, 600));
+                    break;
                   }
                 } catch (err) {
                   if (err.message && (err.message.includes('10027') || err.message.includes('Algo Trading'))) {
@@ -507,10 +511,12 @@ export class AutonomousAgentLoop {
                 'SUCCESS'
               );
               this.lastTradeOpenedAt = Date.now();
+              break;
             }
           }
         }
       }
+    }
 
       // ==========================================
       // 4B. PURE SPOT CRYPTO AUTO-OPEN (Multi-Portion 1-8 Scalps)
@@ -640,8 +646,8 @@ export class AutonomousAgentLoop {
         const handledTickets = new Set();
         const now = Date.now();
         // Calibrated Micro-Scalp Geometry on 0.01 lot:
-        const microTargetProfit = 0.50; // Bank clean green profit
-        const microMaxLoss = 0.45; // Strict capital loss cap
+        const microTargetProfit = 0.45; // Bank clean green profit (~$0.45 to $0.60)
+        const microMaxLoss = 0.45; // Strict 1.5% capital loss cap
 
         for (const p of openPositions) {
           const ticket = p.ticket;
@@ -675,20 +681,20 @@ export class AutonomousAgentLoop {
           let exitMessage = null;
           let logLevel = 'INFO';
 
-          // 1. FULL TAKE PROFIT (+0.50 or higher): Bank full target!
+          // 1. FULL TAKE PROFIT (+0.45 or higher): Bank full target!
           if (currentProfit >= microTargetProfit) {
             exitReason = 'TAKE_PROFIT_TRIGGER';
             exitMessage = `🎯 [MT5 LIVE] Micro Scalp TP Target hit (+${currentProfit}) on Ticket #${ticket} (${p.symbol})! Banking gain...`;
             logLevel = 'SUCCESS';
           }
-          // 2. BREAKEVEN PROFIT SHIELD: If scalp reached >= +0.15 (1.5 pips) and pulls back to +0.03 - +0.08, lock in guaranteed green win!
-          else if (currentPeak >= 0.15 && currentProfit <= 0.08 && currentProfit >= 0.03) {
+          // 2. BREAKEVEN PROFIT SHIELD: If scalp reached >= +0.12 (1.2 pips) and pulls back to +0.03 - +0.08, lock in guaranteed green win!
+          else if (currentPeak >= 0.12 && currentProfit <= 0.08 && currentProfit >= 0.03) {
             exitReason = 'BREAKEVEN_STOP_TRIGGER';
             exitMessage = `🛡️ [MT5 LIVE] Breakeven Profit Shield: Ticket #${ticket} peaked at +$${currentPeak.toFixed(2)}, locking in +$${currentProfit.toFixed(2)} to protect gains!`;
             logLevel = 'SUCCESS';
           }
-          // 3. FAST 60-SECOND MOMENTUM BANK: If scalp is >= 60s old and in solid profit (+0.20 or more), bank it!
-          else if (actualAgeMs >= 60000 && currentProfit >= 0.20) {
+          // 3. FAST 60-SECOND MOMENTUM BANK: If scalp is >= 60s old and in solid profit (+0.22 or more), bank it!
+          else if (actualAgeMs >= 60000 && currentProfit >= 0.22) {
             exitReason = 'MOMENTUM_EXHAUSTION_EXIT';
             exitMessage = `⚡ [MT5 LIVE] Momentum bank: Ticket #${ticket} locked +$${currentProfit.toFixed(2)} in ${Math.round(actualAgeMs / 1000)}s!`;
             logLevel = 'SUCCESS';
@@ -699,11 +705,13 @@ export class AutonomousAgentLoop {
             exitMessage = `🛡️ [MT5 LIVE] Tight micro stop triggered (-$${Math.abs(currentProfit)} / max -$${microMaxLoss}). Closing Ticket #${ticket} on Exness MT5...`;
             logLevel = 'WARN';
           }
-          // 5. MAXIMUM 5-MINUTE SCALP CAP: Never let a scalp hold for 30 minutes!
-          else if (actualAgeMs >= 300000) {
-            exitReason = 'TIME_LIMIT_EXIT';
-            exitMessage = `⏱️ [MT5 LIVE] 5-minute scalp expiry for Ticket #${ticket} (${p.symbol}). Realized: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`;
-            logLevel = currentProfit >= 0 ? 'SUCCESS' : 'INFO';
+          // 5. EXTENDED 20-MINUTE SCALP CAP: Only exit if stagnant or in green profit, never kill floating healthy pullbacks!
+          else if (actualAgeMs >= 1200000) {
+            if (currentProfit >= 0.03 || Math.abs(currentProfit) <= 0.12) {
+              exitReason = 'TIME_LIMIT_EXIT';
+              exitMessage = `⏱️ [MT5 LIVE] 20-minute scalp cycle expiry for Ticket #${ticket} (${p.symbol}). Realized: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`;
+              logLevel = currentProfit >= 0 ? 'SUCCESS' : 'INFO';
+            }
           }
 
           if (exitReason) {
@@ -728,8 +736,8 @@ export class AutonomousAgentLoop {
                 });
                 this.liveRealizedPnL = Number((this.liveRealizedPnL + brokerProfit).toFixed(2));
                 this.marginTradingEngine.activePositions = (this.marginTradingEngine.activePositions || []).filter(ap => ap.ticket !== ticket);
-                // Asset cooldown: 60 cycles (5m) on stop loss, 12 cycles (1m) on profit
-                this.assetCooldowns.set(p.symbol, exitReason === 'STOP_LOSS_TRIGGER' ? 60 : 12);
+                // Asset cooldown: 30 cycles (2.5m) on stop loss, 6 cycles (30s) on profit
+                this.assetCooldowns.set(p.symbol, exitReason === 'STOP_LOSS_TRIGGER' ? 30 : 6);
               }
             }).catch(err => {
               this.log(`⚠️ [MT5 LIVE] Failed to close Ticket #${ticket}: ${err.message}`, 'WARN');

@@ -370,25 +370,27 @@ export class PaperTradingEngine {
       }
 
       // ====================================================
-      // 2. STRICT 5-MINUTE SCALP TIME-LIMIT (At most 5 minutes per trade for BOTH Margin and Spot)
+      // 2. SCALP TIME-LIMIT (20m for Margin, 5m for Spot)
       // ====================================================
       const openTimeMs = pos.openTime ? new Date(pos.openTime).getTime() : 0;
       const ageMs = openTimeMs > 0 ? (Date.now() - openTimeMs) : ((pos.cycleCount || 0) * 5000);
       const cyclesElapsed = pos.cycleCount || 0;
-      const maxHoldMinutes = 5; // Strict 5-minute maximum holding cap
-      const maxHoldMs = maxHoldMinutes * 60 * 1000; // 300,000ms = 5 minutes
-      const maxHoldCycles = maxHoldMinutes * 12; // 60 cycles @ 5s = 5 minutes
+      const maxHoldMinutes = this.accountType === 'SPOT' ? 5 : 20;
+      const maxHoldMs = maxHoldMinutes * 60 * 1000;
+      const maxHoldCycles = maxHoldMinutes * 12;
 
-      // A. Hard 5-Minute Cap: Exit at market price to rotate capital
+      // A. Holding Cap: Exit at market price to rotate capital if profitable or cycle expired
       if (ageMs >= maxHoldMs || cyclesElapsed >= maxHoldCycles) {
-        const isProfitable = pos.unrealizedPnL >= 0;
-        const exitNote = isProfitable
-          ? `5m Scalp Expiry: Banked profit at 5m cap (+${pos.pnlPercent}%)`
-          : `5m Scalp Expiry: Scalp duration reached 5m cap (${pos.pnlPercent}%)`;
-        const closed = this.closePosition(pos.id, livePrice, 'TIME_LIMIT_EXIT', exitNote);
-        if (closed) {
-          closedTriggers.push(closed);
-          continue;
+        if (pos.unrealizedPnL >= 0 || ageMs >= 1200000) {
+          const isProfitable = pos.unrealizedPnL >= 0;
+          const exitNote = isProfitable
+            ? `${maxHoldMinutes}m Scalp Expiry: Banked profit at ${maxHoldMinutes}m cap (+${pos.pnlPercent}%)`
+            : `${maxHoldMinutes}m Scalp Expiry: Scalp duration reached ${maxHoldMinutes}m cap (${pos.pnlPercent}%)`;
+          const closed = this.closePosition(pos.id, livePrice, 'TIME_LIMIT_EXIT', exitNote);
+          if (closed) {
+            closedTriggers.push(closed);
+            continue;
+          }
         }
       }
 
