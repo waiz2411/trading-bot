@@ -7,10 +7,10 @@
 export class RiskManager {
   constructor(options = {}) {
     this.riskPerTradePct = options.riskPerTradePct !== undefined ? Number(options.riskPerTradePct) : 1.5; // Strictly 1.5% capital risk per trade
-    this.maxConcurrentTrades = options.maxConcurrentTrades || 2; // Focused 2-slot sniper scalper (no over-trading)
+    this.maxConcurrentTrades = options.maxConcurrentTrades || 8; // Full 8-slot multi-scalp capacity
     this.maxPositionAllocationPct = options.maxPositionAllocationPct || 25; // Max 25% notional per asset for spot
     this.maxDailyDrawdownPct = options.maxDailyDrawdownPct || 5.0; // Circuit breaker at 5% daily loss
-    this.minConfidenceThreshold = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 80; // High win-rate sniper threshold (80%+)
+    this.minConfidenceThreshold = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 75; // High win-rate sniper threshold (75%+)
     this.tradeDirection = options.tradeDirection || 'BOTH'; // 'BOTH' | 'SHORT_ONLY' | 'LONG_ONLY'
     this.tradingStyle = options.tradingStyle || 'SCALPING'; // 'SCALPING' | 'SWING'
     this.targetRiskRewardRatio = 1.3; // Strictly 1:1.3 Risk-to-Reward ratio
