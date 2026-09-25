@@ -338,17 +338,17 @@ def status():
         for op in open_positions:
             print(f"   -> #{op['ticket']}: {op['symbol']} {op['type']} {op['volume']} lots @ {op['priceOpen']} | PnL: ${op['profit']}")
 
-    # Collect live market ticks for major Forex scalping symbols
+    # Collect live market ticks and real M1 candles directly from Exness MT5
     market_ticks = {}
     major_symbols = [
         'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD',
-        'CHFJPY', 'EURJPY', 'GBPJPY', 'AUDJPY', 'CADJPY', 'GBPCAD', 'GBPAUD', 'EURAUD'
+        'XAUUSD', 'EURJPY', 'GBPJPY', 'CADJPY', 'CHFJPY'
     ]
     for ms in major_symbols:
         tsym = find_broker_symbol(ms)
         tk = mt5.symbol_info_tick(tsym)
         if tk and getattr(tk, 'bid', 0) > 0:
-            market_ticks[ms] = {
+            tick_obj = {
                 'symbol': ms,
                 'brokerSymbol': tsym,
                 'bid': safe_float(tk.bid),
@@ -357,6 +357,23 @@ def status():
                 'spread': round(safe_float(tk.ask - tk.bid), 5),
                 'time': safe_int(getattr(tk, 'time', int(time.time())))
             }
+            try:
+                rates = mt5.copy_rates_from_pos(tsym, mt5.TIMEFRAME_M1, 0, 50)
+                if rates is not None and len(rates) > 0:
+                    candles_list = []
+                    for r in rates:
+                        candles_list.append({
+                            'time': datetime.datetime.fromtimestamp(int(r['time'])).isoformat(),
+                            'open': safe_float(r['open']),
+                            'high': safe_float(r['high']),
+                            'low': safe_float(r['low']),
+                            'close': safe_float(r['close']),
+                            'volume': safe_int(r['tick_volume'])
+                        })
+                    tick_obj['candles'] = candles_list
+            except Exception:
+                pass
+            market_ticks[ms] = tick_obj
 
     return jsonify({
         'success': True,

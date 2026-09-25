@@ -292,11 +292,10 @@ export class AutonomousAgentLoop {
         const isMarginCooldown = (this.assetCooldowns.get(asset.symbol) || 0) > 0;
         const isSpotCooldown = (this.spotCooldowns.get(asset.symbol) || 0) > 0;
 
-        // 3A. Margin Scalper Confluence: Ultra Tight-Spread Forex Majors (0.8-1.2 pips) & Liquid JPY Crosses
-        // Excludes wide-spread / low-liquidity pairs to guarantee maximum win rate and avoid spread traps
+        // 3A. Margin Scalper Confluence: Ultra Tight-Spread Forex Majors (0.8-1.2 pips) & Gold
+        // Excludes wide-spread / low-liquidity pairs (GBPJPY, CHFJPY) to guarantee maximum win rate
         const MT5_INSTITUTIONAL_MAJORS = new Set([
-          'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X', 'USDCHF=X',
-          'CHFJPY=X', 'GBPJPY=X'
+          'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X', 'USDCHF=X', 'GC=F'
         ]);
         const isMt5Symbol = MT5_INSTITUTIONAL_MAJORS.has(asset.symbol);
 
@@ -666,12 +665,11 @@ export class AutonomousAgentLoop {
           if (!isBotTrade) continue;
 
           const posVolume = Number(p.volume || 0.02);
-          const microTargetProfit = Number((posVolume * 73).toFixed(2)); // +$1.46 on 0.02 lot (1.95% net profit after spread)
-          const microMaxLoss = Number((posVolume * 55).toFixed(2));      // -$1.10 on 0.02 lot (strictly 1.50% capital risk)
-          const beThreshold = Number((posVolume * 35).toFixed(2));       // +$0.70 peak trigger
-          const beLockMin = Number((posVolume * 12).toFixed(2));         // +$0.24 lock floor
-          const beLockMax = Number((posVolume * 22).toFixed(2));         // +$0.44 lock ceiling
-          const momentumBankThreshold = Number((posVolume * 50).toFixed(2)); // +$1.00 after 45s
+          const microTargetProfit = Number((posVolume * 73).toFixed(2)); // +$1.46 on 0.02 lot (1.95% net target on $75) / +$2.19 on 0.03 lot ($100)
+          const microMaxLoss = Number((posVolume * 55).toFixed(2));      // -$1.10 on 0.02 lot (1.50% capital risk on $75) / -$1.65 on 0.03 lot ($100)
+          const beThreshold = Number((posVolume * 30).toFixed(2));       // +$0.60 peak trigger (3 pips profit peak)
+          const beLockFloor = Number((posVolume * 10).toFixed(2));       // +$0.20 lock floor
+          const momentumBankThreshold = Number((posVolume * 45).toFixed(2)); // +$0.90 after 45s
 
           if (!this.livePositionFirstSeen.has(ticket)) {
             this.livePositionFirstSeen.set(ticket, now);
@@ -693,34 +691,40 @@ export class AutonomousAgentLoop {
           let exitMessage = null;
           let logLevel = 'INFO';
 
-          // 1. FULL TAKE PROFIT (+1.46 on 0.02 lot): Strict 1:1.32 net reward banked!
+          // 1. FULL TAKE PROFIT: Bank full 1:1.32 Net R:R gain!
           if (currentProfit >= microTargetProfit) {
             exitReason = 'TAKE_PROFIT_TRIGGER';
-            exitMessage = `🎯 [MT5 LIVE] Scalp TP Target hit (+${currentProfit} / +1.95%) on Ticket #${ticket} (${p.symbol})! Banking 1:1.3 gain...`;
+            exitMessage = `🎯 [MT5 LIVE] Scalp TP Target hit (+${currentProfit}) on Ticket #${ticket} (${p.symbol})! Banking 1:1.3 gain...`;
             logLevel = 'SUCCESS';
           }
-          // 2. BREAKEVEN PROFIT SHIELD: If scalp reached >= +0.70 and pulls back, lock in guaranteed net profit (+0.24 - +0.44)!
-          else if (currentPeak >= beThreshold && currentProfit <= beLockMax && currentProfit >= beLockMin) {
-            exitReason = 'BREAKEVEN_STOP_TRIGGER';
-            exitMessage = `🛡️ [MT5 LIVE] Breakeven Profit Shield: Ticket #${ticket} peaked at +$${currentPeak.toFixed(2)}, locking in +$${currentProfit.toFixed(2)} gain!`;
-            logLevel = 'SUCCESS';
+          // 2. BREAKEVEN PROFIT SHIELD: If scalp peaked >= +$0.60 and pulls back, lock in profit and NEVER allow it to turn red!
+          else if (currentPeak >= beThreshold && (currentProfit <= Number((currentPeak * 0.45).toFixed(2)) || currentProfit <= beLockFloor)) {
+            if (currentProfit >= 0.05) {
+              exitReason = 'BREAKEVEN_STOP_TRIGGER';
+              exitMessage = `🛡️ [MT5 LIVE] Breakeven Profit Shield: Ticket #${ticket} peaked at +$${currentPeak.toFixed(2)}, locked in +$${currentProfit.toFixed(2)} gain!`;
+              logLevel = 'SUCCESS';
+            } else if (currentProfit <= 0.02 && currentProfit >= -0.10) {
+              exitReason = 'BREAKEVEN_STOP_TRIGGER';
+              exitMessage = `🛡️ [MT5 LIVE] Breakeven Cut: Ticket #${ticket} peaked at +$${currentPeak.toFixed(2)}, closed at breakeven ($${currentProfit.toFixed(2)}) to prevent loss!`;
+              logLevel = 'INFO';
+            }
           }
-          // 3. FAST MOMENTUM BANK: If scalp is >= 45s old and reached +1.00+, bank it!
+          // 3. FAST MOMENTUM BANK: If scalp is >= 45s old and reached +0.90+, bank it!
           else if (actualAgeMs >= 45000 && currentProfit >= momentumBankThreshold) {
             exitReason = 'MOMENTUM_EXHAUSTION_EXIT';
             exitMessage = `⚡ [MT5 LIVE] Momentum bank: Ticket #${ticket} locked +$${currentProfit.toFixed(2)} in ${Math.round(actualAgeMs / 1000)}s!`;
             logLevel = 'SUCCESS';
           }
-          // 4. STRICT 1.5% CAPITAL RISK STOP LOSS (-$1.10 on 0.02 lot): Strict capital protection!
+          // 4. STRICT 1.5% CAPITAL RISK STOP LOSS: Strict capital protection!
           else if (currentProfit <= -microMaxLoss) {
             exitReason = 'STOP_LOSS_TRIGGER';
             exitMessage = `🛡️ [MT5 LIVE] 1.5% Capital Stop triggered (-$${Math.abs(currentProfit)} / max -$${microMaxLoss}). Cutting loss cleanly on Ticket #${ticket}...`;
             logLevel = 'WARN';
           }
-          // 5. MAX 5-MINUTE RAPID SCALP EXPIRY: High-frequency slot recycling (10-20 trades/5m)
-          else if (actualAgeMs >= 300000) {
+          // 5. MAX 10-MINUTE SCALP CAP: Allow natural 1m trend cycles to play out
+          else if (actualAgeMs >= 600000) {
             exitReason = 'TIME_LIMIT_EXIT';
-            exitMessage = `⏱️ [MT5 LIVE] 5-minute scalp cycle expiry for Ticket #${ticket} (${p.symbol}). Realized: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`;
+            exitMessage = `⏱️ [MT5 LIVE] 10-minute scalp cycle expiry for Ticket #${ticket} (${p.symbol}). Realized: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`;
             logLevel = currentProfit >= 0 ? 'SUCCESS' : 'INFO';
           }
 

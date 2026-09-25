@@ -369,48 +369,59 @@ export class MarketDataService {
     for (const [symKey, tick] of Object.entries(ticksMap)) {
       if (!tick || !tick.price) continue;
       const targetSym = `${symKey}=X`;
-      const cached = marketCache.get(targetSym) || marketCache.get(symKey);
+      const cached = marketCache.get(targetSym) || marketCache.get(symKey) || marketCache.get(`${symKey}=F`);
       if (cached) {
         const livePrice = Number(Number(tick.price).toFixed(cached.decimals));
         cached.price = livePrice;
+        cached.spread = tick.spread !== undefined ? Number(tick.spread) : cached.spread;
         cached.isLiveFeed = true;
         cached.lastLiveTime = now;
 
-        // Calibrate candle base if uncalibrated
-        if (!cached.isBrokerCalibrated) {
-          const firstCandlePrice = cached.candles[0]?.close || livePrice;
-          const ratio = livePrice / firstCandlePrice;
-          if (Math.abs(ratio - 1) > 0.002) {
-            for (const c of cached.candles) {
-              c.open = Number((c.open * ratio).toFixed(cached.decimals));
-              c.close = Number((c.close * ratio).toFixed(cached.decimals));
-              c.high = Number((c.high * ratio).toFixed(cached.decimals));
-              c.low = Number((c.low * ratio).toFixed(cached.decimals));
-            }
-          }
+        // If real broker candles provided by MT5 bridge, use 100% real broker data
+        if (Array.isArray(tick.candles) && tick.candles.length >= 10) {
+          cached.candles = tick.candles;
           cached.isBrokerCalibrated = true;
-        }
-
-        // Maintain live 1m sliding candles
-        const candles = cached.candles;
-        if (!cached.brokerCandleStartTime) cached.brokerCandleStartTime = now;
-        if (now - cached.brokerCandleStartTime >= 60000) {
-          cached.brokerCandleStartTime = now;
-          candles.push({
-            time: new Date(now).toISOString(),
-            open: livePrice,
-            high: livePrice,
-            low: livePrice,
-            close: livePrice,
-            volume: 1000
-          });
-          if (candles.length > 70) candles.shift();
-        } else {
-          const lastCandle = candles[candles.length - 1];
+          const lastCandle = tick.candles[tick.candles.length - 1];
           if (lastCandle) {
-            lastCandle.close = livePrice;
-            lastCandle.high = Math.max(lastCandle.high, livePrice);
-            lastCandle.low = Math.min(lastCandle.low, livePrice);
+            cached.high24h = Math.max(cached.high24h || livePrice, lastCandle.high);
+            cached.low24h = Math.min(cached.low24h || livePrice, lastCandle.low);
+          }
+        } else {
+          // Fallback: Maintain live 1m sliding candles
+          if (!cached.isBrokerCalibrated) {
+            const firstCandlePrice = cached.candles[0]?.close || livePrice;
+            const ratio = livePrice / firstCandlePrice;
+            if (Math.abs(ratio - 1) > 0.002) {
+              for (const c of cached.candles) {
+                c.open = Number((c.open * ratio).toFixed(cached.decimals));
+                c.close = Number((c.close * ratio).toFixed(cached.decimals));
+                c.high = Number((c.high * ratio).toFixed(cached.decimals));
+                c.low = Number((c.low * ratio).toFixed(cached.decimals));
+              }
+            }
+            cached.isBrokerCalibrated = true;
+          }
+
+          const candles = cached.candles;
+          if (!cached.brokerCandleStartTime) cached.brokerCandleStartTime = now;
+          if (now - cached.brokerCandleStartTime >= 60000) {
+            cached.brokerCandleStartTime = now;
+            candles.push({
+              time: new Date(now).toISOString(),
+              open: livePrice,
+              high: livePrice,
+              low: livePrice,
+              close: livePrice,
+              volume: 1000
+            });
+            if (candles.length > 70) candles.shift();
+          } else {
+            const lastCandle = candles[candles.length - 1];
+            if (lastCandle) {
+              lastCandle.close = livePrice;
+              lastCandle.high = Math.max(lastCandle.high, livePrice);
+              lastCandle.low = Math.min(lastCandle.low, livePrice);
+            }
           }
         }
       }
