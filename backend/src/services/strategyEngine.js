@@ -58,16 +58,10 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
       shortScore += 5;
       shortReasons.push('Macro Trend: Price trading below EMA 200');
     }
-  } 
-  // Transitional / Early Trend
-  else if (ema9 && ema21 && currentPrice) {
-    if (ema9 > ema21 && currentPrice > ema21) {
-      longScore += 15;
-      longReasons.push('Micro Uptrend: EMA 9 leading above EMA 21');
-    } else if (ema9 < ema21 && currentPrice < ema21) {
-      shortScore += 15;
-      shortReasons.push('Micro Downtrend: EMA 9 leading below EMA 21');
-    }
+  } else {
+    // Sideways / Choppy Market: STRICTLY ZERO SCORE - Never trade chop!
+    longScore = 0;
+    shortScore = 0;
   }
 
   // ==========================================
@@ -79,20 +73,20 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   // In Bullish Trend: Reward pullback into EMA 21 support
   if (longScore > 0) {
     if (isAtEma21Pocket && currentPrice >= ema21 * 0.998) {
-      longScore += 22;
+      longScore += 25;
       longReasons.push('Value Entry: Bullish pullback into EMA 21 support pocket');
-    } else if (distToEma21 > minAtr * 2.2 && currentPrice > ema21) {
-      longScore -= 25; // Overextended, NEVER chase green candles!
+    } else if (distToEma21 > minAtr * 2.0 && currentPrice > ema21) {
+      longScore -= 30; // Overextended, NEVER chase green candles!
     }
   }
 
   // In Bearish Trend: Reward counter-rally into EMA 21 resistance
   if (shortScore > 0) {
     if (isAtEma21Pocket && currentPrice <= ema21 * 1.002) {
-      shortScore += 22;
+      shortScore += 25;
       shortReasons.push('Value Entry: Bearish rally into EMA 21 resistance pocket');
-    } else if (distToEma21 > minAtr * 2.2 && currentPrice < ema21) {
-      shortScore -= 25; // Overextended, NEVER chase red candles!
+    } else if (distToEma21 > minAtr * 2.0 && currentPrice < ema21) {
+      shortScore -= 30; // Overextended, NEVER chase red candles!
     }
   }
 
@@ -109,34 +103,35 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
     const lowerRatio = lowerWick / range;
     const upperRatio = upperWick / range;
     const isGreen = lastCandle.close >= lastCandle.open;
+    const prevIsGreen = prevCandle ? prevCandle.close >= prevCandle.open : isGreen;
 
     if (longScore > 0) {
       // Pin bar / Hammer rejection wick
       if (lowerRatio >= 0.35) {
-        longScore += 20;
+        longScore += 22;
         longReasons.push('Bullish Pin Bar: Lower wick confirms buyer absorption');
-      } else if (isGreen && prevCandle && prevCandle.close <= prevCandle.open) {
-        longScore += 12;
-        longReasons.push('Bullish Reversal: Dip bought back up aggressively');
+      } else if (isGreen && !prevIsGreen && lastCandle.close > prevCandle.open) {
+        longScore += 18;
+        longReasons.push('Bullish Engulfing: Buyers aggressively reclaimed momentum');
       }
-      // Heavy upper wick in uptrend indicates seller capping
-      if (upperRatio >= 0.40) {
-        longScore -= 20;
+      // Upper wick in uptrend indicates seller capping
+      if (upperRatio >= 0.35) {
+        longScore -= 25;
       }
     }
 
     if (shortScore > 0) {
       // Shooting star / inverted rejection wick
       if (upperRatio >= 0.35) {
-        shortScore += 20;
+        shortScore += 22;
         shortReasons.push('Bearish Pin Bar: Upper wick confirms seller rejection');
-      } else if (!isGreen && prevCandle && prevCandle.close >= prevCandle.open) {
-        shortScore += 12;
-        shortReasons.push('Bearish Reversal: Counter-rally rejected by sellers');
+      } else if (!isGreen && prevIsGreen && lastCandle.close < prevCandle.open) {
+        shortScore += 18;
+        shortReasons.push('Bearish Engulfing: Sellers aggressively reclaimed momentum');
       }
-      // Heavy lower wick in downtrend indicates buyer bounce
-      if (lowerRatio >= 0.40) {
-        shortScore -= 20;
+      // Lower wick in downtrend indicates buyer bounce
+      if (lowerRatio >= 0.35) {
+        shortScore -= 25;
       }
     }
   }

@@ -70,7 +70,13 @@ def ensure_mt5(login=None, password=None, server=None):
         )
         if needs_login:
             print(f"[*] Switching/Logging into MT5 account #{login} on {server}...")
-            ok = mt5.initialize(login=login_int, password=str(password), server=server_str)
+            ok = False
+            try:
+                ok = mt5.login(login=login_int, password=str(password), server=server_str)
+            except Exception as e:
+                print(f"[!] mt5.login exception: {e}")
+            if not ok:
+                ok = mt5.initialize(login=login_int, password=str(password), server=server_str)
             if not ok:
                 print(f"[!] Login failed: {mt5.last_error()}")
                 return False

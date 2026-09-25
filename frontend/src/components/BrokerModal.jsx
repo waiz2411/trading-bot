@@ -32,7 +32,7 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
 
   // MT5 State
   const [mt5Method, setMt5Method] = useState('CLOUD'); // 'CLOUD' | 'EA'
-  const [mt5Login, setMt5Login] = useState(user?.brokerConnections?.mt5?.login?.toString().replace(/\*+/g, '') || '474621142');
+  const [mt5Login, setMt5Login] = useState(user?.brokerConnections?.mt5?.login?.toString().replace(/\*+/g, '') || '474636066');
   const [mt5Password, setMt5Password] = useState('Test@123');
   const [mt5Server, setMt5Server] = useState(user?.brokerConnections?.mt5?.server || 'Exness-MT5Trial15');
   const [showMt5Password, setShowMt5Password] = useState(false);

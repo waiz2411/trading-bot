@@ -291,17 +291,12 @@ export class AutonomousAgentLoop {
         const isMarginCooldown = (this.assetCooldowns.get(asset.symbol) || 0) > 0;
         const isSpotCooldown = (this.spotCooldowns.get(asset.symbol) || 0) > 0;
 
-        // 3A. Margin Scalper Confluence (Forex, Commodities, Indices, and Top Crypto BTC only)
-        const isMt5Symbol = asset.category === 'Forex' ||
-                            asset.category === 'Commodities' ||
-                            asset.category === 'Indices' ||
-                            asset.symbol === 'BTC-USD' || asset.symbol === 'BTCUSD';
-
-        // Disqualify exotic high-spread currencies that destroy scalp win rates
-        const SPREAD_DISQUALIFIED = ['ZAR', 'TRY', 'MXN', 'SGD', 'HKD', 'SEK', 'NOK', 'RUB'];
-        if (SPREAD_DISQUALIFIED.some(bad => asset.symbol.includes(bad))) {
-          continue;
-        }
+        // 3A. Margin Scalper Confluence: Strict Low-Spread Institutional Universe for 80%+ Win Rate
+        // Only trade high-liquidity, tight-spread majors & Gold. Strictly no CFD indices, crypto, or high-spread crosses!
+        const MT5_INSTITUTIONAL_MAJORS = new Set([
+          'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X', 'EURJPY=X', 'GC=F'
+        ]);
+        const isMt5Symbol = MT5_INSTITUTIONAL_MAJORS.has(asset.symbol);
 
         let signal = null;
         if (isMt5Symbol) {
@@ -697,8 +692,8 @@ export class AutonomousAgentLoop {
           let exitMessage = null;
           let logLevel = 'INFO';
 
-          // 1. Loss cap at 1.5% of balance (Cut loss if price hits stop level, with 12s initial spread grace)
-          const isPastSpreadGrace = actualAgeMs >= 12000;
+          // 1. Loss cap at 1.5% of balance (Cut loss if price reaches -1.5% stop loss level, with 15s initial spread grace)
+          const isPastSpreadGrace = actualAgeMs >= 15000;
           if ((isPastSpreadGrace && currentProfit <= -maxAllowedLoss) || currentProfit <= -(maxAllowedLoss * 1.5)) {
             exitReason = 'STOP_LOSS_TRIGGER';
             exitMessage = `🛡️ [MT5 LIVE] Loss cap reached (-$${Math.abs(currentProfit)} / max -$${maxAllowedLoss}). Closing Ticket #${ticket} on Exness MT5...`;
@@ -710,28 +705,16 @@ export class AutonomousAgentLoop {
             exitMessage = `🎯 [MT5 LIVE] Target Profit 1:1.3 hit (+${currentProfit} >= +$${targetProfit}) on Ticket #${ticket} (${p.symbol})! Banking gain...`;
             logLevel = 'SUCCESS';
           }
-          // 3. Break-Even Stop Protection: If scalp reached >= 50% of target (e.g. +$0.50) and drops back to zero ($0.02 or less)
-          else if (currentPeak >= targetProfit * 0.50 && currentProfit <= 0.02) {
-            exitReason = 'BREAKEVEN_STOP_TRIGGER';
-            exitMessage = `🔒 [MT5 LIVE] Break-even protection: Ticket #${ticket} peaked at +$${currentPeak.toFixed(2)}, pulled back to $${currentProfit.toFixed(2)}. Closing with zero loss!`;
-            logLevel = 'INFO';
-          }
-          // 4. Trailing Profit Lock: If scalp reached >= 80% of target and drops below 40% of target
-          else if (currentPeak >= targetProfit * 0.80 && currentProfit < targetProfit * 0.40) {
+          // 3. Trailing Profit Lock: If scalp reached >= 75% of target and pulls back, lock in green
+          else if (currentPeak >= targetProfit * 0.75 && currentProfit <= targetProfit * 0.45 && currentProfit >= 0.15) {
             exitReason = 'TRAILING_STOP_TRIGGER';
             exitMessage = `🛡️ [MT5 LIVE] Trailing profit lock: Ticket #${ticket} peaked at +$${currentPeak.toFixed(2)}, locking in +$${currentProfit.toFixed(2)}!`;
             logLevel = 'SUCCESS';
           }
-          // 5. Fast 2-Minute Scalp Profit Exit: If scalp is >= 2 minutes old and has >= 60% of target profit
-          else if (actualAgeMs >= 120000 && currentProfit >= targetProfit * 0.60) {
-            exitReason = 'MOMENTUM_EXHAUSTION_EXIT';
-            exitMessage = `⚡ [MT5 LIVE] Fast 2-minute scalp bank: Ticket #${ticket} locked +$${currentProfit.toFixed(2)} in ${Math.round(actualAgeMs / 1000)}s!`;
-            logLevel = 'SUCCESS';
-          }
-          // 6. Strict 5-Minute Maximum Holding Cap (Never hold long trades, short scalps only)
-          else if (actualAgeMs >= 300000) {
+          // 4. Maximum Safety Time Expiry (30 minutes - allows full price movement to TP/SL without premature closure)
+          else if (actualAgeMs >= 1800000) {
             exitReason = 'TIME_LIMIT_EXIT';
-            exitMessage = `⏱️ [MT5 LIVE] 5-minute scalp expiry triggered for Ticket #${ticket} (${p.symbol}, open ${Math.round(actualAgeMs / 60000)}m). Realized: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`;
+            exitMessage = `⏱️ [MT5 LIVE] 30-minute scalp expiry triggered for Ticket #${ticket} (${p.symbol}). Realized: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`;
             logLevel = currentProfit >= 0 ? 'SUCCESS' : 'INFO';
           }
 

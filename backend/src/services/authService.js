@@ -108,7 +108,7 @@ const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://grid-air-te
           },
           mt5: {
             connected: false,
-            login: '474621142',
+            login: '474636066',
             password: 'Test@123',
             server: 'Exness-MT5Trial15',
             gatewayUrl: LIVE_MT5_GATEWAY_URL,
@@ -130,7 +130,7 @@ const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://grid-air-te
         if (!user.brokerConnections.mt5) {
           user.brokerConnections.mt5 = {
             connected: false,
-            login: '474621142',
+            login: '474636066',
             password: 'Test@123',
             server: 'Exness-MT5Trial15',
             gatewayUrl: LIVE_MT5_GATEWAY_URL,
@@ -139,9 +139,9 @@ const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://grid-air-te
             lastChecked: new Date().toISOString()
           };
         } else {
-          if (!user.brokerConnections.mt5.login) user.brokerConnections.mt5.login = '474621142';
-          if (!user.brokerConnections.mt5.password) user.brokerConnections.mt5.password = 'Test@123';
-          if (!user.brokerConnections.mt5.server) user.brokerConnections.mt5.server = 'Exness-MT5Trial15';
+          user.brokerConnections.mt5.login = '474636066';
+          user.brokerConnections.mt5.password = 'Test@123';
+          user.brokerConnections.mt5.server = 'Exness-MT5Trial15';
           if (!user.brokerConnections.mt5.gatewayUrl || user.brokerConnections.mt5.gatewayUrl.includes('abu-solve')) {
             user.brokerConnections.mt5.gatewayUrl = LIVE_MT5_GATEWAY_URL;
           }
