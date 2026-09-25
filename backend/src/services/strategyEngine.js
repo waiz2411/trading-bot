@@ -208,32 +208,32 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
 
   // ==========================================
   // ==========================================
-  // ASYMMETRIC MICRO-SCALP GEOMETRY (Tight 2.2 pips SL, 5.5 pips TP, strictly 1:2.5 R:R)
-  // Ensures profits (+0.55+) are 2.5x larger than losses (-0.22)
+  // ASYMMETRIC MICRO-SCALP GEOMETRY (4.0 pips SL, 8.5 pips TP, strictly 1:2.1 R:R)
+  // Ensures profits (+$0.85+) are more than 2x larger than losses (-$0.40)
   // ==========================================
-  const targetRR = options.targetRiskRewardRatio !== undefined ? Math.max(1.5, Number(options.targetRiskRewardRatio)) : 2.50;
+  const targetRR = options.targetRiskRewardRatio !== undefined ? Math.max(1.8, Number(options.targetRiskRewardRatio)) : 2.12;
   const decimals = asset.decimals !== undefined ? asset.decimals : 4;
 
   let stopDistance;
   if (asset.category === 'Crypto') {
-    stopDistance = 25.00; // ~$0.25 per 0.01 lot BTC
+    stopDistance = 40.00; // ~$0.40 per 0.01 lot BTC
   } else if (asset.category === 'Forex') {
     if (asset.symbol.includes('JPY')) {
-      stopDistance = 0.028; // 2.8 pips (~$0.19 on 0.01 lot USDJPY/EURJPY/GBPJPY)
+      stopDistance = 0.050; // 5.0 pips (~$0.34 on 0.01 lot USDJPY/CHFJPY/GBPJPY)
     } else {
-      stopDistance = 0.00022; // 2.2 pips (~$0.22 on 0.01 lot EURUSD/GBPUSD/AUDUSD/USDCAD/Crosses)
+      stopDistance = 0.00040; // 4.0 pips (~$0.40 on 0.01 lot EURUSD/GBPUSD/AUDUSD/USDCAD/USDCHF)
     }
   } else if (asset.symbol.includes('GC') || asset.symbol.includes('XAU')) {
-    stopDistance = 1.50; // $1.50 on Gold
+    stopDistance = 2.00; // $2.00 on Gold
   } else {
-    stopDistance = Number((currentPrice * 0.00025).toFixed(decimals));
+    stopDistance = Number((currentPrice * 0.00040).toFixed(decimals));
   }
 
   const targetDistance = Number((stopDistance * targetRR).toFixed(decimals));
   const effectiveRR = Number((targetDistance / stopDistance).toFixed(2));
 
-  // Active Scalping Threshold (Defaults to 75% for active high win-rate sniper scalps)
-  const SNIPER_THRESHOLD = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 75;
+  // High Win-Rate Sniper Threshold (80%+ confluence required)
+  const SNIPER_THRESHOLD = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 80;
 
   // Clear directional edge requirement (must be >= threshold and have >= 4% lead over opposite side)
   const isLongWinning = finalLongConfidence >= SNIPER_THRESHOLD && (

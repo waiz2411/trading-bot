@@ -17,11 +17,11 @@ export class AutonomousAgentLoop {
     this.marginRiskManager = new RiskManager({
       riskPerTradePct: 1.5,
       maxConcurrentTrades: 8, // Full 8-slot multi-scalp capacity
-      minConfidenceThreshold: 75, // High win-rate sniper scalps (75%+)
+      minConfidenceThreshold: 80, // High win-rate sniper scalps (80%+)
       tradeDirection: 'BOTH',
       tradingStyle: 'SCALPING',
       defaultLeverage: 500,
-      targetRiskRewardRatio: 1.3
+      targetRiskRewardRatio: 2.12
     });
     this.marginTradingEngine = new PaperTradingEngine(100, 'MARGIN');
 
@@ -292,12 +292,11 @@ export class AutonomousAgentLoop {
         const isMarginCooldown = (this.assetCooldowns.get(asset.symbol) || 0) > 0;
         const isSpotCooldown = (this.spotCooldowns.get(asset.symbol) || 0) > 0;
 
-        // 3A. Margin Scalper Confluence: High-Momentum Low-Spread Forex Majors & Volatile Crosses
-        // Excludes slow-moving, high-spread pairs (EURGBP, AUDNZD) to maximize win rate
+        // 3A. Margin Scalper Confluence: Ultra Tight-Spread Forex Majors (0.8-1.2 pips) & Liquid JPY Crosses
+        // Excludes wide-spread / low-liquidity pairs to guarantee maximum win rate and avoid spread traps
         const MT5_INSTITUTIONAL_MAJORS = new Set([
-          'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X', 'USDCHF=X', 'NZDUSD=X',
-          'CHFJPY=X', 'EURJPY=X', 'GBPJPY=X', 'AUDJPY=X', 'CADJPY=X', 'NZDJPY=X',
-          'GBPCAD=X', 'EURCAD=X', 'GBPAUD=X', 'EURAUD=X'
+          'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X', 'USDCHF=X',
+          'CHFJPY=X', 'GBPJPY=X'
         ]);
         const isMt5Symbol = MT5_INSTITUTIONAL_MAJORS.has(asset.symbol);
 
@@ -650,8 +649,8 @@ export class AutonomousAgentLoop {
         const handledTickets = new Set();
         const now = Date.now();
         // Calibrated Asymmetric Scalp Geometry on 0.01 lot:
-        const microTargetProfit = 0.55; // Large profit target (~+$0.55 to +$0.70)
-        const microMaxLoss = 0.22; // Tight micro stop loss cap (-$0.22 max, strictly 2.2 pips)
+        const microTargetProfit = 0.80; // Large profit target (~+$0.80 to +$1.10)
+        const microMaxLoss = 0.40; // Full 4.0 pips beyond spread (-$0.40 max loss)
 
         for (const p of openPositions) {
           const ticket = p.ticket;
@@ -685,28 +684,28 @@ export class AutonomousAgentLoop {
           let exitMessage = null;
           let logLevel = 'INFO';
 
-          // 1. FULL TAKE PROFIT (+0.55 or higher): Bank large target!
+          // 1. FULL TAKE PROFIT (+0.80 or higher): Bank large target!
           if (currentProfit >= microTargetProfit) {
             exitReason = 'TAKE_PROFIT_TRIGGER';
             exitMessage = `🎯 [MT5 LIVE] Big Scalp TP Target hit (+${currentProfit}) on Ticket #${ticket} (${p.symbol})! Banking gain...`;
             logLevel = 'SUCCESS';
           }
-          // 2. BREAKEVEN PROFIT SHIELD: If scalp reached >= +0.28 (3 pips) and pulls back, lock in guaranteed green win (+0.12 - +0.20)!
-          else if (currentPeak >= 0.28 && currentProfit <= 0.20 && currentProfit >= 0.12) {
+          // 2. BREAKEVEN PROFIT SHIELD: If scalp reached >= +0.40 (4 pips) and pulls back, lock in guaranteed green win (+0.18 - +0.28)!
+          else if (currentPeak >= 0.40 && currentProfit <= 0.28 && currentProfit >= 0.18) {
             exitReason = 'BREAKEVEN_STOP_TRIGGER';
             exitMessage = `🛡️ [MT5 LIVE] Breakeven Profit Shield: Ticket #${ticket} peaked at +$${currentPeak.toFixed(2)}, locking in +$${currentProfit.toFixed(2)} gain!`;
             logLevel = 'SUCCESS';
           }
-          // 3. FAST MOMENTUM BANK: If scalp is >= 60s old and reached +0.40+, bank it!
-          else if (actualAgeMs >= 60000 && currentProfit >= 0.40) {
+          // 3. FAST MOMENTUM BANK: If scalp is >= 60s old and reached +0.60+, bank it!
+          else if (actualAgeMs >= 60000 && currentProfit >= 0.60) {
             exitReason = 'MOMENTUM_EXHAUSTION_EXIT';
             exitMessage = `⚡ [MT5 LIVE] Momentum bank: Ticket #${ticket} locked +$${currentProfit.toFixed(2)} in ${Math.round(actualAgeMs / 1000)}s!`;
             logLevel = 'SUCCESS';
           }
-          // 4. IMMEDIATE TIGHT MICRO STOP LOSS (-$0.22 max): Cut loss early at 2.2 pips, NEVER allow -$0.45 bleed!
+          // 4. IMMEDIATE TIGHT MICRO STOP LOSS (-$0.40 max): Cut loss cleanly, NEVER allow bleed!
           else if (currentProfit <= -microMaxLoss) {
             exitReason = 'STOP_LOSS_TRIGGER';
-            exitMessage = `🛡️ [MT5 LIVE] Tight micro stop triggered (-$${Math.abs(currentProfit)} / max -$${microMaxLoss}). Cutting loss immediately on Ticket #${ticket}...`;
+            exitMessage = `🛡️ [MT5 LIVE] Micro stop triggered (-$${Math.abs(currentProfit)} / max -$${microMaxLoss}). Cutting loss on Ticket #${ticket}...`;
             logLevel = 'WARN';
           }
           // 5. MAX 15-MINUTE SCALP RECYCLE: Never let a scalp float indefinitely, free slot for next opportunity
