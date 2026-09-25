@@ -13,7 +13,7 @@ export class RiskManager {
     this.minConfidenceThreshold = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 75; // High win-rate sniper threshold (75%+)
     this.tradeDirection = options.tradeDirection || 'BOTH'; // 'BOTH' | 'SHORT_ONLY' | 'LONG_ONLY'
     this.tradingStyle = options.tradingStyle || 'SCALPING'; // 'SCALPING' | 'SWING'
-    this.targetRiskRewardRatio = 1.3; // Strictly 1:1.3 Risk-to-Reward ratio
+    this.targetRiskRewardRatio = 2.5; // Asymmetric 1:2.5 Risk-to-Reward ratio
     this.defaultLeverage = 500; // Strictly 500x leverage
     this.maxTradesPerPair = options.maxTradesPerPair || 1; // Strictly 1 trade per pair (no averaging down)
   }

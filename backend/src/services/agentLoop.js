@@ -649,9 +649,9 @@ export class AutonomousAgentLoop {
         const openPositions = Array.isArray(mt5Connector.openPositions) ? mt5Connector.openPositions : [];
         const handledTickets = new Set();
         const now = Date.now();
-        // Calibrated Micro-Scalp Geometry on 0.01 lot:
-        const microTargetProfit = 0.45; // Bank clean green profit (~$0.45 to $0.60)
-        const microMaxLoss = 0.45; // Strict 1.5% capital loss cap
+        // Calibrated Asymmetric Scalp Geometry on 0.01 lot:
+        const microTargetProfit = 0.55; // Large profit target (~+$0.55 to +$0.70)
+        const microMaxLoss = 0.22; // Tight micro stop loss cap (-$0.22 max, strictly 2.2 pips)
 
         for (const p of openPositions) {
           const ticket = p.ticket;
@@ -685,28 +685,28 @@ export class AutonomousAgentLoop {
           let exitMessage = null;
           let logLevel = 'INFO';
 
-          // 1. FULL TAKE PROFIT (+0.40 or higher): Bank full target!
+          // 1. FULL TAKE PROFIT (+0.55 or higher): Bank large target!
           if (currentProfit >= microTargetProfit) {
             exitReason = 'TAKE_PROFIT_TRIGGER';
-            exitMessage = `🎯 [MT5 LIVE] Micro Scalp TP Target hit (+${currentProfit}) on Ticket #${ticket} (${p.symbol})! Banking gain...`;
+            exitMessage = `🎯 [MT5 LIVE] Big Scalp TP Target hit (+${currentProfit}) on Ticket #${ticket} (${p.symbol})! Banking gain...`;
             logLevel = 'SUCCESS';
           }
-          // 2. BREAKEVEN PROFIT SHIELD: If scalp reached >= +0.10 (1 pip) and pulls back to +0.02 - +0.07, lock in guaranteed green win!
-          else if (currentPeak >= 0.10 && currentProfit <= 0.07 && currentProfit >= 0.02) {
+          // 2. BREAKEVEN PROFIT SHIELD: If scalp reached >= +0.28 (3 pips) and pulls back, lock in guaranteed green win (+0.12 - +0.20)!
+          else if (currentPeak >= 0.28 && currentProfit <= 0.20 && currentProfit >= 0.12) {
             exitReason = 'BREAKEVEN_STOP_TRIGGER';
-            exitMessage = `🛡️ [MT5 LIVE] Breakeven Profit Shield: Ticket #${ticket} peaked at +$${currentPeak.toFixed(2)}, locking in +$${currentProfit.toFixed(2)} to protect gains!`;
+            exitMessage = `🛡️ [MT5 LIVE] Breakeven Profit Shield: Ticket #${ticket} peaked at +$${currentPeak.toFixed(2)}, locking in +$${currentProfit.toFixed(2)} gain!`;
             logLevel = 'SUCCESS';
           }
-          // 3. FAST 45-SECOND MOMENTUM BANK: If scalp is >= 45s old and in solid profit (+0.18 or more), bank it!
-          else if (actualAgeMs >= 45000 && currentProfit >= 0.18) {
+          // 3. FAST MOMENTUM BANK: If scalp is >= 60s old and reached +0.40+, bank it!
+          else if (actualAgeMs >= 60000 && currentProfit >= 0.40) {
             exitReason = 'MOMENTUM_EXHAUSTION_EXIT';
             exitMessage = `⚡ [MT5 LIVE] Momentum bank: Ticket #${ticket} locked +$${currentProfit.toFixed(2)} in ${Math.round(actualAgeMs / 1000)}s!`;
             logLevel = 'SUCCESS';
           }
-          // 4. IMMEDIATE TIGHT STOP LOSS (-0.45 max): Cut loss cleanly, NEVER allow bleed!
+          // 4. IMMEDIATE TIGHT MICRO STOP LOSS (-$0.22 max): Cut loss early at 2.2 pips, NEVER allow -$0.45 bleed!
           else if (currentProfit <= -microMaxLoss) {
             exitReason = 'STOP_LOSS_TRIGGER';
-            exitMessage = `🛡️ [MT5 LIVE] Tight micro stop triggered (-$${Math.abs(currentProfit)} / max -$${microMaxLoss}). Closing Ticket #${ticket} on Exness MT5...`;
+            exitMessage = `🛡️ [MT5 LIVE] Tight micro stop triggered (-$${Math.abs(currentProfit)} / max -$${microMaxLoss}). Cutting loss immediately on Ticket #${ticket}...`;
             logLevel = 'WARN';
           }
           // 5. MAX 15-MINUTE SCALP RECYCLE: Never let a scalp float indefinitely, free slot for next opportunity
@@ -738,8 +738,11 @@ export class AutonomousAgentLoop {
                 });
                 this.liveRealizedPnL = Number((this.liveRealizedPnL + brokerProfit).toFixed(2));
                 this.marginTradingEngine.activePositions = (this.marginTradingEngine.activePositions || []).filter(ap => ap.ticket !== ticket);
-                // Asset cooldown: 30 cycles (2.5m) on stop loss, 6 cycles (30s) on profit
-                this.assetCooldowns.set(p.symbol, exitReason === 'STOP_LOSS_TRIGGER' ? 30 : 6);
+                // Asset cooldown: 120 cycles (10m) on stop loss to prevent repeat loss; 6 cycles (30s) on profit
+                const cdCycles = exitReason === 'STOP_LOSS_TRIGGER' ? 120 : 6;
+                this.assetCooldowns.set(p.symbol, cdCycles);
+                const cleanSym = (p.symbol || '').replace(/[-_./=Xm]/gi, '').toUpperCase();
+                this.assetCooldowns.set(`${cleanSym}=X`, cdCycles);
               }
             }).catch(err => {
               this.log(`⚠️ [MT5 LIVE] Failed to close Ticket #${ticket}: ${err.message}`, 'WARN');

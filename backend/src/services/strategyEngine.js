@@ -207,24 +207,26 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   const finalLongConfidence = Math.max(0, Math.min(100, Math.round(longScore)));
 
   // ==========================================
-  // FAST MICRO-SCALP GEOMETRY (5.5 pips SL, 7.5 pips TP, strictly 1:1.36 R:R)
   // ==========================================
-  const targetRR = options.targetRiskRewardRatio !== undefined ? Number(options.targetRiskRewardRatio) : 1.30;
+  // ASYMMETRIC MICRO-SCALP GEOMETRY (Tight 2.2 pips SL, 5.5 pips TP, strictly 1:2.5 R:R)
+  // Ensures profits (+0.55+) are 2.5x larger than losses (-0.22)
+  // ==========================================
+  const targetRR = options.targetRiskRewardRatio !== undefined ? Math.max(1.5, Number(options.targetRiskRewardRatio)) : 2.50;
   const decimals = asset.decimals !== undefined ? asset.decimals : 4;
 
   let stopDistance;
   if (asset.category === 'Crypto') {
-    stopDistance = 45.00; // ~$0.45 per 0.01 lot BTC
+    stopDistance = 25.00; // ~$0.25 per 0.01 lot BTC
   } else if (asset.category === 'Forex') {
     if (asset.symbol.includes('JPY')) {
-      stopDistance = 0.055; // 5.5 pips (~$0.38 on 0.01 lot USDJPY/EURJPY/GBPJPY)
+      stopDistance = 0.028; // 2.8 pips (~$0.19 on 0.01 lot USDJPY/EURJPY/GBPJPY)
     } else {
-      stopDistance = 0.00055; // 5.5 pips (~$0.55 on 0.01 lot EURUSD/GBPUSD/AUDUSD/USDCAD/Crosses)
+      stopDistance = 0.00022; // 2.2 pips (~$0.22 on 0.01 lot EURUSD/GBPUSD/AUDUSD/USDCAD/Crosses)
     }
   } else if (asset.symbol.includes('GC') || asset.symbol.includes('XAU')) {
-    stopDistance = 2.50; // $2.50 on Gold
+    stopDistance = 1.50; // $1.50 on Gold
   } else {
-    stopDistance = Number((currentPrice * 0.00055).toFixed(decimals));
+    stopDistance = Number((currentPrice * 0.00025).toFixed(decimals));
   }
 
   const targetDistance = Number((stopDistance * targetRR).toFixed(decimals));
