@@ -33,17 +33,19 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
 
   // ==========================================
   // 1. MANDATORY MOVING AVERAGE FAN ALIGNMENT (Strict Anti-Chop / True Trend Engine)
-  // Absolute Rule: FULL STRUCTURAL TREND ALIGNMENT ONLY.
+  // Absolute Rule: STRICT STRUCTURAL TREND ALIGNMENT ONLY.
   // ==========================================
-  // Full Bullish Fan: EMA 9 > EMA 21 > EMA 50 with price above EMA 50
-  const isBullishFan = (!ema9 || !ema21 || ema9 >= ema21) && 
-                       (!ema21 || !ema50 || ema21 >= ema50 * 0.9995) && 
-                       (!ema50 || currentPrice >= ema50 * 0.9995);
+  // Full Bullish Fan: Current Price > EMA 9 > EMA 21 > EMA 50
+  const isBullishFan = ema9 && ema21 && ema50 && 
+                       (currentPrice >= ema9) && 
+                       (ema9 >= ema21) && 
+                       (ema21 >= ema50);
 
-  // Full Bearish Fan: EMA 9 < EMA 21 < EMA 50 with price below EMA 50
-  const isBearishFan = (!ema9 || !ema21 || ema9 <= ema21) && 
-                       (!ema21 || !ema50 || ema21 <= ema50 * 1.0005) && 
-                       (!ema50 || currentPrice <= ema50 * 1.0005);
+  // Full Bearish Fan: Current Price < EMA 9 < EMA 21 < EMA 50
+  const isBearishFan = ema9 && ema21 && ema50 && 
+                       (currentPrice <= ema9) && 
+                       (ema9 <= ema21) && 
+                       (ema21 <= ema50);
 
   if (isBullishFan) {
     longScore += 32;
@@ -55,28 +57,48 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
     shortReasons.push('Moving Average Fan: Price < EMA 9 < EMA 21 < EMA 50 bearish expansion');
   }
 
+  // If there is NO active trend fan, abort early (Anti-Chop protection)
+  if (!isBullishFan && !isBearishFan) {
+    return {
+      action: 'NEUTRAL',
+      side: null,
+      confidence: 30,
+      entryPrice: currentPrice,
+      stopLoss: null,
+      takeProfit: null,
+      riskRewardRatio: null,
+      tradingStyle: 'SCALPING',
+      tradeDirection,
+      reason: 'Anti-Chop Guard: Moving averages not in clean trend alignment. Preserving capital.',
+      factors: ['Market is choppy / consolidating across moving averages']
+    };
+  }
+
   // ==========================================
   // 2. STRUCTURAL HTF TREND BIAS (EMA 50 vs EMA 200 Golden/Death Alignment)
   // ==========================================
   if (longScore > 0 && ema50 && ema200) {
     if (ema50 > ema200 && currentPrice >= ema200) {
-      longScore += 18;
+      longScore += 20;
       longReasons.push('Golden Macro: EMA 50 > EMA 200 structural bull trend');
+    } else if (currentPrice < ema200) {
+      longScore -= 30; // Counter-macro trend penalty!
     }
   }
   if (shortScore > 0 && ema50 && ema200) {
     if (ema50 < ema200 && currentPrice <= ema200) {
-      shortScore += 18;
+      shortScore += 20;
       shortReasons.push('Death Macro: EMA 50 < EMA 200 structural bear trend');
+    } else if (currentPrice > ema200) {
+      shortScore -= 30; // Counter-macro trend penalty!
     }
   }
 
   // ==========================================
   // 3. VALUE PULLBACK ZONE (Near EMA 9 / EMA 21 Dynamic Guide)
-  // Catches pullbacks in active trends without buying at exhausted tops
   // ==========================================
   const distToEma21 = ema21 ? Math.abs(currentPrice - ema21) : Infinity;
-  const isAtEma21Pocket = distToEma21 <= minAtr * 1.8;
+  const isAtEma21Pocket = distToEma21 <= minAtr * 1.6;
 
   if (longScore > 0 && isAtEma21Pocket) {
     longScore += 16;
@@ -100,36 +122,40 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
 
     if (longScore > 0) {
       if (lowerWick / range >= 0.18 || isGreen || lastCandle.close >= prevCandle.close) {
-        longScore += 16;
+        longScore += 18;
         longReasons.push('Bullish Pressure: Lower wick absorption / green momentum confirmed');
+      } else {
+        longScore -= 15;
       }
     }
     if (shortScore > 0) {
       if (upperWick / range >= 0.18 || !isGreen || lastCandle.close <= prevCandle.close) {
-        shortScore += 16;
+        shortScore += 18;
         shortReasons.push('Bearish Pressure: Upper wick rejection / red momentum confirmed');
+      } else {
+        shortScore -= 15;
       }
     }
   }
 
   // ==========================================
-  // 5. RSI MOMENTUM RUNWAY (42 - 66 for Long, 34 - 58 for Short)
+  // 5. RSI MOMENTUM RUNWAY (45 - 65 for Long, 35 - 55 for Short)
   // ==========================================
   if (rsi !== null && rsi !== undefined) {
     if (longScore > 0) {
-      if (rsi >= 44 && rsi <= 66) {
+      if (rsi >= 46 && rsi <= 64) {
         longScore += 14;
         longReasons.push(`RSI Runway (${rsi.toFixed(1)}): Ideal bullish expansion zone`);
-      } else if (rsi > 72) {
-        longScore -= 25; // Overbought penalty
+      } else if (rsi > 70) {
+        longScore -= 30; // Overbought penalty
       }
     }
     if (shortScore > 0) {
-      if (rsi >= 34 && rsi <= 56) {
+      if (rsi >= 36 && rsi <= 54) {
         shortScore += 14;
         shortReasons.push(`RSI Runway (${rsi.toFixed(1)}): Ideal bearish expansion zone`);
-      } else if (rsi < 28) {
-        shortScore -= 25; // Oversold penalty
+      } else if (rsi < 30) {
+        shortScore -= 30; // Oversold penalty
       }
     }
   }
@@ -139,19 +165,19 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   // ==========================================
   if (macd) {
     if (longScore > 0) {
-      if (macd.histogram >= -0.00005) {
+      if (macd.histogram > 0) {
         longScore += 10;
         longReasons.push('MACD: Positive bullish momentum acceleration');
       } else {
-        longScore -= 15; // Histogram mismatch penalty
+        longScore -= 20; // Histogram mismatch penalty
       }
     }
     if (shortScore > 0) {
-      if (macd.histogram <= 0.00005) {
+      if (macd.histogram < 0) {
         shortScore += 10;
         shortReasons.push('MACD: Negative bearish momentum acceleration');
       } else {
-        shortScore -= 15; // Histogram mismatch penalty
+        shortScore -= 20; // Histogram mismatch penalty
       }
     }
   }
@@ -160,11 +186,11 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   // 7. BOLLINGER BANDS POSITION
   // ==========================================
   if (bb) {
-    if (longScore > 0 && currentPrice <= bb.middle * 1.003) {
+    if (longScore > 0 && currentPrice <= bb.middle * 1.002) {
       longScore += 8;
       longReasons.push('Bollinger Value: Buying near mid/lower volatility band');
     }
-    if (shortScore > 0 && currentPrice >= bb.middle * 0.997) {
+    if (shortScore > 0 && currentPrice >= bb.middle * 0.998) {
       shortScore += 8;
       shortReasons.push('Bollinger Value: Selling near mid/upper volatility band');
     }

@@ -265,10 +265,10 @@ export class AutonomousAgentLoop {
       }
 
       // 2. Update live market prices & broker telemetry
-      await marketDataService.updateAll();
-      if (this.currentMode === 'LIVE' && mt5Connector.connected) {
+      if (this.currentMode === 'LIVE') {
         await mt5Connector.tryGatewayConnection().catch(() => {});
       }
+      await marketDataService.updateAll(mt5Connector.marketTicks);
       const markets = marketDataService.getAllMarkets();
       const pricesMap = marketDataService.getAllPricesMap();
 
@@ -404,7 +404,11 @@ export class AutonomousAgentLoop {
 
           // Concentration check: strictly 1 trade per symbol (no averaging down or stacking)
           const openPositions = portfolioState.activePositions;
-          const sameSymbolCount = openPositions.filter(p => p.symbol === asset.symbol).length;
+          const cleanAssetSym = asset.symbol.replace(/[-_./=Xm]/gi, '').toUpperCase();
+          const sameSymbolCount = openPositions.filter(p => {
+            const cleanPosSym = (p.symbol || '').replace(/[-_./=Xm]/gi, '').toUpperCase();
+            return cleanPosSym === cleanAssetSym || cleanPosSym.includes(cleanAssetSym) || cleanAssetSym.includes(cleanPosSym);
+          }).length;
           if (sameSymbolCount >= 1) continue;
 
           const riskEval = this.marginRiskManager.evaluateTradeRisk(portfolioState, signal, asset);
@@ -681,20 +685,20 @@ export class AutonomousAgentLoop {
           let exitMessage = null;
           let logLevel = 'INFO';
 
-          // 1. FULL TAKE PROFIT (+0.45 or higher): Bank full target!
+          // 1. FULL TAKE PROFIT (+0.40 or higher): Bank full target!
           if (currentProfit >= microTargetProfit) {
             exitReason = 'TAKE_PROFIT_TRIGGER';
             exitMessage = `🎯 [MT5 LIVE] Micro Scalp TP Target hit (+${currentProfit}) on Ticket #${ticket} (${p.symbol})! Banking gain...`;
             logLevel = 'SUCCESS';
           }
-          // 2. BREAKEVEN PROFIT SHIELD: If scalp reached >= +0.12 (1.2 pips) and pulls back to +0.03 - +0.08, lock in guaranteed green win!
-          else if (currentPeak >= 0.12 && currentProfit <= 0.08 && currentProfit >= 0.03) {
+          // 2. BREAKEVEN PROFIT SHIELD: If scalp reached >= +0.10 (1 pip) and pulls back to +0.02 - +0.07, lock in guaranteed green win!
+          else if (currentPeak >= 0.10 && currentProfit <= 0.07 && currentProfit >= 0.02) {
             exitReason = 'BREAKEVEN_STOP_TRIGGER';
             exitMessage = `🛡️ [MT5 LIVE] Breakeven Profit Shield: Ticket #${ticket} peaked at +$${currentPeak.toFixed(2)}, locking in +$${currentProfit.toFixed(2)} to protect gains!`;
             logLevel = 'SUCCESS';
           }
-          // 3. FAST 60-SECOND MOMENTUM BANK: If scalp is >= 60s old and in solid profit (+0.22 or more), bank it!
-          else if (actualAgeMs >= 60000 && currentProfit >= 0.22) {
+          // 3. FAST 45-SECOND MOMENTUM BANK: If scalp is >= 45s old and in solid profit (+0.18 or more), bank it!
+          else if (actualAgeMs >= 45000 && currentProfit >= 0.18) {
             exitReason = 'MOMENTUM_EXHAUSTION_EXIT';
             exitMessage = `⚡ [MT5 LIVE] Momentum bank: Ticket #${ticket} locked +$${currentProfit.toFixed(2)} in ${Math.round(actualAgeMs / 1000)}s!`;
             logLevel = 'SUCCESS';
@@ -705,13 +709,11 @@ export class AutonomousAgentLoop {
             exitMessage = `🛡️ [MT5 LIVE] Tight micro stop triggered (-$${Math.abs(currentProfit)} / max -$${microMaxLoss}). Closing Ticket #${ticket} on Exness MT5...`;
             logLevel = 'WARN';
           }
-          // 5. EXTENDED 20-MINUTE SCALP CAP: Only exit if stagnant or in green profit, never kill floating healthy pullbacks!
-          else if (actualAgeMs >= 1200000) {
-            if (currentProfit >= 0.03 || Math.abs(currentProfit) <= 0.12) {
-              exitReason = 'TIME_LIMIT_EXIT';
-              exitMessage = `⏱️ [MT5 LIVE] 20-minute scalp cycle expiry for Ticket #${ticket} (${p.symbol}). Realized: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`;
-              logLevel = currentProfit >= 0 ? 'SUCCESS' : 'INFO';
-            }
+          // 5. MAX 15-MINUTE SCALP RECYCLE: Never let a scalp float indefinitely, free slot for next opportunity
+          else if (actualAgeMs >= 900000) {
+            exitReason = 'TIME_LIMIT_EXIT';
+            exitMessage = `⏱️ [MT5 LIVE] 15-minute scalp cycle expiry for Ticket #${ticket} (${p.symbol}). Realized: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`;
+            logLevel = currentProfit >= 0 ? 'SUCCESS' : 'INFO';
           }
 
           if (exitReason) {

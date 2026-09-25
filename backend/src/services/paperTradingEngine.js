@@ -370,18 +370,18 @@ export class PaperTradingEngine {
       }
 
       // ====================================================
-      // 2. SCALP TIME-LIMIT (20m for Margin, 5m for Spot)
+      // 2. SCALP TIME-LIMIT (15m for Margin, 5m for Spot)
       // ====================================================
       const openTimeMs = pos.openTime ? new Date(pos.openTime).getTime() : 0;
       const ageMs = openTimeMs > 0 ? (Date.now() - openTimeMs) : ((pos.cycleCount || 0) * 5000);
       const cyclesElapsed = pos.cycleCount || 0;
-      const maxHoldMinutes = this.accountType === 'SPOT' ? 5 : 20;
+      const maxHoldMinutes = this.accountType === 'SPOT' ? 5 : 15;
       const maxHoldMs = maxHoldMinutes * 60 * 1000;
       const maxHoldCycles = maxHoldMinutes * 12;
 
       // A. Holding Cap: Exit at market price to rotate capital if profitable or cycle expired
       if (ageMs >= maxHoldMs || cyclesElapsed >= maxHoldCycles) {
-        if (pos.unrealizedPnL >= 0 || ageMs >= 1200000) {
+        if (pos.unrealizedPnL >= 0 || ageMs >= 900000) {
           const isProfitable = pos.unrealizedPnL >= 0;
           const exitNote = isProfitable
             ? `${maxHoldMinutes}m Scalp Expiry: Banked profit at ${maxHoldMinutes}m cap (+${pos.pnlPercent}%)`

@@ -338,6 +338,26 @@ def status():
         for op in open_positions:
             print(f"   -> #{op['ticket']}: {op['symbol']} {op['type']} {op['volume']} lots @ {op['priceOpen']} | PnL: ${op['profit']}")
 
+    # Collect live market ticks for major Forex scalping symbols
+    market_ticks = {}
+    major_symbols = [
+        'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD',
+        'CHFJPY', 'EURJPY', 'GBPJPY', 'AUDJPY', 'CADJPY', 'GBPCAD', 'GBPAUD', 'EURAUD'
+    ]
+    for ms in major_symbols:
+        tsym = find_broker_symbol(ms)
+        tk = mt5.symbol_info_tick(tsym)
+        if tk and getattr(tk, 'bid', 0) > 0:
+            market_ticks[ms] = {
+                'symbol': ms,
+                'brokerSymbol': tsym,
+                'bid': safe_float(tk.bid),
+                'ask': safe_float(tk.ask),
+                'price': round(safe_float((tk.bid + tk.ask) / 2.0), 5),
+                'spread': round(safe_float(tk.ask - tk.bid), 5),
+                'time': safe_int(getattr(tk, 'time', int(time.time())))
+            }
+
     return jsonify({
         'success': True,
         'login': account_info.login,
@@ -353,6 +373,7 @@ def status():
         'positions': open_positions,
         'realizedProfit': round(total_realized_profit, 2),
         'closedDeals': deals_history,
+        'marketTicks': market_ticks,
         'serverTime': int(time.time())
     })
 

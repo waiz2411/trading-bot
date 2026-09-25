@@ -58,6 +58,7 @@ export class MT5Connector {
     this.openPositions = [];
     this.realizedProfit = 0;
     this.closedDeals = [];
+    this.marketTicks = {};
     this.eaSessions = new Map();
     this.accountInfo = {
       balance: 0,
@@ -228,6 +229,7 @@ export class MT5Connector {
       openPositions: this.openPositions || [],
       realizedProfit: this.realizedProfit !== undefined ? this.realizedProfit : 0,
       closedDeals: this.closedDeals || [],
+      marketTicks: this.marketTicks || {},
       activeEaSessions: this.eaSessions.size
     };
   }
@@ -345,6 +347,9 @@ export class MT5Connector {
         }
         if (Array.isArray(data.closedDeals)) {
           this.closedDeals = data.closedDeals;
+        }
+        if (data.marketTicks && typeof data.marketTicks === 'object') {
+          this.marketTicks = data.marketTicks;
         }
         this.accountInfo = {
           balance: Number(data.balance || 0),
