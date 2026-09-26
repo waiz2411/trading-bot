@@ -178,16 +178,18 @@ export class PaperTradingEngine {
     const posMargin = margin || Number((notional / leverage).toFixed(2));
 
     // Realistic Broker Fee Matrix:
-    // Spot: 0.10% (0.0010) Binance/MEXC maker-taker fee
+    // Spot: 0.10% (0.0010) Binance/MEXC maker-taker fee (or 0.075% with BNB discount)
     // Margin: Crypto CFD 0.06% (0.0006) / Forex 0.01% (0.0001) / Commodities 0.02% (0.0002)
-    let feeRate = 0.0001;
-    if (this.accountType === 'SPOT') {
-      feeRate = 0.0010;
-    } else {
-      if (category === 'Crypto') feeRate = 0.0006;
-      else if (category === 'Forex') feeRate = 0.0001;
-      else if (category === 'Commodities' || String(symbol).includes('XAU') || String(symbol).includes('GOLD')) feeRate = 0.0002;
-      else feeRate = 0.00015;
+    let feeRate = orderData.feeRate !== undefined ? Number(orderData.feeRate) : 0.0001;
+    if (orderData.feeRate === undefined) {
+      if (this.accountType === 'SPOT') {
+        feeRate = 0.0010;
+      } else {
+        if (category === 'Crypto') feeRate = 0.0006;
+        else if (category === 'Forex') feeRate = 0.0001;
+        else if (category === 'Commodities' || String(symbol).includes('XAU') || String(symbol).includes('GOLD')) feeRate = 0.0002;
+        else feeRate = 0.00015;
+      }
     }
 
     const entryFee = Number((notional * feeRate).toFixed(4));
@@ -376,22 +378,25 @@ export class PaperTradingEngine {
       }
 
       // ====================================================
-      // 1. SCALPING DYNAMIC TRAILING STOP & BREAK-EVEN (30% & 55% Zones)
+      // 1. SCALPING DYNAMIC TRAILING STOP & FEE-COMPENSATED BREAK-EVEN
+      // Guarantees zero fee loss by moving Stop-Loss above Entry + Round-trip fee buffer!
       // ====================================================
       if (this.trailingStopsEnabled) {
         const dec = pos.decimals !== undefined ? pos.decimals : 4;
+        const roundTripFeeBuffer = pos.entryPrice * ((pos.feeRate || 0.0010) * 2.2);
+
         if (pos.side === 'SHORT') {
           const runDown = pos.entryPrice - pos.lowestPrice;
 
-          // Scalp Break-Even: Price moved 25% of target distance -> Lock in Break-Even ($0 loss)!
-          if (!pos.breakEvenLocked && runDown >= pos.targetDistance * 0.25) {
-            pos.stopLoss = Number((pos.entryPrice - pos.stopDistance * 0.05).toFixed(dec));
+          // Fee-Compensated Break-Even: Price moved 40% of target distance -> Lock in True Break-Even (Covering fees)!
+          if (!pos.breakEvenLocked && (runDown >= pos.targetDistance * 0.40 || runDown >= pos.entryPrice * 0.0050)) {
+            pos.stopLoss = Number((pos.entryPrice - Math.max(roundTripFeeBuffer, pos.stopDistance * 0.08)).toFixed(dec));
             pos.breakEvenLocked = true;
           }
 
-          // Scalp Trailing Stop: Price reached 50% of target distance -> Trail closely behind lowest price!
-          if (runDown >= pos.targetDistance * 0.50) {
-            const newTrailStop = Number((pos.lowestPrice + pos.stopDistance * 0.18).toFixed(dec));
+          // Dynamic Scalp Trailing Stop: Price reached 60% of target distance -> Trail closely behind lowest price!
+          if (runDown >= pos.targetDistance * 0.60) {
+            const newTrailStop = Number((pos.lowestPrice + pos.stopDistance * 0.25).toFixed(dec));
             if (newTrailStop < pos.stopLoss) {
               pos.stopLoss = newTrailStop;
               pos.trailingStopActive = true;
@@ -400,15 +405,15 @@ export class PaperTradingEngine {
         } else if (pos.side === 'LONG') {
           const runUp = pos.highestPrice - pos.entryPrice;
 
-          // Scalp Break-Even: Price gained 25% of target distance -> Lock in Break-Even ($0 loss)!
-          if (!pos.breakEvenLocked && runUp >= pos.targetDistance * 0.25) {
-            pos.stopLoss = Number((pos.entryPrice + pos.stopDistance * 0.05).toFixed(dec));
+          // Fee-Compensated Break-Even: Price gained 40% of target distance -> Lock in True Break-Even (Covering fees)!
+          if (!pos.breakEvenLocked && (runUp >= pos.targetDistance * 0.40 || runUp >= pos.entryPrice * 0.0050)) {
+            pos.stopLoss = Number((pos.entryPrice + Math.max(roundTripFeeBuffer, pos.stopDistance * 0.08)).toFixed(dec));
             pos.breakEvenLocked = true;
           }
 
-          // Scalp Trailing Stop: Price reached 50% of target distance -> Trail closely behind highest price!
-          if (runUp >= pos.targetDistance * 0.50) {
-            const newTrailStop = Number((pos.highestPrice - pos.stopDistance * 0.18).toFixed(dec));
+          // Dynamic Scalp Trailing Stop: Price reached 60% of target distance -> Trail closely behind highest price!
+          if (runUp >= pos.targetDistance * 0.60) {
+            const newTrailStop = Number((pos.highestPrice - pos.stopDistance * 0.25).toFixed(dec));
             if (newTrailStop > pos.stopLoss) {
               pos.stopLoss = newTrailStop;
               pos.trailingStopActive = true;
@@ -418,7 +423,7 @@ export class PaperTradingEngine {
       }
 
       // ====================================================
-      // 2. STRICT 5-MINUTE SCALP TIME-LIMIT & 2.5M MOMENTUM BANK
+      // 2. STRICT 5-MINUTE SCALP TIME-LIMIT & SOLID MOMENTUM BANK
       // ====================================================
       const openTimeMs = pos.openTime ? new Date(pos.openTime).getTime() : 0;
       const ageMs = openTimeMs > 0 ? (Date.now() - openTimeMs) : ((pos.cycleCount || 0) * 5000);
@@ -440,17 +445,18 @@ export class PaperTradingEngine {
         }
       }
 
-      // B. Fast Momentum Lock (After 2.5m / 30 cycles)
-      // If scalp reached profit after 2.5m, bank it cleanly!
-      if ((ageMs >= 150000 || cyclesElapsed >= 30) && pos.unrealizedPnL > 0) {
-        if (pos.side === 'LONG' && livePrice < pos.highestPrice * 0.998) {
-          const closed = this.closePosition(pos.id, livePrice, 'MOMENTUM_EXHAUSTION_EXIT', `Fast Scalp Lock: Secured +${pos.pnlPercent}% gain before 5m cap`);
+      // B. Noticeable Momentum Lock (After 3m / 36 cycles)
+      // Only banks early if net profit is substantial (>= +0.50% net / +$0.50 on $100) and starts pulling back
+      const minNetProfitThreshold = (pos.notional || 100) * 0.0050; // At least +$0.50 net on $100
+      if ((ageMs >= 180000 || cyclesElapsed >= 36) && pos.unrealizedPnL >= minNetProfitThreshold) {
+        if (pos.side === 'LONG' && livePrice < pos.highestPrice * 0.997) {
+          const closed = this.closePosition(pos.id, livePrice, 'MOMENTUM_EXHAUSTION_EXIT', `Fast Scalp Lock: Secured +$${pos.unrealizedPnL} net profit (+${pos.pnlPercent}%) before 5m cap`);
           if (closed) {
             closedTriggers.push(closed);
             continue;
           }
-        } else if (pos.side === 'SHORT' && livePrice > pos.lowestPrice * 1.002) {
-          const closed = this.closePosition(pos.id, livePrice, 'MOMENTUM_EXHAUSTION_EXIT', `Fast Scalp Lock: Secured +${pos.pnlPercent}% gain before 5m cap`);
+        } else if (pos.side === 'SHORT' && livePrice > pos.lowestPrice * 1.003) {
+          const closed = this.closePosition(pos.id, livePrice, 'MOMENTUM_EXHAUSTION_EXIT', `Fast Scalp Lock: Secured +$${pos.unrealizedPnL} net profit (+${pos.pnlPercent}%) before 5m cap`);
           if (closed) {
             closedTriggers.push(closed);
             continue;

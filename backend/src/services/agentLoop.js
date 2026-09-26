@@ -28,16 +28,19 @@ export class AutonomousAgentLoop {
     this.marginTradingEngine = new PaperTradingEngine(100, 'MARGIN');
 
     // Account 2: Pure Spot Crypto (100% Shariah Halal, Multi-Portion 1-8 Slots, 0x leverage, fast 5-minute scalps)
+    // Fee-Compensated Spot Target: 1.00% Gross TP yields +$0.80 Net Profit on $100 after Binance 0.20% fee
     this.spotRiskManager = {
       maxSlots: 4, // 1, 2, 4, 6, 8 portions
       allocationPct: 25, // 25% of balance per portion
       maxTradesPerPair: 2, // Up to 2 concurrent portions per coin
-      stopLossPct: 0.6, // 0.6% Stop Loss default
-      takeProfitPct: 0.78, // 0.78% Take Profit (strict 1:1.3 R:R)
+      stopLossPct: 0.6, // 0.6% Stop Loss default (-$0.80 on $100 after fees)
+      takeProfitPct: 1.0, // 1.00% Take Profit default (+$0.80 net on $100 after 0.20% fees)
       maxHoldMinutes: 5, // Strict 5-minute maximum holding cap
       minConfidenceThreshold: 90,
       allowHighVolatility: true, // User setting: Hunt explosive Halal high-volatility coins vs established Halal majors
       volatilityMode: 'HIGH_VOLATILITY_HALAL', // 'HIGH_VOLATILITY_HALAL' | 'ESTABLISHED_HALAL'
+      useBnbFeeDiscount: false, // 25% BNB fee discount toggle (0.075% vs 0.10%)
+      feeRate: 0.0010,
       isHalalStrict: true // 100% Shariah Compliant (Zero Meme Coins, Zero Riba Lending, Zero Gambling)
     };
     this.spotTradingEngine = new PaperTradingEngine(25, 'SPOT');
@@ -248,8 +251,13 @@ export class AutonomousAgentLoop {
         this.spotRiskManager.allowHighVolatility = true;
       }
     }
+    if (newSettings.useBnbFeeDiscount !== undefined) {
+      this.spotRiskManager.useBnbFeeDiscount = Boolean(newSettings.useBnbFeeDiscount);
+      this.spotRiskManager.feeRate = this.spotRiskManager.useBnbFeeDiscount ? 0.00075 : 0.0010;
+    }
     const volLabel = this.spotRiskManager.allowHighVolatility ? '⚡ High-Volatility Halal Hunter' : '🛡️ Standard Halal Majors';
-    this.log(`⚙️ Spot Strategy updated: [${volLabel}] ${this.spotRiskManager.maxSlots} Portions (${this.spotRiskManager.allocationPct}% each, max ${this.spotRiskManager.maxTradesPerPair}/coin, max ${this.spotRiskManager.maxHoldMinutes || 5}m hold), SL: -${this.spotRiskManager.stopLossPct}%, TP: +${this.spotRiskManager.takeProfitPct}% (🕌 100% Shariah Compliant)`, 'INFO');
+    const feeLabel = this.spotRiskManager.useBnbFeeDiscount ? '0.075% BNB Discount' : '0.10% Standard';
+    this.log(`⚙️ Spot Strategy updated: [${volLabel} | ${feeLabel}] ${this.spotRiskManager.maxSlots} Portions (${this.spotRiskManager.allocationPct}% each, max ${this.spotRiskManager.maxTradesPerPair}/coin, max ${this.spotRiskManager.maxHoldMinutes || 5}m hold), SL: -${this.spotRiskManager.stopLossPct}%, TP: +${this.spotRiskManager.takeProfitPct}% (🕌 100% Shariah Compliant)`, 'INFO');
     return this.spotRiskManager;
   }
 
@@ -648,6 +656,7 @@ export class AutonomousAgentLoop {
             riskRewardRatio: Number((this.spotRiskManager.takeProfitPct / this.spotRiskManager.stopLossPct).toFixed(1)),
             maxHoldMinutes: this.spotRiskManager.maxHoldMinutes || 5,
             tradingStyle: 'SPOT_BUY',
+            feeRate: this.spotRiskManager.feeRate || (this.spotRiskManager.useBnbFeeDiscount ? 0.00075 : 0.0010),
             leverage: 1, // 1x Spot Cash
             margin: notional, // cash allocated
             liquidationPrice: 0 // No liquidation in spot

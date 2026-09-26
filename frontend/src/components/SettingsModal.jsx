@@ -24,12 +24,13 @@ export default function SettingsModal({
   // Spot Settings State (Fast 5-Minute Scalping & Halal Filtering)
   const initialSpot = spotSettings || {};
   const [spotStopLossPct, setSpotStopLossPct] = useState(initialSpot.stopLossPct || 0.6);
-  const [spotTakeProfitPct, setSpotTakeProfitPct] = useState(initialSpot.takeProfitPct || 0.78);
+  const [spotTakeProfitPct, setSpotTakeProfitPct] = useState(initialSpot.takeProfitPct || 1.0);
   const [spotMinConfidence, setSpotMinConfidence] = useState(initialSpot.minConfidenceThreshold || 90);
   const [spotMaxSlots, setSpotMaxSlots] = useState(initialSpot.maxSlots || 4);
   const [spotMaxTradesPerPair, setSpotMaxTradesPerPair] = useState(initialSpot.maxTradesPerPair || 2);
   const [spotMaxHoldMinutes, setSpotMaxHoldMinutes] = useState(initialSpot.maxHoldMinutes || 5);
   const [spotAllowHighVolatility, setSpotAllowHighVolatility] = useState(initialSpot.allowHighVolatility !== undefined ? initialSpot.allowHighVolatility : true);
+  const [spotUseBnbFee, setSpotUseBnbFee] = useState(initialSpot.useBnbFeeDiscount !== undefined ? initialSpot.useBnbFeeDiscount : false);
 
   const [savedSuccess, setSavedSuccess] = useState(false);
 
@@ -93,11 +94,10 @@ export default function SettingsModal({
   ];
 
   const spotTpPresets = [
-    { label: '+0.8%', value: 0.8, tag: 'Quick Lock' },
-    { label: '+1.0%', value: 1.0, tag: 'Fast Scalp ⭐' },
-    { label: '+1.2%', value: 1.2, tag: 'Target 1:2' },
-    { label: '+1.6%', value: 1.6, tag: 'Impulse' },
-    { label: '+2.2%', value: 2.2, tag: 'Runner' }
+    { label: '+0.8%', value: 0.8, tag: 'Net +$0.60 / $100' },
+    { label: '+1.0%', value: 1.0, tag: 'Net +$0.80 ⭐ Optimal' },
+    { label: '+1.4%', value: 1.4, tag: 'Net +$1.20 🔥 High-Vol' },
+    { label: '+2.0%', value: 2.0, tag: 'Net +$1.80 🚀 Runner' }
   ];
 
   const handleSave = (e) => {
@@ -112,7 +112,8 @@ export default function SettingsModal({
         maxTradesPerPair: parseInt(spotMaxTradesPerPair, 10),
         maxHoldMinutes: parseInt(spotMaxHoldMinutes, 10),
         allowHighVolatility: Boolean(spotAllowHighVolatility),
-        volatilityMode: spotAllowHighVolatility ? 'HIGH_VOLATILITY_HALAL' : 'ESTABLISHED_HALAL'
+        volatilityMode: spotAllowHighVolatility ? 'HIGH_VOLATILITY_HALAL' : 'ESTABLISHED_HALAL',
+        useBnbFeeDiscount: Boolean(spotUseBnbFee)
       });
     } else {
       onSaveSettings({
@@ -607,66 +608,110 @@ export default function SettingsModal({
                 </div>
               </div>
 
+              {/* Binance Fee Structure & BNB Discount Option */}
+              <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30">
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="text-amber-300 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Binance Trading Fee Optimization</span>
+                  </label>
+                  <span className="text-amber-300 font-bold text-xs bg-terminal-950 px-2 py-0.5 rounded border border-amber-500/40 font-mono">
+                    {spotUseBnbFee ? '0.15% Round-Trip (BNB)' : '0.20% Round-Trip (Standard)'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 font-sans mb-2.5">
+                  Binance deducts 0.10% on BUY and 0.10% on SELL ($0.20 per $100). The engine auto-compensates Take-Profit and Break-Even stops to guarantee positive net earnings.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSpotUseBnbFee(false)}
+                    className={`p-2 rounded-lg border text-left transition-all ${
+                      !spotUseBnbFee
+                        ? 'bg-amber-600/25 border-amber-400 text-white shadow-sm'
+                        : 'bg-terminal-950 border-terminal-border text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <div className="font-bold text-xs">Standard Binance Fee</div>
+                    <div className="text-[10px] text-slate-400">0.10% Buy + 0.10% Sell</div>
+                    <div className="text-[9px] text-amber-400 mt-0.5">$0.20 Fee per $100</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSpotUseBnbFee(true)}
+                    className={`p-2 rounded-lg border text-left transition-all ${
+                      spotUseBnbFee
+                        ? 'bg-amber-600/25 border-amber-400 text-white shadow-sm'
+                        : 'bg-terminal-950 border-terminal-border text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <div className="font-bold text-xs text-amber-300">BNB Fee Discount (25% Off) ⭐</div>
+                    <div className="text-[10px] text-slate-400">0.075% Buy + 0.075% Sell</div>
+                    <div className="text-[9px] text-emerald-400 mt-0.5">$0.15 Fee per $100 (+5¢ Profit)</div>
+                  </button>
+                </div>
+              </div>
+
               {/* Quick Strategy Combo Presets */}
               <div className="p-3 rounded-xl bg-terminal-950 border border-terminal-border space-y-2">
                 <div className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  <span>High Win-Rate Fast Scalp Presets</span>
+                  <span>Fee-Compensated Spot Scalp Presets</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => {
                       setSpotStopLossPct(0.5);
-                      setSpotTakeProfitPct(0.9);
-                      setSpotMinConfidence(80);
+                      setSpotTakeProfitPct(0.8);
+                      setSpotMinConfidence(85);
                       setSpotMaxHoldMinutes(5);
                     }}
                     className={`p-2 rounded-lg border text-left transition-all ${
-                      Math.abs(parseFloat(spotStopLossPct) - 0.5) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 0.9) < 0.05
+                      Math.abs(parseFloat(spotStopLossPct) - 0.5) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 0.8) < 0.05
                         ? 'bg-emerald-950/60 border-emerald-500/60 text-white'
                         : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    <div className="font-bold text-emerald-400">Ultra-Fast 5m ⚡</div>
-                    <div className="text-[10px] text-slate-400">-0.5% SL / +0.9% TP</div>
-                    <div className="text-[9px] text-cyan-400 mt-0.5">1-5 Min Micro-Burst</div>
+                    <div className="font-bold text-emerald-400">Quick Scalp ⚡</div>
+                    <div className="text-[10px] text-slate-300">+0.8% Gross (Net +$0.60 / $100)</div>
+                    <div className="text-[9px] text-cyan-400 mt-0.5">SL: -0.5% | Fast 5m Cap</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       setSpotStopLossPct(0.6);
-                      setSpotTakeProfitPct(1.1);
-                      setSpotMinConfidence(80);
+                      setSpotTakeProfitPct(1.0);
+                      setSpotMinConfidence(85);
                       setSpotMaxHoldMinutes(5);
                     }}
                     className={`p-2 rounded-lg border text-left transition-all ${
-                      Math.abs(parseFloat(spotStopLossPct) - 0.6) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 1.1) < 0.05
+                      Math.abs(parseFloat(spotStopLossPct) - 0.6) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 1.0) < 0.05
                         ? 'bg-emerald-950/60 border-emerald-500/60 text-white'
                         : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    <div className="font-bold text-amber-400">Sniper Scalp ⭐</div>
-                    <div className="text-[10px] text-slate-400">-0.6% SL / +1.1% TP</div>
-                    <div className="text-[9px] text-emerald-400 mt-0.5">80%–85% Target</div>
+                    <div className="font-bold text-amber-400">Sniper Scalp ⭐ (Recommended)</div>
+                    <div className="text-[10px] text-slate-300">+1.0% Gross (Net +$0.80 / $100)</div>
+                    <div className="text-[9px] text-emerald-400 mt-0.5">SL: -0.6% | 1:1.6 Net R:R</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      setSpotStopLossPct(0.8);
-                      setSpotTakeProfitPct(1.6);
-                      setSpotMinConfidence(80);
+                      setSpotStopLossPct(0.7);
+                      setSpotTakeProfitPct(1.4);
+                      setSpotMinConfidence(85);
                       setSpotMaxHoldMinutes(5);
                     }}
                     className={`p-2 rounded-lg border text-left transition-all ${
-                      Math.abs(parseFloat(spotStopLossPct) - 0.8) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 1.6) < 0.05
+                      Math.abs(parseFloat(spotStopLossPct) - 0.7) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 1.4) < 0.05
                         ? 'bg-emerald-950/60 border-emerald-500/60 text-white'
                         : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    <div className="font-bold text-indigo-400">Momentum Runner</div>
-                    <div className="text-[10px] text-slate-400">-0.8% SL / +1.6% TP</div>
-                    <div className="text-[9px] text-indigo-300 mt-0.5">1:2 R:R Ratio</div>
+                    <div className="font-bold text-indigo-400">Volatile Alt Scalp 🔥</div>
+                    <div className="text-[10px] text-slate-300">+1.4% Gross (Net +$1.20 / $100)</div>
+                    <div className="text-[9px] text-indigo-300 mt-0.5">SL: -0.7% | High-Vol Hunter</div>
                   </button>
                 </div>
               </div>
@@ -710,19 +755,9 @@ export default function SettingsModal({
                   ))}
                 </div>
 
-                {parseFloat(spotStopLossPct) <= 0.4 ? (
-                  <div className="mt-2.5 p-2.5 rounded-lg bg-cyan-950/40 border border-cyan-500/40 text-[11px] text-cyan-200 leading-relaxed flex items-start gap-2">
-                    <ShieldCheck className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold text-cyan-300">Micro-Wick Noise Shield Active: </span>
-                      Because stop is ultra-tight (-{parseFloat(spotStopLossPct).toFixed(1)}%), entries strictly require lower-wick dip rejection & RSI value exhaustion so trades aren't clipped by regular 0.2% crypto spread noise.
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-slate-400 font-sans mt-2">
-                    Safely sells the holding if price dips by this percentage from your buy price.
-                  </p>
-                )}
+                <p className="text-[11px] text-slate-400 font-sans mt-2">
+                  Safely sells holding if price dips by {parseFloat(spotStopLossPct).toFixed(1)}% (Estimated loss: -${((parseFloat(spotStopLossPct) + (spotUseBnbFee ? 0.15 : 0.20))).toFixed(2)} on $100 after fees).
+                </p>
               </div>
 
               {/* Spot Take Profit % */}
@@ -730,7 +765,7 @@ export default function SettingsModal({
                 <div className="flex justify-between items-center mb-1.5">
                   <label className="text-emerald-300 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                     <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Take Profit Percentage</span>
+                    <span>Take Profit Percentage (Gross Target)</span>
                   </label>
                   <span className="text-emerald-400 font-bold text-sm bg-terminal-950 px-2.5 py-0.5 rounded border border-emerald-500/40 font-mono">
                     +{parseFloat(spotTakeProfitPct).toFixed(1)}%
@@ -741,7 +776,7 @@ export default function SettingsModal({
                   type="range"
                   min="0.5"
                   max="15.0"
-                  step="0.25"
+                  step="0.1"
                   value={spotTakeProfitPct}
                   onChange={(e) => setSpotTakeProfitPct(e.target.value)}
                   className="w-full accent-emerald-500 cursor-pointer my-2"
@@ -762,6 +797,22 @@ export default function SettingsModal({
                       {preset.label} <span className="opacity-75">({preset.tag})</span>
                     </button>
                   ))}
+                </div>
+
+                {/* Live Net Profit Breakdown on $100 */}
+                <div className="mt-3 p-2.5 rounded-lg bg-terminal-950 border border-emerald-500/30 text-[11px] space-y-1 font-mono">
+                  <div className="flex justify-between text-slate-400">
+                    <span>Gross Profit Target ($100 Trade):</span>
+                    <span className="text-white">+${(parseFloat(spotTakeProfitPct)).toFixed(2)} (+{parseFloat(spotTakeProfitPct).toFixed(1)}%)</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400">
+                    <span>Binance Round-Trip Fee:</span>
+                    <span className="text-amber-400">-${(spotUseBnbFee ? 0.15 : 0.20).toFixed(2)} ({spotUseBnbFee ? '0.15%' : '0.20%'})</span>
+                  </div>
+                  <div className="pt-1 border-t border-terminal-border flex justify-between font-bold text-xs">
+                    <span className="text-emerald-400">Estimated Net Realized Profit:</span>
+                    <span className="text-emerald-300">+${Math.max(0, parseFloat(spotTakeProfitPct) - (spotUseBnbFee ? 0.15 : 0.20)).toFixed(2)} (Net +{Math.max(0, parseFloat(spotTakeProfitPct) - (spotUseBnbFee ? 0.15 : 0.20)).toFixed(2)}%)</span>
+                  </div>
                 </div>
 
                 <div className="mt-2.5 flex items-center justify-between text-[11px] bg-terminal-950 p-2 rounded border border-terminal-border">

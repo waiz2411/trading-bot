@@ -406,15 +406,18 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
   const currentPrice = asset.price || technicals.currentPrice;
   const { ema9, ema21, ema50, ema200, rsi, macd, bollingerBands: bb } = technicals;
 
+  // Fee-Compensated Spot Target Geometry:
+  // Binance Fee: 0.10% buy + 0.10% sell = 0.20% round-trip ($0.20 on $100).
+  // Target: Base +1.00% gross delivers +$0.80 net profit after fees on $100 trade.
+  // High-volatility alts scale up to +1.40% - +1.80% gross (delivering +$1.20 - +$1.60 net profit).
   const baseStopLossPct = Math.max(0.3, Number(spotRiskSettings.stopLossPct) || 0.6);
-  // Strict 1:1.3 R:R: takeProfitPct is strictly 1.3 * stopLossPct
-  const baseTakeProfitPct = Number((baseStopLossPct * 1.30).toFixed(2));
+  const baseTakeProfitPct = Math.max(0.7, Number(spotRiskSettings.takeProfitPct) || 1.0);
   const minThreshold = Number(spotRiskSettings.minConfidenceThreshold) || 50;
-  const maxHoldMinutes = 5; // Strict 5-minute cap
+  const maxHoldMinutes = Number(spotRiskSettings.maxHoldMinutes) || 5; // Strict 5-minute cap
 
   // Adapt geometry to coin's volatility
-  const volFactor = isVolatileCoin ? Math.min(1.25, (asset.minVolatility || 1.3) / 1.2) : 1.0;
-  const stopLossPct = Number((baseStopLossPct * volFactor).toFixed(2));
+  const volFactor = isVolatileCoin ? Math.min(1.5, Math.max(1.2, (asset.minVolatility || 1.35))) : 1.0;
+  const stopLossPct = Number((baseStopLossPct * (isVolatileCoin ? 1.15 : 1.0)).toFixed(2));
   const takeProfitPct = Number((baseTakeProfitPct * volFactor).toFixed(2));
 
   let score = 32; // Constructive baseline
