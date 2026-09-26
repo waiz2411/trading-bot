@@ -20,6 +20,7 @@ export default function SettingsModal({
   const [targetRiskRewardRatio, setTargetRiskRewardRatio] = useState(initialMargin.targetRiskRewardRatio || 1.6);
   const [defaultLeverage, setDefaultLeverage] = useState(initialMargin.defaultLeverage || 500);
   const [maxTradesPerPair, setMaxTradesPerPair] = useState(initialMargin.maxTradesPerPair || 1);
+  const [marginMaxHoldMinutes, setMarginMaxHoldMinutes] = useState(initialMargin.maxHoldMinutes || 5);
 
   // Spot Settings State (Fast 5-Minute Scalping & Halal Filtering)
   const initialSpot = spotSettings || {};
@@ -46,11 +47,14 @@ export default function SettingsModal({
     { label: '3 Portions 🔥', value: 3, tag: 'Multi-Entry' }
   ];
 
-  const spotMaxHoldPresets = [
+  const holdTimePresets = [
     { label: '3 Mins', value: 3, tag: 'Hyper Scalp' },
     { label: '5 Mins ⭐', value: 5, tag: 'Optimal Cap' },
     { label: '8 Mins', value: 8, tag: 'Balanced' },
-    { label: '10 Mins', value: 10, tag: 'Extended' }
+    { label: '10 Mins', value: 10, tag: 'Extended' },
+    { label: '15 Mins', value: 15, tag: 'Mid Scalp' },
+    { label: '30 Mins', value: 30, tag: 'Swing Scalp' },
+    { label: '60 Mins 🚀', value: 60, tag: '1-Hour Cap' }
   ];
 
   const spotPortionPresets = [
@@ -123,7 +127,8 @@ export default function SettingsModal({
         minConfidenceThreshold: parseInt(minConfidenceThreshold, 10),
         targetRiskRewardRatio: parseFloat(targetRiskRewardRatio),
         defaultLeverage: parseInt(defaultLeverage, 10),
-        maxTradesPerPair: parseInt(maxTradesPerPair, 10)
+        maxTradesPerPair: parseInt(maxTradesPerPair, 10),
+        maxHoldMinutes: parseInt(marginMaxHoldMinutes, 10)
       });
     }
     setSavedSuccess(true);
@@ -383,6 +388,42 @@ export default function SettingsModal({
                 </div>
               </div>
 
+              {/* Max Hold Duration (Auto-Exit Cap) */}
+              <div className="p-3.5 rounded-xl bg-cyan-950/25 border border-cyan-500/40">
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="text-cyan-300 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <Timer className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Max Hold Time Per Scalp (Auto-Exit)</span>
+                  </label>
+                  <span className="text-cyan-400 font-bold text-sm bg-terminal-950 px-2.5 py-0.5 rounded border border-cyan-500/40 font-mono">
+                    {marginMaxHoldMinutes} Min{marginMaxHoldMinutes > 1 ? 's' : ''} Max
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 font-sans mb-2">
+                  Guarantees scalp discipline: Positions held for {marginMaxHoldMinutes} minutes are auto-closed to protect capital and recycle margin into fresh setups.
+                </p>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+                  {holdTimePresets.map((p) => {
+                    const active = Number(marginMaxHoldMinutes) === p.value;
+                    return (
+                      <button
+                        key={p.value}
+                        type="button"
+                        onClick={() => setMarginMaxHoldMinutes(p.value)}
+                        className={`px-2 py-1.5 rounded text-xs font-semibold border transition-all text-center ${
+                          active
+                            ? 'bg-cyan-600/30 border-cyan-500 text-white shadow-sm'
+                            : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                        }`}
+                      >
+                        <div className="font-bold">{p.label}</div>
+                        <div className="text-[10px] opacity-75 font-normal truncate">{p.tag}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Min Confluence Score */}
               <div>
                 <div className="flex justify-between items-center mb-1.5">
@@ -572,7 +613,7 @@ export default function SettingsModal({
                 </div>
               </div>
 
-              {/* Max Hold Duration (Fast 5m Scalp Hard Cap) */}
+              {/* Max Hold Duration (Auto-Exit Cap) */}
               <div className="p-3.5 rounded-xl bg-cyan-950/25 border border-cyan-500/40">
                 <div className="flex justify-between items-center mb-1.5">
                   <label className="text-cyan-300 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
@@ -586,8 +627,8 @@ export default function SettingsModal({
                 <p className="text-[11px] text-slate-300 font-sans mb-2">
                   Guarantees fast turnover: Trades held for {spotMaxHoldMinutes} minutes are auto-closed at market price to bank micro-profits and recycle cash into new high-conviction setups.
                 </p>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {spotMaxHoldPresets.map((p) => {
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+                  {holdTimePresets.map((p) => {
                     const active = Number(spotMaxHoldMinutes) === p.value;
                     return (
                       <button

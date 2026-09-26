@@ -16,6 +16,7 @@ export class RiskManager {
     this.targetRiskRewardRatio = 1.6; // M5 Trend Sniper 1:1.6 Net Risk-to-Reward ratio
     this.defaultLeverage = 500; // Strictly 500x leverage
     this.maxTradesPerPair = options.maxTradesPerPair || 1; // Strictly 1 trade per pair (no averaging down)
+    this.maxHoldMinutes = options.maxHoldMinutes || 5; // Default 5 minutes (supports 3m, 5m, 10m, 15m, 30m, 60m)
   }
 
   updateSettings(newSettings) {
@@ -43,6 +44,9 @@ export class RiskManager {
     if (newSettings.maxTradesPerPair !== undefined) {
       this.maxTradesPerPair = Math.max(1, Math.min(4, parseInt(newSettings.maxTradesPerPair, 10)));
     }
+    if (newSettings.maxHoldMinutes !== undefined) {
+      this.maxHoldMinutes = Math.max(1, Math.min(180, parseInt(newSettings.maxHoldMinutes, 10)));
+    }
   }
 
   getSettings() {
@@ -56,7 +60,8 @@ export class RiskManager {
       tradingStyle: this.tradingStyle,
       targetRiskRewardRatio: this.targetRiskRewardRatio,
       defaultLeverage: this.defaultLeverage,
-      maxTradesPerPair: this.maxTradesPerPair
+      maxTradesPerPair: this.maxTradesPerPair,
+      maxHoldMinutes: this.maxHoldMinutes
     };
   }
 

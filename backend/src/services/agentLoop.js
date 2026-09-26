@@ -564,6 +564,7 @@ export class AutonomousAgentLoop {
                 reason: signal.reason,
                 riskRewardRatio: signal.riskRewardRatio,
                 tradingStyle: marginRiskSettings.tradingStyle,
+                maxHoldMinutes: marginRiskSettings.maxHoldMinutes || this.marginRiskManager.maxHoldMinutes || 5,
                 leverage: riskEval.leverage,
                 margin: riskEval.margin,
                 liquidationPrice: riskEval.liquidationPrice
@@ -790,8 +791,12 @@ export class AutonomousAgentLoop {
               logLevel = 'INFO';
             }
           }
-          // 3. FAST MOMENTUM BANK: If scalp is >= 2.5 minutes old and reached positive momentum, bank it!
-          else if (actualAgeMs >= 150000 && currentProfit >= momentumBankThreshold) {
+          const maxHoldMinutes = this.marginRiskManager.maxHoldMinutes || 5;
+          const maxHoldMs = maxHoldMinutes * 60 * 1000;
+          const momentumAgeMs = Math.min(150000, Math.floor(maxHoldMs * 0.5));
+
+          // 3. FAST MOMENTUM BANK: If scalp reached positive momentum after holding for half duration, bank it!
+          else if (actualAgeMs >= momentumAgeMs && currentProfit >= momentumBankThreshold) {
             exitReason = 'MOMENTUM_EXHAUSTION_EXIT';
             exitMessage = `⚡ [MT5 LIVE] Fast Momentum Bank: Ticket #${ticket} locked +$${currentProfit.toFixed(2)} in ${Math.round(actualAgeMs / 1000)}s!`;
             logLevel = 'SUCCESS';
@@ -802,10 +807,10 @@ export class AutonomousAgentLoop {
             exitMessage = `🛡️ [MT5 LIVE] Scalp Stop Loss triggered (-$${Math.abs(currentProfit)} / max -$${microMaxLoss}). Cutting loss cleanly on Ticket #${ticket}...`;
             logLevel = 'WARN';
           }
-          // 5. STRICT 5-MINUTE SCALP CYCLE CAP: Pure Scalping Rule (Never hold scalps for hours!)
-          else if (actualAgeMs >= 300000) {
+          // 5. DYNAMIC SCALP CYCLE CAP (Auto-close at user-selected 3m, 5m, 10m, 15m, 30m, 60m cap)
+          else if (actualAgeMs >= maxHoldMs) {
             exitReason = 'TIME_LIMIT_EXIT';
-            exitMessage = `⏱️ [MT5 LIVE] 5-minute Scalp Cycle Expiry for Ticket #${ticket} (${p.symbol}). Realized P/L: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`;
+            exitMessage = `⏱️ [MT5 LIVE] ${maxHoldMinutes}-minute Scalp Cycle Expiry for Ticket #${ticket} (${p.symbol}). Realized P/L: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`;
             logLevel = currentProfit >= 0 ? 'SUCCESS' : 'INFO';
           }
 
