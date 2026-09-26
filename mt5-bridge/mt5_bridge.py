@@ -338,11 +338,27 @@ def status():
         for op in open_positions:
             print(f"   -> #{op['ticket']}: {op['symbol']} {op['type']} {op['volume']} lots @ {op['priceOpen']} | PnL: ${op['profit']}")
 
-    # Collect live market ticks and real M1 candles directly from Exness MT5
+    # Detect Cent Account vs Standard Account
+    curr_currency = str(getattr(account_info, 'currency', 'USD')).upper()
+    curr_server = str(getattr(account_info, 'server', '')).lower()
+    curr_company = str(getattr(account_info, 'company', '')).lower()
+
+    is_cent = (
+        'USC' in curr_currency or 
+        'EUC' in curr_currency or 
+        'GBC' in curr_currency or 
+        'CENT' in curr_currency or 
+        'cent' in curr_server or 
+        'cent' in curr_company
+    )
+    account_type = 'CENT' if is_cent else 'STANDARD'
+
+    # Collect live market ticks and real M5 candles directly from Exness MT5
     market_ticks = {}
     major_symbols = [
         'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD',
-        'XAUUSD', 'EURJPY', 'GBPJPY', 'CADJPY', 'CHFJPY'
+        'EURGBP', 'EURJPY', 'AUDJPY', 'CADJPY', 'EURCAD', 'EURAUD',
+        'GBPAUD', 'GBPCAD', 'AUDNZD', 'EURCHF', 'GBPCHF'
     ]
     for ms in major_symbols:
         tsym = find_broker_symbol(ms)
@@ -358,7 +374,8 @@ def status():
                 'time': safe_int(getattr(tk, 'time', int(time.time())))
             }
             try:
-                rates = mt5.copy_rates_from_pos(tsym, mt5.TIMEFRAME_M1, 0, 50)
+                # Stream real 5-minute (M5) structural candles for high-probability trend confluence
+                rates = mt5.copy_rates_from_pos(tsym, mt5.TIMEFRAME_M5, 0, 50)
                 if rates is not None and len(rates) > 0:
                     candles_list = []
                     for r in rates:
@@ -378,12 +395,13 @@ def status():
     return jsonify({
         'success': True,
         'login': account_info.login,
+        'accountType': account_type,
         'balance': safe_float(account_info.balance),
         'equity': safe_float(account_info.equity),
         'margin': safe_float(account_info.margin),
         'freeMargin': safe_float(account_info.margin_free),
         'leverage': safe_int(account_info.leverage, 500),
-        'currency': str(getattr(account_info, 'currency', 'USD')),
+        'currency': curr_currency,
         'company': str(getattr(account_info, 'company', 'Exness')),
         'server': str(getattr(account_info, 'server', '')),
         'algoTradingEnabled': algo_allowed,

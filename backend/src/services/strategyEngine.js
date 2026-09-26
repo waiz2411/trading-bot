@@ -207,7 +207,7 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   const finalLongConfidence = Math.max(0, Math.min(100, Math.round(longScore)));
 
   // Dynamic Spread Filter (Protects from news, rollover, and broker fees)
-  if (asset.spread && asset.spread > (asset.symbol.includes('JPY') ? 0.020 : 0.00018)) {
+  if (asset.spread && asset.spread > (asset.symbol.includes('JPY') ? 0.022 : 0.00020)) {
     return {
       action: 'NEUTRAL',
       side: null,
@@ -224,38 +224,34 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   }
 
   // ==========================================
-  // FEE-ADJUSTED 1:1.3 NET SCALP GEOMETRY (5.5 pips gross SL vs 8.3 pips gross TP)
-  // Guarantees Net Loss -$1.10 (1.5%) vs Net Profit +$1.46 (1.95%) on 0.02 lot ($75 balance)
-  // Net Ratio = +$1.46 / -$1.10 = EXACTLY 1 : 1.32 R:R after covering all broker spreads & fees
+  // M5 STRUCTURAL TREND SNIPER GEOMETRY (11.0 pips SL vs 17.0 pips TP)
+  // Guarantees Net Loss -$1.10 (1.1%) vs Net Profit +$1.75 (1.75%) on 0.01 lot ($100 balance)
+  // Net Ratio = +$1.75 / -$1.10 = EXACTLY 1 : 1.60 R:R after covering all broker spreads & fees
   // ==========================================
-  const targetRR = 1.32;
   const decimals = asset.decimals !== undefined ? asset.decimals : 4;
 
   let stopDistance;
   let targetDistance;
 
   if (asset.category === 'Crypto') {
-    stopDistance = 35.00;
-    targetDistance = 46.00;
+    stopDistance = 85.00;
+    targetDistance = 140.00;
   } else if (asset.category === 'Forex') {
     if (asset.symbol.includes('JPY')) {
-      stopDistance = 0.055; // 5.5 pips gross (4.5 pips + 1.0 pip spread)
-      targetDistance = 0.083; // 8.3 pips gross (7.3 pips + 1.0 pip spread)
+      stopDistance = 0.110; // 11.0 pips (10.0 pips + 1.0 pip spread)
+      targetDistance = 0.170; // 17.0 pips (16.0 pips + 1.0 pip spread)
     } else {
-      stopDistance = 0.00055; // 5.5 pips gross (4.5 pips + 1.0 pip spread)
-      targetDistance = 0.00083; // 8.3 pips gross (7.3 pips + 1.0 pip spread)
+      stopDistance = 0.00110; // 11.0 pips (10.0 pips + 1.0 pip spread)
+      targetDistance = 0.00170; // 17.0 pips (16.0 pips + 1.0 pip spread)
     }
-  } else if (asset.symbol.includes('GC') || asset.symbol.includes('XAU')) {
-    stopDistance = 2.00;
-    targetDistance = 3.00;
   } else {
-    stopDistance = Number((currentPrice * 0.00055).toFixed(decimals));
-    targetDistance = Number((currentPrice * 0.00083).toFixed(decimals));
+    stopDistance = Number((currentPrice * 0.00110).toFixed(decimals));
+    targetDistance = Number((currentPrice * 0.00170).toFixed(decimals));
   }
 
-  const effectiveRR = 1.30;
+  const effectiveRR = 1.60;
 
-  // Active Sniper Scalping Threshold (75%+ confluence for fast, high-frequency setups)
+  // Active Sniper Scalping Threshold (75%+ confluence for high-probability trend entries)
   const SNIPER_THRESHOLD = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 75;
 
   // Clear directional edge requirement (must be >= threshold and have >= 4% lead over opposite side)

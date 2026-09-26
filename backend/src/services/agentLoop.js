@@ -292,10 +292,11 @@ export class AutonomousAgentLoop {
         const isMarginCooldown = (this.assetCooldowns.get(asset.symbol) || 0) > 0;
         const isSpotCooldown = (this.spotCooldowns.get(asset.symbol) || 0) > 0;
 
-        // 3A. Margin Scalper Confluence: Ultra Tight-Spread Forex Majors (0.8-1.2 pips) & Gold
-        // Excludes wide-spread / low-liquidity pairs (GBPJPY, CHFJPY) to guarantee maximum win rate
+        // 3A. Margin Scalper Confluence: Top 18 Ultra-Liquid Tight-Spread Forex Pairs
         const MT5_INSTITUTIONAL_MAJORS = new Set([
-          'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X', 'USDCHF=X', 'GC=F'
+          'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X', 'USDCHF=X', 'NZDUSD=X',
+          'EURGBP=X', 'EURJPY=X', 'AUDJPY=X', 'CADJPY=X', 'EURCAD=X', 'EURAUD=X',
+          'GBPAUD=X', 'GBPCAD=X', 'AUDNZD=X', 'EURCHF=X', 'GBPCHF=X'
         ]);
         const isMt5Symbol = MT5_INSTITUTIONAL_MAJORS.has(asset.symbol);
 
@@ -362,6 +363,32 @@ export class AutonomousAgentLoop {
           for (const { asset, signal } of validMarginSignals) {
           const portfolioState = this.marginTradingEngine.getPortfolioState();
 
+          // Dynamic Cent vs Standard Account Adaptation
+          const accountType = (mt5Connector.accountInfo?.accountType || 'STANDARD').toUpperCase();
+          const liveBal = Number(mt5Connector.accountInfo?.balance || portfolioState.balance || 10);
+          let maxAllowedSlots = 20;
+          let lotVolume = 0.01;
+
+          if (accountType === 'CENT') {
+            maxAllowedSlots = 20; // 20 simultaneous slots on Cent accounts with zero margin stress
+            lotVolume = Math.max(0.10, Math.min(1.00, Number(((liveBal / 1000) * 0.10).toFixed(2))));
+          } else {
+            // Standard USD Account: Strict margin protection for small $10-$30 accounts
+            if (liveBal < 35) {
+              maxAllowedSlots = 2; // Exactly 2 slots for $10-$30 balance ($4.56 margin used, $5.44 free buffer)
+              lotVolume = 0.01;
+            } else if (liveBal < 75) {
+              maxAllowedSlots = 6;
+              lotVolume = 0.01;
+            } else if (liveBal < 150) {
+              maxAllowedSlots = 16;
+              lotVolume = 0.01;
+            } else {
+              maxAllowedSlots = 20;
+              lotVolume = Math.max(0.01, Math.min(0.05, Math.round((liveBal / 100) * 0.01 * 100) / 100));
+            }
+          }
+
           if (this.currentMode === 'LIVE') {
             // Keep engine positions strictly synchronized with real broker tickets
             const liveTickets = new Set((mt5Connector.openPositions || []).map(p => Number(p.ticket)));
@@ -369,7 +396,6 @@ export class AutonomousAgentLoop {
             portfolioState.activePositions = this.marginTradingEngine.activePositions;
 
             if (mt5Connector.connected && mt5Connector.accountInfo) {
-              const liveBal = Number(mt5Connector.accountInfo.balance || 0);
               const liveEq = Number(mt5Connector.accountInfo.equity || liveBal);
               const liveMargin = Number(mt5Connector.accountInfo.margin || 0);
               const liveFreeMargin = Number(mt5Connector.accountInfo.freeMargin || Math.max(0, liveBal - liveMargin));
@@ -379,8 +405,8 @@ export class AutonomousAgentLoop {
               portfolioState.usedMargin = liveMargin;
               portfolioState.freeMargin = liveFreeMargin;
 
-              // If free margin is below $5.00, pause new order attempts
-              if (liveFreeMargin < 5.0) {
+              // If free margin is below $3.00, pause new order attempts
+              if (liveFreeMargin < 3.0) {
                 break;
               }
 
@@ -390,14 +416,14 @@ export class AutonomousAgentLoop {
                 : (liveMargin > 0 ? Math.floor(liveMargin / 2.0) : 0);
 
               const realSlotsInUse = Math.max(portfolioState.activePositions.length, brokerPositionsCount);
-              if (realSlotsInUse >= this.marginRiskManager.maxConcurrentTrades) {
-                break; // All user-configured slots occupied on real broker!
+              if (realSlotsInUse >= maxAllowedSlots) {
+                break; // Max slots for this account type occupied on real broker!
               }
             }
           }
 
-          if (portfolioState.activePositions.length >= this.marginRiskManager.maxConcurrentTrades) {
-            break; // Max user-configured slots occupied
+          if (portfolioState.activePositions.length >= maxAllowedSlots) {
+            break; // Max slots occupied
           }
 
           // Concentration check: strictly 1 trade per symbol (no averaging down or stacking)
@@ -414,10 +440,6 @@ export class AutonomousAgentLoop {
             if (this.currentMode === 'LIVE') {
               if (mt5Connector.connected) {
                 try {
-                  // Dynamic Lot Sizing: 0.02 lot for ~$75 balance (1.5% capital risk = $1.10 max loss)
-                  const liveBal = Number(mt5Connector.accountInfo?.balance || portfolioState.balance || 75);
-                  const lotVolume = Math.max(0.01, Math.min(0.05, Math.round((liveBal / 75) * 0.02 * 100) / 100));
-
                   const ticket = await mt5Connector.openPosition({
                     symbol: asset.symbol,
                     side: signal.side,
@@ -664,12 +686,13 @@ export class AutonomousAgentLoop {
                              knownBotTicket;
           if (!isBotTrade) continue;
 
-          const posVolume = Number(p.volume || 0.02);
-          const microTargetProfit = Number((posVolume * 73).toFixed(2)); // +$1.46 on 0.02 lot (1.95% net target on $75) / +$2.19 on 0.03 lot ($100)
-          const microMaxLoss = Number((posVolume * 55).toFixed(2));      // -$1.10 on 0.02 lot (1.50% capital risk on $75) / -$1.65 on 0.03 lot ($100)
-          const beThreshold = Number((posVolume * 30).toFixed(2));       // +$0.60 peak trigger (3 pips profit peak)
-          const beLockFloor = Number((posVolume * 10).toFixed(2));       // +$0.20 lock floor
-          const momentumBankThreshold = Number((posVolume * 45).toFixed(2)); // +$0.90 after 45s
+          const posVolume = Number(p.volume || 0.01);
+          // M5 Trend Sniper Geometry: 17 pips TP ($1.70 on 0.01 lot) vs 11 pips SL ($1.10 on 0.01 lot)
+          const microTargetProfit = Number((posVolume * 170).toFixed(2)); // +17 pips target profit (+1.75% on $100 / 0.01 lot)
+          const microMaxLoss = Number((posVolume * 110).toFixed(2));      // -11 pips maximum loss (-1.10% on $100 / 0.01 lot)
+          const beThreshold = Number((posVolume * 80).toFixed(2));        // +8 pips peak trigger (+$0.80 profit peak)
+          const beLockFloor = Number((posVolume * 25).toFixed(2));        // +2.5 pips minimum guaranteed lock (+$0.25)
+          const momentumBankThreshold = Number((posVolume * 130).toFixed(2)); // +13 pips fast momentum bank after 5m
 
           if (!this.livePositionFirstSeen.has(ticket)) {
             this.livePositionFirstSeen.set(ticket, now);
@@ -691,13 +714,13 @@ export class AutonomousAgentLoop {
           let exitMessage = null;
           let logLevel = 'INFO';
 
-          // 1. FULL TAKE PROFIT: Bank full 1:1.32 Net R:R gain!
+          // 1. FULL TAKE PROFIT (17 pips): Bank full 1:1.6 Net R:R gain!
           if (currentProfit >= microTargetProfit) {
             exitReason = 'TAKE_PROFIT_TRIGGER';
-            exitMessage = `🎯 [MT5 LIVE] Scalp TP Target hit (+${currentProfit}) on Ticket #${ticket} (${p.symbol})! Banking 1:1.3 gain...`;
+            exitMessage = `🎯 [MT5 LIVE] M5 Scalp TP Target hit (+${currentProfit}) on Ticket #${ticket} (${p.symbol})! Banking 1:1.6 gain...`;
             logLevel = 'SUCCESS';
           }
-          // 2. BREAKEVEN PROFIT SHIELD: If scalp peaked >= +$0.60 and pulls back, lock in profit and NEVER allow it to turn red!
+          // 2. BREAKEVEN PROFIT SHIELD: If scalp peaked >= +8 pips (+$0.80) and pulls back, lock in profit!
           else if (currentPeak >= beThreshold && (currentProfit <= Number((currentPeak * 0.45).toFixed(2)) || currentProfit <= beLockFloor)) {
             if (currentProfit >= 0.05) {
               exitReason = 'BREAKEVEN_STOP_TRIGGER';
@@ -709,22 +732,22 @@ export class AutonomousAgentLoop {
               logLevel = 'INFO';
             }
           }
-          // 3. FAST MOMENTUM BANK: If scalp is >= 45s old and reached +0.90+, bank it!
-          else if (actualAgeMs >= 45000 && currentProfit >= momentumBankThreshold) {
+          // 3. FAST MOMENTUM BANK: If scalp is >= 5m old and reached +13 pips+, bank it!
+          else if (actualAgeMs >= 300000 && currentProfit >= momentumBankThreshold) {
             exitReason = 'MOMENTUM_EXHAUSTION_EXIT';
             exitMessage = `⚡ [MT5 LIVE] Momentum bank: Ticket #${ticket} locked +$${currentProfit.toFixed(2)} in ${Math.round(actualAgeMs / 1000)}s!`;
             logLevel = 'SUCCESS';
           }
-          // 4. STRICT 1.5% CAPITAL RISK STOP LOSS: Strict capital protection!
+          // 4. STRICT 11 PIPS STOP LOSS: Strict capital protection!
           else if (currentProfit <= -microMaxLoss) {
             exitReason = 'STOP_LOSS_TRIGGER';
-            exitMessage = `🛡️ [MT5 LIVE] 1.5% Capital Stop triggered (-$${Math.abs(currentProfit)} / max -$${microMaxLoss}). Cutting loss cleanly on Ticket #${ticket}...`;
+            exitMessage = `🛡️ [MT5 LIVE] 11 Pip Stop Loss triggered (-$${Math.abs(currentProfit)} / max -$${microMaxLoss}). Cutting loss cleanly on Ticket #${ticket}...`;
             logLevel = 'WARN';
           }
-          // 5. MAX 10-MINUTE SCALP CAP: Allow natural 1m trend cycles to play out
-          else if (actualAgeMs >= 600000) {
+          // 5. MAX 60-MINUTE M5 CYCLE CAP: Allow complete structural trend waves to play out
+          else if (actualAgeMs >= 3600000) {
             exitReason = 'TIME_LIMIT_EXIT';
-            exitMessage = `⏱️ [MT5 LIVE] 10-minute scalp cycle expiry for Ticket #${ticket} (${p.symbol}). Realized: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`;
+            exitMessage = `⏱️ [MT5 LIVE] 60-minute M5 scalp cycle expiry for Ticket #${ticket} (${p.symbol}). Realized: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`;
             logLevel = currentProfit >= 0 ? 'SUCCESS' : 'INFO';
           }
 

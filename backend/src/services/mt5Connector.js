@@ -358,6 +358,7 @@ export class MT5Connector {
           freeMargin: Number(data.freeMargin || data.balance || 0),
           leverage: data.leverage || 500,
           currency: data.currency || 'USD',
+          accountType: (data.accountType || (String(data.currency || '').includes('USC') ? 'CENT' : 'STANDARD')).toUpperCase(),
           company: data.company || this.server,
           server: data.server || this.server
         };
@@ -367,6 +368,7 @@ export class MT5Connector {
           connected: true,
           latencyMs: this.latencyMs,
           server: this.server,
+          accountType: this.accountInfo.accountType,
           algoTradingEnabled: this.algoTradingEnabled,
           positions: this.openPositions || [],
           accountInfo: this.accountInfo
