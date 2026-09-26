@@ -23,7 +23,7 @@ export class RiskManager {
       this.riskPerTradePct = Math.max(0.25, Math.min(5.0, Number(newSettings.riskPerTradePct)));
     }
     if (newSettings.maxConcurrentTrades !== undefined) {
-      this.maxConcurrentTrades = Math.max(1, Math.min(10, parseInt(newSettings.maxConcurrentTrades, 10)));
+      this.maxConcurrentTrades = Math.max(1, Math.min(20, parseInt(newSettings.maxConcurrentTrades, 10)));
     }
     if (newSettings.minConfidenceThreshold !== undefined) {
       this.minConfidenceThreshold = Math.max(40, Math.min(99, parseInt(newSettings.minConfidenceThreshold, 10)));
@@ -180,7 +180,7 @@ export class RiskManager {
     const units = Math.floor(rawUnits * roundFactor) / roundFactor;
     notional = Number((units * signal.entryPrice).toFixed(2));
 
-    if (units <= 0 || notional < 0.5) {
+    if (units <= 0 || notional < 0.1) {
       return {
         allowed: false,
         reason: 'Calculated position size is too small'

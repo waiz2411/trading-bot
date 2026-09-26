@@ -15,9 +15,9 @@ export default function SettingsModal({
   // Margin Settings State
   const initialMargin = marginSettings || settings || {};
   const [riskPerTradePct, setRiskPerTradePct] = useState(initialMargin.riskPerTradePct || 1.5);
-  const [maxConcurrentTrades, setMaxConcurrentTrades] = useState(initialMargin.maxConcurrentTrades || 8);
+  const [maxConcurrentTrades, setMaxConcurrentTrades] = useState(initialMargin.maxConcurrentTrades || 20);
   const [minConfidenceThreshold, setMinConfidenceThreshold] = useState(initialMargin.minConfidenceThreshold || 75);
-  const [targetRiskRewardRatio, setTargetRiskRewardRatio] = useState(initialMargin.targetRiskRewardRatio || 1.3);
+  const [targetRiskRewardRatio, setTargetRiskRewardRatio] = useState(initialMargin.targetRiskRewardRatio || 1.6);
   const [defaultLeverage, setDefaultLeverage] = useState(initialMargin.defaultLeverage || 500);
   const [maxTradesPerPair, setMaxTradesPerPair] = useState(initialMargin.maxTradesPerPair || 1);
 
@@ -60,10 +60,10 @@ export default function SettingsModal({
   ];
 
   const slotPresets = [
-    { label: '2 Slots', value: 2, tag: 'Sniper Focus' },
-    { label: '4 Slots', value: 4, tag: 'Multi-Scalp ⭐' },
-    { label: '6 Slots', value: 6, tag: 'Active Scalper' },
-    { label: '8 Slots', value: 8, tag: 'Max 8 Scalps 🔥' }
+    { label: '2 Slots', value: 2, tag: '$10 Standard Cap' },
+    { label: '6 Slots', value: 6, tag: '$50 Standard' },
+    { label: '12 Slots', value: 12, tag: '$100 Multi-Scalp' },
+    { label: '20 Slots ⭐', value: 20, tag: 'Cent / Max 20 Scalps 🔥' }
   ];
 
   const rrPresets = [
@@ -312,7 +312,7 @@ export default function SettingsModal({
                 <input
                   type="range"
                   min="1"
-                  max="8"
+                  max="20"
                   step="1"
                   value={maxConcurrentTrades}
                   onChange={(e) => setMaxConcurrentTrades(Number(e.target.value))}

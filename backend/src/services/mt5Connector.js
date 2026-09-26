@@ -351,14 +351,20 @@ export class MT5Connector {
         if (data.marketTicks && typeof data.marketTicks === 'object') {
           this.marketTicks = data.marketTicks;
         }
+        const currStr = String(data.currency || '').toUpperCase();
+        const serverStr = String(data.server || this.server || '').toLowerCase();
+        const companyStr = String(data.company || '').toLowerCase();
+        const isCent = (data.accountType === 'CENT') || currStr.includes('USC') || currStr.includes('EUC') || currStr.includes('GBC') || currStr.includes('CENT') || serverStr.includes('cent') || companyStr.includes('cent');
+        const accType = isCent ? 'CENT' : 'STANDARD';
+
         this.accountInfo = {
           balance: Number(data.balance || 0),
           equity: Number(data.equity || data.balance || 0),
           margin: Number(data.margin || 0),
           freeMargin: Number(data.freeMargin || data.balance || 0),
           leverage: data.leverage || 500,
-          currency: data.currency || 'USD',
-          accountType: (data.accountType || (String(data.currency || '').includes('USC') ? 'CENT' : 'STANDARD')).toUpperCase(),
+          currency: data.currency || (isCent ? 'USC' : 'USD'),
+          accountType: accType,
           company: data.company || this.server,
           server: data.server || this.server
         };

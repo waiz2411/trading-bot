@@ -13,15 +13,15 @@ export class AutonomousAgentLoop {
     this.currentUser = 'demo@gmail.com';
     this.currentMode = 'SIMULATED'; // 'SIMULATED' | 'LIVE'
 
-    // Account 1: Margin Scalper (500x leverage, up to 8 active scalp slots, 1.5% capital risk, 1:1.3 R:R)
+    // Account 1: Margin Scalper (500x leverage, up to 20 active scalp slots, 1.5% capital risk, 1:1.6 R:R)
     this.marginRiskManager = new RiskManager({
       riskPerTradePct: 1.5,
-      maxConcurrentTrades: 8, // Full 8-slot multi-scalp capacity
+      maxConcurrentTrades: 20, // Full 20-slot multi-scalp capacity
       minConfidenceThreshold: 75, // High-frequency sniper scalps (75%+)
       tradeDirection: 'BOTH',
       tradingStyle: 'SCALPING',
       defaultLeverage: 500,
-      targetRiskRewardRatio: 1.3
+      targetRiskRewardRatio: 1.6
     });
     this.marginTradingEngine = new PaperTradingEngine(100, 'MARGIN');
 
@@ -364,8 +364,8 @@ export class AutonomousAgentLoop {
           const portfolioState = this.marginTradingEngine.getPortfolioState();
 
           // Dynamic Cent vs Standard Account Adaptation
-          const accountType = (mt5Connector.accountInfo?.accountType || 'STANDARD').toUpperCase();
-          const liveBal = Number(mt5Connector.accountInfo?.balance || portfolioState.balance || 10);
+          const accountType = (mt5Connector.accountInfo?.accountType || (String(mt5Connector.accountInfo?.currency || '').includes('USC') ? 'CENT' : 'STANDARD')).toUpperCase();
+          const liveBal = Number(mt5Connector.accountInfo?.balance || portfolioState.balance || 100);
           let maxAllowedSlots = 20;
           let lotVolume = 0.01;
 
@@ -389,6 +389,9 @@ export class AutonomousAgentLoop {
             }
           }
 
+          // Dynamically synchronize risk manager slot capacity
+          this.marginRiskManager.maxConcurrentTrades = maxAllowedSlots;
+
           if (this.currentMode === 'LIVE') {
             // Keep engine positions strictly synchronized with real broker tickets
             const liveTickets = new Set((mt5Connector.openPositions || []).map(p => Number(p.ticket)));
@@ -405,8 +408,9 @@ export class AutonomousAgentLoop {
               portfolioState.usedMargin = liveMargin;
               portfolioState.freeMargin = liveFreeMargin;
 
-              // If free margin is below $3.00, pause new order attempts
-              if (liveFreeMargin < 3.0) {
+              // Dynamic minimum free margin check (0.20 USC for Cent, $2.10 for Standard 500x)
+              const minReqFreeMargin = accountType === 'CENT' ? 0.20 : 2.10;
+              if (liveFreeMargin < minReqFreeMargin) {
                 break;
               }
 
@@ -1043,7 +1047,23 @@ export class AutonomousAgentLoop {
       };
     }
 
-    const marginRisk = this.marginRiskManager.getSettings();
+    // Dynamic Cent vs Standard Account Sizing for Dashboard Telemetry
+    const mt5AccType = (mt5Status.accountInfo?.accountType || (String(mt5Status.accountInfo?.currency || '').includes('USC') ? 'CENT' : 'STANDARD')).toUpperCase();
+    const mt5Bal = Number(mt5Status.accountInfo?.balance || (marginPortfolio ? marginPortfolio.balance : 100) || 100);
+    let dynamicMarginSlots = 20;
+    if (mt5AccType === 'CENT') {
+      dynamicMarginSlots = 20;
+    } else {
+      if (mt5Bal < 35) dynamicMarginSlots = 2;
+      else if (mt5Bal < 75) dynamicMarginSlots = 6;
+      else if (mt5Bal < 150) dynamicMarginSlots = 16;
+      else dynamicMarginSlots = 20;
+    }
+
+    const marginRisk = {
+      ...this.marginRiskManager.getSettings(),
+      maxConcurrentTrades: dynamicMarginSlots
+    };
     const spotRisk = {
       ...this.spotRiskManager,
       maxConcurrentTrades: this.spotRiskManager.maxSlots || 4,
