@@ -48,34 +48,38 @@ export class MarketDataService {
       let defaultPrice = 1.0;
       let volatility = 0.0025;
 
-      // Crypto defaults
+      // Halal Shariah-Compliant Crypto Defaults
       if (item.symbol === 'BTC-USD') { defaultPrice = 77000; volatility = 0.003; }
       else if (item.symbol === 'ETH-USD') { defaultPrice = 2460; volatility = 0.004; }
       else if (item.symbol === 'SOL-USD') { defaultPrice = 100.8; volatility = 0.005; }
       else if (item.symbol === 'BNB-USD') { defaultPrice = 718; volatility = 0.003; }
       else if (item.symbol === 'XRP-USD') { defaultPrice = 1.40; volatility = 0.005; }
-      else if (item.symbol === 'DOGE-USD') { defaultPrice = 0.1650; volatility = 0.006; }
       else if (item.symbol === 'ADA-USD') { defaultPrice = 0.5850; volatility = 0.004; }
       else if (item.symbol === 'AVAX-USD') { defaultPrice = 24.50; volatility = 0.005; }
       else if (item.symbol === 'LINK-USD') { defaultPrice = 14.80; volatility = 0.004; }
       else if (item.symbol === 'SUI-USD') { defaultPrice = 2.1500; volatility = 0.007; }
       else if (item.symbol === 'NEAR-USD') { defaultPrice = 4.350; volatility = 0.006; }
-      else if (item.symbol === 'PEPE-USD') { defaultPrice = 0.0000085; volatility = 0.009; }
-      else if (item.symbol === 'SHIB-USD') { defaultPrice = 0.0000185; volatility = 0.008; }
-      else if (item.symbol === 'FLOKI-USD') { defaultPrice = 0.000145; volatility = 0.008; }
-      else if (item.symbol === 'BONK-USD') { defaultPrice = 0.0000195; volatility = 0.009; }
-      else if (item.symbol === 'WIF-USD') { defaultPrice = 1.8500; volatility = 0.009; }
-      else if (item.symbol === 'FET-USD') { defaultPrice = 1.2500; volatility = 0.007; }
-      else if (item.symbol === 'RENDER-USD') { defaultPrice = 5.850; volatility = 0.007; }
-      else if (item.symbol === 'INJ-USD') { defaultPrice = 18.50; volatility = 0.007; }
-      else if (item.symbol === 'TIA-USD') { defaultPrice = 4.850; volatility = 0.007; }
-      else if (item.symbol === 'GALA-USD') { defaultPrice = 0.02250; volatility = 0.008; }
       else if (item.symbol === 'APT-USD') { defaultPrice = 8.450; volatility = 0.006; }
+      else if (item.symbol === 'INJ-USD') { defaultPrice = 18.50; volatility = 0.007; }
+      else if (item.symbol === 'SEI-USD') { defaultPrice = 0.4250; volatility = 0.007; }
+      else if (item.symbol === 'TIA-USD') { defaultPrice = 4.850; volatility = 0.007; }
+      else if (item.symbol === 'RENDER-USD') { defaultPrice = 5.850; volatility = 0.007; }
+      else if (item.symbol === 'FET-USD') { defaultPrice = 1.2500; volatility = 0.007; }
       else if (item.symbol === 'AR-USD') { defaultPrice = 15.60; volatility = 0.006; }
+      else if (item.symbol === 'FIL-USD') { defaultPrice = 4.80; volatility = 0.005; }
+      else if (item.symbol === 'ICP-USD') { defaultPrice = 8.90; volatility = 0.006; }
+      else if (item.symbol === 'DOT-USD') { defaultPrice = 5.40; volatility = 0.004; }
+      else if (item.symbol === 'ATOM-USD') { defaultPrice = 5.80; volatility = 0.004; }
+      else if (item.symbol === 'POL-USD') { defaultPrice = 0.3850; volatility = 0.004; }
+      else if (item.symbol === 'STX-USD') { defaultPrice = 1.450; volatility = 0.006; }
+      else if (item.symbol === 'KAS-USD') { defaultPrice = 0.1250; volatility = 0.006; }
+      else if (item.symbol === 'ALGO-USD') { defaultPrice = 0.1750; volatility = 0.004; }
+      else if (item.symbol === 'HBAR-USD') { defaultPrice = 0.0950; volatility = 0.004; }
+      else if (item.symbol === 'FTM-USD') { defaultPrice = 0.6850; volatility = 0.006; }
+      else if (item.symbol === 'VET-USD') { defaultPrice = 0.0265; volatility = 0.004; }
+      else if (item.symbol === 'GALA-USD') { defaultPrice = 0.02250; volatility = 0.008; }
       else if (item.symbol === 'OP-USD') { defaultPrice = 1.450; volatility = 0.006; }
       else if (item.symbol === 'ARB-USD') { defaultPrice = 0.5550; volatility = 0.006; }
-      else if (item.symbol === 'SEI-USD') { defaultPrice = 0.4250; volatility = 0.007; }
-      else if (item.symbol === 'PENDLE-USD') { defaultPrice = 4.150; volatility = 0.007; }
       // Forex defaults (Calibrated to live institutional market levels)
       else if (item.symbol === 'EURUSD=X') { defaultPrice = 1.1370; volatility = 0.0010; }
       else if (item.symbol === 'GBPUSD=X') { defaultPrice = 1.3220; volatility = 0.0012; }
@@ -141,34 +145,39 @@ export class MarketDataService {
   }
 
   async fetchCryptoBinance() {
+    // 100% Shariah / Halal Compliant Binance Feed
     const cryptoMap = {
       'BTC-USD': 'BTCUSDT',
       'ETH-USD': 'ETHUSDT',
       'SOL-USD': 'SOLUSDT',
       'BNB-USD': 'BNBUSDT',
       'XRP-USD': 'XRPUSDT',
-      'DOGE-USD': 'DOGEUSDT',
       'ADA-USD': 'ADAUSDT',
       'AVAX-USD': 'AVAXUSDT',
       'LINK-USD': 'LINKUSDT',
       'SUI-USD': 'SUIUSDT',
       'NEAR-USD': 'NEARUSDT',
-      'PEPE-USD': 'PEPEUSDT',
-      'SHIB-USD': 'SHIBUSDT',
-      'FLOKI-USD': 'FLOKIUSDT',
-      'BONK-USD': 'BONKUSDT',
-      'WIF-USD': 'WIFUSDT',
-      'FET-USD': 'FETUSDT',
-      'RENDER-USD': 'RENDERUSDT',
-      'INJ-USD': 'INJUSDT',
-      'TIA-USD': 'TIAUSDT',
-      'GALA-USD': 'GALAUSDT',
       'APT-USD': 'APTUSDT',
-      'AR-USD': 'ARUSDT',
-      'OP-USD': 'OPUSDT',
-      'ARB-USD': 'ARBUSDT',
+      'INJ-USD': 'INJUSDT',
       'SEI-USD': 'SEIUSDT',
-      'PENDLE-USD': 'PENDLEUSDT'
+      'TIA-USD': 'TIAUSDT',
+      'RENDER-USD': 'RENDERUSDT',
+      'FET-USD': 'FETUSDT',
+      'AR-USD': 'ARUSDT',
+      'FIL-USD': 'FILUSDT',
+      'ICP-USD': 'ICPUSDT',
+      'DOT-USD': 'DOTUSDT',
+      'ATOM-USD': 'ATOMUSDT',
+      'POL-USD': 'POLUSDT',
+      'STX-USD': 'STXUSDT',
+      'KAS-USD': 'KASUSDT',
+      'ALGO-USD': 'ALGOUSDT',
+      'HBAR-USD': 'HBARUSDT',
+      'FTM-USD': 'FTMUSDT',
+      'VET-USD': 'VETUSDT',
+      'GALA-USD': 'GALAUSDT',
+      'OP-USD': 'OPUSDT',
+      'ARB-USD': 'ARBUSDT'
     };
 
     try {

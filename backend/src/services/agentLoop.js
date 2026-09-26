@@ -6,6 +6,7 @@ import { PaperTradingEngine } from './paperTradingEngine.js';
 import { binanceConnector } from './binanceConnector.js';
 import { mt5Connector } from './mt5Connector.js';
 import { authService } from './authService.js';
+import { isHalalCompliant } from './halalFilter.js';
 
 export class AutonomousAgentLoop {
   constructor() {
@@ -25,7 +26,7 @@ export class AutonomousAgentLoop {
     });
     this.marginTradingEngine = new PaperTradingEngine(100, 'MARGIN');
 
-    // Account 2: Pure Spot Crypto (Multi-Portion 1-8 Slots, 0x leverage, fast 5-minute scalps)
+    // Account 2: Pure Spot Crypto (100% Shariah Halal, Multi-Portion 1-8 Slots, 0x leverage, fast 5-minute scalps)
     this.spotRiskManager = {
       maxSlots: 4, // 1, 2, 4, 6, 8 portions
       allocationPct: 25, // 25% of balance per portion
@@ -33,7 +34,10 @@ export class AutonomousAgentLoop {
       stopLossPct: 0.6, // 0.6% Stop Loss default
       takeProfitPct: 0.78, // 0.78% Take Profit (strict 1:1.3 R:R)
       maxHoldMinutes: 5, // Strict 5-minute maximum holding cap
-      minConfidenceThreshold: 90
+      minConfidenceThreshold: 90,
+      allowHighVolatility: true, // User setting: Hunt explosive Halal high-volatility coins vs established Halal majors
+      volatilityMode: 'HIGH_VOLATILITY_HALAL', // 'HIGH_VOLATILITY_HALAL' | 'ESTABLISHED_HALAL'
+      isHalalStrict: true // 100% Shariah Compliant (Zero Meme Coins, Zero Riba Lending, Zero Gambling)
     };
     this.spotTradingEngine = new PaperTradingEngine(25, 'SPOT');
 
@@ -232,7 +236,19 @@ export class AutonomousAgentLoop {
     if (newSettings.maxTradesPerPair !== undefined) {
       this.spotRiskManager.maxTradesPerPair = Math.max(1, Math.min(4, parseInt(newSettings.maxTradesPerPair, 10)));
     }
-    this.log(`⚙️ Spot Strategy updated: ${this.spotRiskManager.maxSlots} Portions (${this.spotRiskManager.allocationPct}% each, max ${this.spotRiskManager.maxTradesPerPair}/coin, max ${this.spotRiskManager.maxHoldMinutes || 5}m hold), SL: -${this.spotRiskManager.stopLossPct}%, TP: +${this.spotRiskManager.takeProfitPct}%`, 'INFO');
+    if (newSettings.allowHighVolatility !== undefined) {
+      this.spotRiskManager.allowHighVolatility = Boolean(newSettings.allowHighVolatility);
+    }
+    if (newSettings.volatilityMode !== undefined) {
+      this.spotRiskManager.volatilityMode = newSettings.volatilityMode;
+      if (newSettings.volatilityMode === 'ESTABLISHED_HALAL') {
+        this.spotRiskManager.allowHighVolatility = false;
+      } else if (newSettings.volatilityMode === 'HIGH_VOLATILITY_HALAL') {
+        this.spotRiskManager.allowHighVolatility = true;
+      }
+    }
+    const volLabel = this.spotRiskManager.allowHighVolatility ? '⚡ High-Volatility Halal Hunter' : '🛡️ Standard Halal Majors';
+    this.log(`⚙️ Spot Strategy updated: [${volLabel}] ${this.spotRiskManager.maxSlots} Portions (${this.spotRiskManager.allocationPct}% each, max ${this.spotRiskManager.maxTradesPerPair}/coin, max ${this.spotRiskManager.maxHoldMinutes || 5}m hold), SL: -${this.spotRiskManager.stopLossPct}%, TP: +${this.spotRiskManager.takeProfitPct}% (🕌 100% Shariah Compliant)`, 'INFO');
     return this.spotRiskManager;
   }
 
@@ -292,9 +308,9 @@ export class AutonomousAgentLoop {
         const isMarginCooldown = (this.assetCooldowns.get(asset.symbol) || 0) > 0;
         const isSpotCooldown = (this.spotCooldowns.get(asset.symbol) || 0) > 0;
 
-        // 3A. Margin Scalper Confluence: 24/7 Exness Tradable Crypto + Top 18 Liquid Forex Pairs
+        // 3A. Margin Scalper Confluence: 24/7 Exness Tradable Halal Crypto + Top 18 Liquid Forex Pairs
         const MT5_INSTITUTIONAL_MAJORS = new Set([
-          'BTC-USD', 'ETH-USD', 'BNB-USD', 'XRP-USD', 'DOGE-USD', 'ADA-USD', 'LTC-USD',
+          'BTC-USD', 'ETH-USD', 'BNB-USD', 'XRP-USD', 'ADA-USD', 'LTC-USD',
           'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X', 'USDCHF=X', 'NZDUSD=X',
           'EURGBP=X', 'EURJPY=X', 'AUDJPY=X', 'CADJPY=X', 'EURCAD=X', 'EURAUD=X',
           'GBPAUD=X', 'GBPCAD=X', 'AUDNZD=X', 'EURCHF=X', 'GBPCHF=X'
@@ -309,12 +325,20 @@ export class AutonomousAgentLoop {
           }
         }
 
-        // 3B. Pure Spot Crypto Confluence (Decoupled, 75%+ Win Rate Edge)
+        // 3B. Pure Spot Crypto Confluence (100% Shariah Halal Filtered & Volatility Selected)
         let spotSignal = null;
         if (asset.category === 'Crypto') {
-          spotSignal = evaluateSpotConfluence(asset, technicals, this.spotRiskManager);
-          if (spotSignal.action === 'STRONG_BUY' && !isSpotCooldown) {
-            validSpotBuys.push({ asset, signal: spotSignal });
+          if (isHalalCompliant(asset.symbol)) {
+            const allowVolatile = this.spotRiskManager.allowHighVolatility ?? true;
+            const isVolatile = asset.isHighVolatility || (asset.minVolatility && asset.minVolatility >= 1.4);
+            
+            // Respect user choice: if user opted out of high volatility, skip volatile alts
+            if (allowVolatile || !isVolatile) {
+              spotSignal = evaluateSpotConfluence(asset, technicals, this.spotRiskManager);
+              if (spotSignal.action === 'STRONG_BUY' && !isSpotCooldown) {
+                validSpotBuys.push({ asset, signal: spotSignal });
+              }
+            }
           }
         }
 
@@ -543,19 +567,24 @@ export class AutonomousAgentLoop {
       }
 
       // ==========================================
-      // 4B. PURE SPOT CRYPTO AUTO-OPEN (Multi-Portion 1-8 Scalps)
+      // 4B. PURE SPOT CRYPTO AUTO-OPEN (100% Shariah Halal Filtered)
       // ==========================================
       const spotSlots = this.spotRiskManager.maxSlots || 4;
       const spotOpen = this.spotTradingEngine.activePositions;
 
       if (this.isAutoTradingEnabled && spotOpen.length < spotSlots && validSpotBuys.length > 0) {
-        // Sort by Volatility-Weighted Confluence: Prioritizes explosive meme & altcoins (PEPE, BONK, DOGE, SUI, etc.)
+        // Sort candidates:
+        // When allowHighVolatility is true: Prioritizes explosive high-volatility Halal utility coins (SUI, INJ, RENDER, FET, SEI, TIA, AVAX, NEAR, APT)
+        // When allowHighVolatility is false: Pure Confidence Ranking among established large-cap Halal coins (BTC, ETH, SOL, LINK, ADA, DOT)
+        const allowVolatile = this.spotRiskManager.allowHighVolatility ?? true;
         validSpotBuys.sort((a, b) => {
-          const volA = (a.asset.isHighVolatility ? 1.5 : 1.0) * (a.asset.minVolatility || 1.0);
-          const volB = (b.asset.isHighVolatility ? 1.5 : 1.0) * (b.asset.minVolatility || 1.0);
-          const scoreA = a.signal.confidence * volA;
-          const scoreB = b.signal.confidence * volB;
-          return scoreB - scoreA;
+          if (allowVolatile) {
+            const volA = (a.asset.isHighVolatility ? 1.5 : 1.0) * (a.asset.minVolatility || 1.0);
+            const volB = (b.asset.isHighVolatility ? 1.5 : 1.0) * (b.asset.minVolatility || 1.0);
+            return (b.signal.confidence * volB) - (a.signal.confidence * volA);
+          } else {
+            return b.signal.confidence - a.signal.confidence;
+          }
         });
 
         const totalCash = this.spotTradingEngine.balance;

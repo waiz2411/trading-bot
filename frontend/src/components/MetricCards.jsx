@@ -201,18 +201,18 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
       {isSpot ? (
         <div className="bg-terminal-850/80 border border-terminal-border rounded-xl p-3.5 relative overflow-hidden">
           <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-            <span className="font-mono uppercase tracking-wider text-[11px]">Target R:R Ratio</span>
+            <span className="font-mono uppercase tracking-wider text-[11px]">Volatility & Shariah</span>
             <Target className="w-3.5 h-3.5 text-emerald-400" />
           </div>
-          <div className="text-base font-bold font-mono text-emerald-300 tracking-tight flex items-center justify-between">
-            <span>1:{riskSettings?.targetRiskRewardRatio || '2.2'}</span>
-            <span className="text-xs px-2 py-0.5 rounded bg-terminal-950 border border-emerald-500/40 text-emerald-300 font-mono font-bold">
-              SPOT
+          <div className="text-sm font-bold font-mono text-emerald-300 tracking-tight flex items-center justify-between">
+            <span>{riskSettings?.allowHighVolatility !== false ? '⚡ VOLATILE HALAL' : '🛡️ STANDARD HALAL'}</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded bg-teal-950/80 border border-teal-500/40 text-teal-300 font-mono font-bold">
+              🕌 100% HALAL
             </span>
           </div>
           <div className="text-[11px] font-mono mt-1 text-emerald-400 font-semibold flex items-center justify-between">
-            <span>▲ LONG ONLY</span>
-            <span className="text-slate-400 font-normal">SL -{riskSettings?.stopLossPct || '1.0'}% | TP +{riskSettings?.takeProfitPct || '2.2'}%</span>
+            <span>1:{riskSettings?.targetRiskRewardRatio || '1.3'} R:R</span>
+            <span className="text-slate-400 font-normal">SL -{riskSettings?.stopLossPct || '0.6'}% | TP +{riskSettings?.takeProfitPct || '0.78'}%</span>
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-emerald-500 opacity-60" />
         </div>

@@ -170,9 +170,19 @@ export default function MarketRadar({ marketScan = [], onSelectAsset, onQuickTra
                             <span className="text-[10px] font-normal px-1.5 py-0.2 rounded bg-terminal-900 text-slate-400 border border-terminal-border">
                               {item.category}
                             </span>
+                            {item.category === 'Crypto' && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-teal-500/15 text-teal-300 border border-teal-500/30">
+                                🕌 Halal
+                              </span>
+                            )}
+                            {item.isHighVolatility && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                ⚡ Volatile
+                              </span>
+                            )}
                           </div>
                           <div className="text-[11px] text-slate-400 font-sans truncate max-w-[140px]">
-                            {item.name}
+                            {item.name} {item.halalSector ? `(${item.halalSector})` : ''}
                           </div>
                         </div>
                       </div>

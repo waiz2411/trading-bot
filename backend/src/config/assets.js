@@ -1,6 +1,7 @@
 export const WATCHLIST = [
   // ==========================================
-  // 1. CRYPTOCURRENCIES (24/7 Global Liquid & Volatile Altcoins/Memecoins)
+  // 1. SHARIAH-COMPLIANT CRYPTOCURRENCIES (100% Halal Utility, L1/L2, AI & Infrastructure)
+  // Strict Islamic Compliance: Zero Meme Coins, Zero Riba Lending, Zero Gambling
   // ==========================================
   {
     symbol: 'BTC-USD',
@@ -11,7 +12,9 @@ export const WATCHLIST = [
     decimals: 2,
     icon: '₿',
     minVolatility: 0.5,
-    isHighVolatility: false
+    isHighVolatility: false,
+    isHalal: true,
+    halalSector: 'Store of Value / L1'
   },
   {
     symbol: 'ETH-USD',
@@ -22,7 +25,9 @@ export const WATCHLIST = [
     decimals: 2,
     icon: 'Ξ',
     minVolatility: 0.8,
-    isHighVolatility: false
+    isHighVolatility: false,
+    isHalal: true,
+    halalSector: 'Smart Contracts L1'
   },
   {
     symbol: 'SOL-USD',
@@ -32,8 +37,10 @@ export const WATCHLIST = [
     quoteAsset: 'USD',
     decimals: 2,
     icon: '◎',
-    minVolatility: 1.2,
-    isHighVolatility: true
+    minVolatility: 1.4,
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'High-Throughput L1'
   },
   {
     symbol: 'BNB-USD',
@@ -44,7 +51,9 @@ export const WATCHLIST = [
     decimals: 2,
     icon: 'BNB',
     minVolatility: 0.8,
-    isHighVolatility: false
+    isHighVolatility: false,
+    isHalal: true,
+    halalSector: 'Ecosystem Utility'
   },
   {
     symbol: 'XRP-USD',
@@ -55,18 +64,9 @@ export const WATCHLIST = [
     decimals: 4,
     icon: '✕',
     minVolatility: 1.0,
-    isHighVolatility: false
-  },
-  {
-    symbol: 'DOGE-USD',
-    name: 'Dogecoin',
-    category: 'Crypto',
-    baseAsset: 'DOGE',
-    quoteAsset: 'USD',
-    decimals: 4,
-    icon: 'Ð',
-    minVolatility: 1.5,
-    isHighVolatility: true
+    isHighVolatility: false,
+    isHalal: true,
+    halalSector: 'Cross-Border Settlement'
   },
   {
     symbol: 'ADA-USD',
@@ -77,7 +77,9 @@ export const WATCHLIST = [
     decimals: 4,
     icon: '₳',
     minVolatility: 1.0,
-    isHighVolatility: false
+    isHighVolatility: false,
+    isHalal: true,
+    halalSector: 'Proof-of-Stake L1'
   },
   {
     symbol: 'AVAX-USD',
@@ -87,8 +89,10 @@ export const WATCHLIST = [
     quoteAsset: 'USD',
     decimals: 2,
     icon: '🔺',
-    minVolatility: 1.2,
-    isHighVolatility: true
+    minVolatility: 1.5,
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'Subnets Multi-Chain L1'
   },
   {
     symbol: 'LINK-USD',
@@ -99,7 +103,9 @@ export const WATCHLIST = [
     decimals: 3,
     icon: '🔗',
     minVolatility: 1.0,
-    isHighVolatility: false
+    isHighVolatility: false,
+    isHalal: true,
+    halalSector: 'Decentralized Oracle'
   },
   {
     symbol: 'SUI-USD',
@@ -109,8 +115,10 @@ export const WATCHLIST = [
     quoteAsset: 'USD',
     decimals: 4,
     icon: '💧',
-    minVolatility: 1.6,
-    isHighVolatility: true
+    minVolatility: 1.8,
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'Move Ultra-Fast L1'
   },
   {
     symbol: 'NEAR-USD',
@@ -120,118 +128,10 @@ export const WATCHLIST = [
     quoteAsset: 'USD',
     decimals: 3,
     icon: 'Ⓝ',
-    minVolatility: 1.4,
-    isHighVolatility: true
-  },
-  {
-    symbol: 'PEPE-USD',
-    name: 'Pepe',
-    category: 'Crypto',
-    baseAsset: 'PEPE',
-    quoteAsset: 'USD',
-    decimals: 7,
-    icon: '🐸',
-    minVolatility: 2.2,
-    isHighVolatility: true
-  },
-  {
-    symbol: 'SHIB-USD',
-    name: 'Shiba Inu',
-    category: 'Crypto',
-    baseAsset: 'SHIB',
-    quoteAsset: 'USD',
-    decimals: 7,
-    icon: '🐕',
-    minVolatility: 2.0,
-    isHighVolatility: true
-  },
-  {
-    symbol: 'FLOKI-USD',
-    name: 'Floki',
-    category: 'Crypto',
-    baseAsset: 'FLOKI',
-    quoteAsset: 'USD',
-    decimals: 6,
-    icon: '⚔️',
-    minVolatility: 2.2,
-    isHighVolatility: true
-  },
-  {
-    symbol: 'BONK-USD',
-    name: 'Bonk',
-    category: 'Crypto',
-    baseAsset: 'BONK',
-    quoteAsset: 'USD',
-    decimals: 7,
-    icon: '🐶',
-    minVolatility: 2.2,
-    isHighVolatility: true
-  },
-  {
-    symbol: 'WIF-USD',
-    name: 'dogwifhat',
-    category: 'Crypto',
-    baseAsset: 'WIF',
-    quoteAsset: 'USD',
-    decimals: 4,
-    icon: '🧢',
-    minVolatility: 2.5,
-    isHighVolatility: true
-  },
-  {
-    symbol: 'FET-USD',
-    name: 'Artificial Superintelligence',
-    category: 'Crypto',
-    baseAsset: 'FET',
-    quoteAsset: 'USD',
-    decimals: 4,
-    icon: '🤖',
-    minVolatility: 1.8,
-    isHighVolatility: true
-  },
-  {
-    symbol: 'RENDER-USD',
-    name: 'Render',
-    category: 'Crypto',
-    baseAsset: 'RENDER',
-    quoteAsset: 'USD',
-    decimals: 3,
-    icon: '🎨',
-    minVolatility: 1.7,
-    isHighVolatility: true
-  },
-  {
-    symbol: 'INJ-USD',
-    name: 'Injective',
-    category: 'Crypto',
-    baseAsset: 'INJ',
-    quoteAsset: 'USD',
-    decimals: 3,
-    icon: '💉',
-    minVolatility: 1.8,
-    isHighVolatility: true
-  },
-  {
-    symbol: 'TIA-USD',
-    name: 'Celestia',
-    category: 'Crypto',
-    baseAsset: 'TIA',
-    quoteAsset: 'USD',
-    decimals: 3,
-    icon: '✨',
-    minVolatility: 1.9,
-    isHighVolatility: true
-  },
-  {
-    symbol: 'GALA-USD',
-    name: 'Gala Games',
-    category: 'Crypto',
-    baseAsset: 'GALA',
-    quoteAsset: 'USD',
-    decimals: 5,
-    icon: '🎮',
-    minVolatility: 2.0,
-    isHighVolatility: true
+    minVolatility: 1.6,
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'Sharded User-Cloud L1'
   },
   {
     symbol: 'APT-USD',
@@ -241,41 +141,23 @@ export const WATCHLIST = [
     quoteAsset: 'USD',
     decimals: 3,
     icon: '🌐',
-    minVolatility: 1.6,
-    isHighVolatility: true
-  },
-  {
-    symbol: 'AR-USD',
-    name: 'Arweave',
-    category: 'Crypto',
-    baseAsset: 'AR',
-    quoteAsset: 'USD',
-    decimals: 3,
-    icon: '💾',
     minVolatility: 1.7,
-    isHighVolatility: true
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'Move Parallel L1'
   },
   {
-    symbol: 'OP-USD',
-    name: 'Optimism',
+    symbol: 'INJ-USD',
+    name: 'Injective',
     category: 'Crypto',
-    baseAsset: 'OP',
+    baseAsset: 'INJ',
     quoteAsset: 'USD',
     decimals: 3,
-    icon: '🔴',
-    minVolatility: 1.6,
-    isHighVolatility: true
-  },
-  {
-    symbol: 'ARB-USD',
-    name: 'Arbitrum',
-    category: 'Crypto',
-    baseAsset: 'ARB',
-    quoteAsset: 'USD',
-    decimals: 4,
-    icon: '🔵',
-    minVolatility: 1.6,
-    isHighVolatility: true
+    icon: '⚡',
+    minVolatility: 1.8,
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'Fintech Infrastructure L1'
   },
   {
     symbol: 'SEI-USD',
@@ -286,18 +168,243 @@ export const WATCHLIST = [
     decimals: 4,
     icon: '🌊',
     minVolatility: 1.8,
-    isHighVolatility: true
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'Parallelized EVM L1'
   },
   {
-    symbol: 'PENDLE-USD',
-    name: 'Pendle',
+    symbol: 'TIA-USD',
+    name: 'Celestia',
     category: 'Crypto',
-    baseAsset: 'PENDLE',
+    baseAsset: 'TIA',
     quoteAsset: 'USD',
     decimals: 3,
-    icon: '⌛',
+    icon: '✨',
     minVolatility: 1.9,
-    isHighVolatility: true
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'Modular Data Availability'
+  },
+  {
+    symbol: 'RENDER-USD',
+    name: 'Render Network',
+    category: 'Crypto',
+    baseAsset: 'RENDER',
+    quoteAsset: 'USD',
+    decimals: 3,
+    icon: '🎨',
+    minVolatility: 1.8,
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'Decentralized GPU / AI'
+  },
+  {
+    symbol: 'FET-USD',
+    name: 'Artificial Superintelligence',
+    category: 'Crypto',
+    baseAsset: 'FET',
+    quoteAsset: 'USD',
+    decimals: 4,
+    icon: '🤖',
+    minVolatility: 1.9,
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'Decentralized Machine Learning'
+  },
+  {
+    symbol: 'AR-USD',
+    name: 'Arweave',
+    category: 'Crypto',
+    baseAsset: 'AR',
+    quoteAsset: 'USD',
+    decimals: 3,
+    icon: '💾',
+    minVolatility: 1.7,
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'Permanent Data Storage'
+  },
+  {
+    symbol: 'FIL-USD',
+    name: 'Filecoin',
+    category: 'Crypto',
+    baseAsset: 'FIL',
+    quoteAsset: 'USD',
+    decimals: 3,
+    icon: '📁',
+    minVolatility: 1.5,
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'IPFS Storage Network'
+  },
+  {
+    symbol: 'ICP-USD',
+    name: 'Internet Computer',
+    category: 'Crypto',
+    baseAsset: 'ICP',
+    quoteAsset: 'USD',
+    decimals: 3,
+    icon: '♾️',
+    minVolatility: 1.6,
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: '100% On-Chain Cloud Compute'
+  },
+  {
+    symbol: 'DOT-USD',
+    name: 'Polkadot',
+    category: 'Crypto',
+    baseAsset: 'DOT',
+    quoteAsset: 'USD',
+    decimals: 3,
+    icon: '●',
+    minVolatility: 1.0,
+    isHighVolatility: false,
+    isHalal: true,
+    halalSector: 'Interoperability Parachain L1'
+  },
+  {
+    symbol: 'ATOM-USD',
+    name: 'Cosmos Hub',
+    category: 'Crypto',
+    baseAsset: 'ATOM',
+    quoteAsset: 'USD',
+    decimals: 3,
+    icon: '⚛️',
+    minVolatility: 1.1,
+    isHighVolatility: false,
+    isHalal: true,
+    halalSector: 'Inter-Blockchain Hub'
+  },
+  {
+    symbol: 'POL-USD',
+    name: 'Polygon',
+    category: 'Crypto',
+    baseAsset: 'POL',
+    quoteAsset: 'USD',
+    decimals: 4,
+    icon: '💜',
+    minVolatility: 1.1,
+    isHighVolatility: false,
+    isHalal: true,
+    halalSector: 'Ethereum ZK Layer 2'
+  },
+  {
+    symbol: 'STX-USD',
+    name: 'Stacks',
+    category: 'Crypto',
+    baseAsset: 'STX',
+    quoteAsset: 'USD',
+    decimals: 4,
+    icon: '🧱',
+    minVolatility: 1.7,
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'Bitcoin Smart Contracts L2'
+  },
+  {
+    symbol: 'KAS-USD',
+    name: 'Kaspa',
+    category: 'Crypto',
+    baseAsset: 'KAS',
+    quoteAsset: 'USD',
+    decimals: 5,
+    icon: '🪙',
+    minVolatility: 1.8,
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'GHOSTDAG PoW L1'
+  },
+  {
+    symbol: 'ALGO-USD',
+    name: 'Algorand',
+    category: 'Crypto',
+    baseAsset: 'ALGO',
+    quoteAsset: 'USD',
+    decimals: 4,
+    icon: 'Ⱥ',
+    minVolatility: 1.0,
+    isHighVolatility: false,
+    isHalal: true,
+    halalSector: 'Pure PoS Green L1'
+  },
+  {
+    symbol: 'HBAR-USD',
+    name: 'Hedera',
+    category: 'Crypto',
+    baseAsset: 'HBAR',
+    quoteAsset: 'USD',
+    decimals: 4,
+    icon: 'ℏ',
+    minVolatility: 1.0,
+    isHighVolatility: false,
+    isHalal: true,
+    halalSector: 'Enterprise DLT'
+  },
+  {
+    symbol: 'FTM-USD',
+    name: 'Sonic / Fantom',
+    category: 'Crypto',
+    baseAsset: 'FTM',
+    quoteAsset: 'USD',
+    decimals: 4,
+    icon: '👻',
+    minVolatility: 1.7,
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'High TPS DAG L1'
+  },
+  {
+    symbol: 'VET-USD',
+    name: 'VeChain',
+    category: 'Crypto',
+    baseAsset: 'VET',
+    quoteAsset: 'USD',
+    decimals: 5,
+    icon: '⛓️',
+    minVolatility: 1.1,
+    isHighVolatility: false,
+    isHalal: true,
+    halalSector: 'Supply Chain Logistics'
+  },
+  {
+    symbol: 'GALA-USD',
+    name: 'Gala Games',
+    category: 'Crypto',
+    baseAsset: 'GALA',
+    quoteAsset: 'USD',
+    decimals: 5,
+    icon: '🎮',
+    minVolatility: 2.0,
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'Web3 Entertainment Infrastructure'
+  },
+  {
+    symbol: 'OP-USD',
+    name: 'Optimism',
+    category: 'Crypto',
+    baseAsset: 'OP',
+    quoteAsset: 'USD',
+    decimals: 3,
+    icon: '🔴',
+    minVolatility: 1.6,
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'Optimistic Rollup L2'
+  },
+  {
+    symbol: 'ARB-USD',
+    name: 'Arbitrum',
+    category: 'Crypto',
+    baseAsset: 'ARB',
+    quoteAsset: 'USD',
+    decimals: 4,
+    icon: '🔵',
+    minVolatility: 1.6,
+    isHighVolatility: true,
+    isHalal: true,
+    halalSector: 'Ethereum Scaling L2'
   },
 
   // ==========================================

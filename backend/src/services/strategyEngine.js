@@ -1,3 +1,5 @@
+import { isHalalCompliant } from './halalFilter.js';
+
 /**
  * High-Frequency Scalping Confluence Engine
  * 
@@ -365,13 +367,39 @@ export function evaluatePositionExit(position, technicals, currentPrice) {
 /**
  * High-Precision Pure Spot Crypto Confluence Engine
  * - Strictly Long-Only Crypto Buy evaluation
- * - Constructive scoring with 50% default threshold
+ * - 100% Shariah & Halal Compliant (Zero Meme Coins, Zero Riba Lending, Zero Gambling)
+ * - User-Configurable Volatility Mode (Explosive Halal Alts vs Established Halal Majors)
  * - Strict 1:1.3 Risk-to-Reward ratio
  * - Strict 5-minute maximum holding cap
  */
 export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {}) {
   if (!technicals || asset.category !== 'Crypto') {
     return { action: 'NEUTRAL', side: null, confidence: 0 };
+  }
+
+  // 1. Mandatory Islamic Halal Compliance Check
+  if (!isHalalCompliant(asset.symbol)) {
+    return {
+      action: 'NEUTRAL',
+      side: null,
+      confidence: 0,
+      reason: 'Excluded by Islamic Shariah Guard (Meme coin / Riba protocol)',
+      factors: ['Asset does not meet Shariah compliance standards']
+    };
+  }
+
+  // 2. User Volatility Mode Filter
+  const allowHighVol = spotRiskSettings.allowHighVolatility ?? true;
+  const isVolatileCoin = asset.isHighVolatility || (asset.minVolatility && asset.minVolatility >= 1.4);
+
+  if (!allowHighVol && isVolatileCoin) {
+    return {
+      action: 'NEUTRAL',
+      side: null,
+      confidence: 30,
+      reason: 'High-volatility coin bypassed (Standard large-cap Halal mode active)',
+      factors: ['Filtered by user setting: Trading established low-volatility Halal coins only']
+    };
   }
 
   const currentPrice = asset.price || technicals.currentPrice;
@@ -384,7 +412,6 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
   const maxHoldMinutes = 5; // Strict 5-minute cap
 
   // Adapt geometry to coin's volatility
-  const isVolatileCoin = asset.isHighVolatility || (asset.minVolatility && asset.minVolatility >= 1.4);
   const volFactor = isVolatileCoin ? Math.min(1.25, (asset.minVolatility || 1.3) / 1.2) : 1.0;
   const stopLossPct = Number((baseStopLossPct * volFactor).toFixed(2));
   const takeProfitPct = Number((baseTakeProfitPct * volFactor).toFixed(2));

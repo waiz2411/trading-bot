@@ -21,7 +21,7 @@ export default function SettingsModal({
   const [defaultLeverage, setDefaultLeverage] = useState(initialMargin.defaultLeverage || 500);
   const [maxTradesPerPair, setMaxTradesPerPair] = useState(initialMargin.maxTradesPerPair || 1);
 
-  // Spot Settings State (Fast 5-Minute Scalping)
+  // Spot Settings State (Fast 5-Minute Scalping & Halal Filtering)
   const initialSpot = spotSettings || {};
   const [spotStopLossPct, setSpotStopLossPct] = useState(initialSpot.stopLossPct || 0.6);
   const [spotTakeProfitPct, setSpotTakeProfitPct] = useState(initialSpot.takeProfitPct || 0.78);
@@ -29,6 +29,7 @@ export default function SettingsModal({
   const [spotMaxSlots, setSpotMaxSlots] = useState(initialSpot.maxSlots || 4);
   const [spotMaxTradesPerPair, setSpotMaxTradesPerPair] = useState(initialSpot.maxTradesPerPair || 2);
   const [spotMaxHoldMinutes, setSpotMaxHoldMinutes] = useState(initialSpot.maxHoldMinutes || 5);
+  const [spotAllowHighVolatility, setSpotAllowHighVolatility] = useState(initialSpot.allowHighVolatility !== undefined ? initialSpot.allowHighVolatility : true);
 
   const [savedSuccess, setSavedSuccess] = useState(false);
 
@@ -109,7 +110,9 @@ export default function SettingsModal({
         minConfidenceThreshold: parseInt(spotMinConfidence, 10),
         maxSlots: parseInt(spotMaxSlots, 10),
         maxTradesPerPair: parseInt(spotMaxTradesPerPair, 10),
-        maxHoldMinutes: parseInt(spotMaxHoldMinutes, 10)
+        maxHoldMinutes: parseInt(spotMaxHoldMinutes, 10),
+        allowHighVolatility: Boolean(spotAllowHighVolatility),
+        volatilityMode: spotAllowHighVolatility ? 'HIGH_VOLATILITY_HALAL' : 'ESTABLISHED_HALAL'
       });
     } else {
       onSaveSettings({
@@ -405,6 +408,82 @@ export default function SettingsModal({
           {/* ========================================================= */}
           {selectedTab === 'SPOT' && (
             <>
+              {/* Shariah Halal Compliance Guarantee Banner */}
+              <div className="p-3.5 rounded-xl bg-teal-950/30 border border-teal-500/40 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-teal-300 font-bold uppercase tracking-wider text-[11px]">
+                    <span>🕌 100% Shariah-Compliant Crypto Shield</span>
+                  </div>
+                  <span className="text-teal-300 font-bold text-[10px] bg-teal-900/60 border border-teal-500/40 px-2 py-0.5 rounded font-mono">
+                    ALWAYS ENFORCED
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 font-sans leading-relaxed">
+                  Strictly blocks all <strong>Meme Coins</strong> (DOGE, SHIB, PEPE, BONK, WIF), <strong>Riba Lending Protocols</strong> (AAVE, COMP, PENDLE), and <strong>Casino/Gambling Tokens</strong>. Only vetted Halal utility, Layer 1/2, AI, decentralized storage, and oracle infrastructure cryptos are scanned.
+                </p>
+              </div>
+
+              {/* Volatile Coins Selection Option */}
+              <div className="p-3.5 rounded-xl bg-indigo-950/25 border border-indigo-500/40 space-y-2.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-indigo-300 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Market Volatility Selection</span>
+                  </label>
+                  <span className={`text-xs font-bold font-mono px-2.5 py-0.5 rounded border ${
+                    spotAllowHighVolatility
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                  }`}>
+                    {spotAllowHighVolatility ? '⚡ High-Volatility Halal' : '🛡️ Standard Halal Majors'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 font-sans">
+                  Choose whether the autonomous agent should dynamically hunt high-volatility Halal tokens on the internet or stick to established large-cap Halal coins:
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSpotAllowHighVolatility(true)}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      spotAllowHighVolatility
+                        ? 'bg-amber-950/40 border-amber-500/60 text-white shadow-md shadow-amber-500/10'
+                        : 'bg-terminal-950 border-terminal-border text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="font-bold text-xs text-amber-400 flex items-center gap-1">
+                        <Zap className="w-3.5 h-3.5" /> High-Volatility Halal ⚡
+                      </span>
+                      {spotAllowHighVolatility && <Check className="w-3.5 h-3.5 text-amber-400" />}
+                    </div>
+                    <p className="text-[10px] text-slate-300 leading-tight">
+                      Dynamically scans explosive Halal alts (SUI, APT, INJ, RENDER, FET, SEI, TIA, AVAX, NEAR) for rapid 5m scalping.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSpotAllowHighVolatility(false)}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      !spotAllowHighVolatility
+                        ? 'bg-indigo-950/40 border-indigo-500/60 text-white shadow-md shadow-indigo-500/10'
+                        : 'bg-terminal-950 border-terminal-border text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="font-bold text-xs text-indigo-300 flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5" /> Standard Halal Majors 🛡️
+                      </span>
+                      {!spotAllowHighVolatility && <Check className="w-3.5 h-3.5 text-indigo-300" />}
+                    </div>
+                    <p className="text-[10px] text-slate-300 leading-tight">
+                      Trades established large-cap Halal cryptos (BTC, ETH, SOL, LINK, ADA, DOT, AVAX, NEAR) with steady momentum.
+                    </p>
+                  </button>
+                </div>
+              </div>
+
               {/* Capital Allocation Info Banner */}
               <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/40 space-y-2">
                 <div className="flex items-center justify-between">
