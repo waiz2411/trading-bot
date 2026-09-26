@@ -508,25 +508,70 @@ def place_order():
     if safe_tp is not None:
         request_payload["tp"] = safe_tp
 
-    filling_modes = [mt5.ORDER_FILLING_IOC, mt5.ORDER_FILLING_RETURN, mt5.ORDER_FILLING_FOK]
-    if symbol_info.filling_mode & 1:
-        filling_modes = [mt5.ORDER_FILLING_FOK, mt5.ORDER_FILLING_IOC, mt5.ORDER_FILLING_RETURN]
-    elif symbol_info.filling_mode & 2:
-        filling_modes = [mt5.ORDER_FILLING_IOC, mt5.ORDER_FILLING_RETURN, mt5.ORDER_FILLING_FOK]
+    # Determine supported filling modes from symbol specification
+    supported_fillings = []
+    fmode = getattr(symbol_info, 'filling_mode', 0)
+    if fmode & 2:  # SYMBOL_FILLING_IOC
+        supported_fillings.append(mt5.ORDER_FILLING_IOC)
+    if fmode & 1:  # SYMBOL_FILLING_FOK
+        supported_fillings.append(mt5.ORDER_FILLING_FOK)
+    supported_fillings.extend([mt5.ORDER_FILLING_IOC, mt5.ORDER_FILLING_RETURN, mt5.ORDER_FILLING_FOK])
+
+    # Deduplicate preserving order
+    clean_fillings = []
+    for fm in supported_fillings:
+        if fm not in clean_fillings:
+            clean_fillings.append(fm)
 
     result = None
-    for fm in filling_modes:
+
+    # Step 1: Attempt with SL/TP across all filling modes
+    for fm in clean_fillings:
         request_payload["type_filling"] = fm
         result = mt5.order_send(request_payload)
         if result and result.retcode == mt5.TRADE_RETCODE_DONE:
             break
-        # If rejected due to invalid stops (retcode 10016), retry without SL/TP and then set stops via SLTP action
-        if result and result.retcode == 10016:
-            request_payload.pop("sl", None)
-            request_payload.pop("tp", None)
-            result = mt5.order_send(request_payload)
+        # Also try without type_time if 10030 (Unsupported filling mode)
+        if result and result.retcode in (10030, 10013):
+            req_no_time = dict(request_payload)
+            req_no_time.pop("type_time", None)
+            result = mt5.order_send(req_no_time)
             if result and result.retcode == mt5.TRADE_RETCODE_DONE:
                 break
+
+    # Step 2: If rejected due to 10030, 10016 (Invalid Stops) or Market Execution broker restrictions:
+    # Open market position cleanly without SL/TP first, then attach SL/TP via TRADE_ACTION_SLTP!
+    if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+        market_payload = dict(request_payload)
+        market_payload.pop("sl", None)
+        market_payload.pop("tp", None)
+
+        for fm in clean_fillings:
+            market_payload["type_filling"] = fm
+            result = mt5.order_send(market_payload)
+            if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+                break
+
+            # Try without type_time
+            market_payload_no_time = dict(market_payload)
+            market_payload_no_time.pop("type_time", None)
+            result = mt5.order_send(market_payload_no_time)
+            if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+                break
+
+    # Step 3: Minimal fallback deal
+    if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+        raw_req = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": target_sym,
+            "volume": volume,
+            "type": order_type,
+            "price": price,
+            "deviation": dev,
+            "magic": 241100,
+            "comment": comment
+        }
+        result = mt5.order_send(raw_req)
 
     if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
         err_msg = result.comment if result else f'order_send failed: {mt5.last_error()}'
@@ -667,6 +712,15 @@ def close_order():
                 print(f"[Close] Position #{pos.ticket} ({pos.symbol}) closed successfully with filling mode {fm}.")
                 position_first_seen.pop(int(pos.ticket), None)
                 break
+            elif res and res.retcode in (10030, 10013):
+                close_req_no_time = dict(close_req)
+                close_req_no_time.pop("type_time", None)
+                res = mt5.order_send(close_req_no_time)
+                if res and res.retcode == mt5.TRADE_RETCODE_DONE:
+                    closed_count += 1
+                    print(f"[Close] Position #{pos.ticket} ({pos.symbol}) closed successfully without type_time.")
+                    position_first_seen.pop(int(pos.ticket), None)
+                    break
             else:
                 print(f"[Close] Position #{pos.ticket} attempt failed (mode {fm}, retcode {getattr(res, 'retcode', 'None')}: {getattr(res, 'comment', 'error')})")
 

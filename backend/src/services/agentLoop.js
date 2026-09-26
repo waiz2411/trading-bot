@@ -380,11 +380,8 @@ export class AutonomousAgentLoop {
             } else if (liveBal < 75) {
               maxAllowedSlots = 6;
               lotVolume = 0.01;
-            } else if (liveBal < 150) {
-              maxAllowedSlots = 16;
-              lotVolume = 0.01;
             } else {
-              maxAllowedSlots = 20;
+              maxAllowedSlots = 20; // Full 20 slots for $100+ accounts
               lotVolume = Math.max(0.01, Math.min(0.05, Math.round((liveBal / 100) * 0.01 * 100) / 100));
             }
           }
@@ -1056,7 +1053,6 @@ export class AutonomousAgentLoop {
     } else {
       if (mt5Bal < 35) dynamicMarginSlots = 2;
       else if (mt5Bal < 75) dynamicMarginSlots = 6;
-      else if (mt5Bal < 150) dynamicMarginSlots = 16;
       else dynamicMarginSlots = 20;
     }
 
