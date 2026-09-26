@@ -533,11 +533,10 @@ export class AutonomousAgentLoop {
               });
 
               this.log(
-                `⚡ [MARGIN DEMO] SCALP OPEN: ${signal.side} ${asset.symbol} @ $${signal.entryPrice} (${riskEval.leverage}x Lev, Margin: $${riskEval.margin})`,
+                `⚡ [MARGIN DEMO] SCALP OPEN: ${signal.side} ${asset.symbol} @ $${signal.entryPrice} (${riskEval.leverage}x Lev, Margin: $${riskEval.margin}, Fee: -$${pos.entryFee || 0})`,
                 'SUCCESS'
               );
               this.lastTradeOpenedAt = Date.now();
-              break;
             }
           }
         }
@@ -619,7 +618,7 @@ export class AutonomousAgentLoop {
           });
 
           this.log(
-            `🪙 [SPOT] SCALP OPEN${scaleLabel}: Bought ${candidate.asset.symbol} with $${notional} (Portion ${this.spotTradingEngine.activePositions.length}/${spotSlots}) @ $${entryPrice} (Confidence: ${candidate.signal.confidence}%). Target: +${this.spotRiskManager.takeProfitPct}% ($${takeProfit}) | Stop: -${this.spotRiskManager.stopLossPct}% ($${stopLoss}) | Cap: ${this.spotRiskManager.maxHoldMinutes || 5}m`,
+            `🪙 [SPOT] SCALP OPEN${scaleLabel}: Bought ${candidate.asset.symbol} with $${notional} (Portion ${this.spotTradingEngine.activePositions.length}/${spotSlots}) @ $${entryPrice} (Confidence: ${candidate.signal.confidence}%, Fee: -$${spotPos?.entryFee || 0}). Target: +${this.spotRiskManager.takeProfitPct}% ($${takeProfit}) | Stop: -${this.spotRiskManager.stopLossPct}% ($${stopLoss}) | Cap: ${this.spotRiskManager.maxHoldMinutes || 5}m`,
             'SUCCESS'
           );
 
@@ -648,18 +647,19 @@ export class AutonomousAgentLoop {
           // Cooldown: 60 cycles (5m) on stop loss, 12 cycles (1m) on profit/breakeven
           const cooldownTime = closed.exitReason === 'STOP_LOSS_TRIGGER' ? 60 : 12;
           this.assetCooldowns.set(closed.symbol, cooldownTime);
+          const feeStr = closed.fee ? ` (Fee: -$${closed.fee})` : '';
           if (closed.exitReason === 'TAKE_PROFIT_TRIGGER') {
-            this.log(`🎯 [MARGIN] TP HIT: ${closed.symbol} ${closed.side}! Realized: +$${closed.finalPnL}`, 'SUCCESS');
+            this.log(`🎯 [MARGIN DEMO] TP HIT: ${closed.symbol} ${closed.side}! Realized Net: +$${closed.finalPnL}${feeStr}`, 'SUCCESS');
           } else if (closed.exitReason === 'TIME_LIMIT_EXIT') {
-            this.log(`⏱️ [MARGIN] 5M SCALP EXPIRY: ${closed.symbol} auto-closed at 5m cap. Realized: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'INFO');
+            this.log(`⏱️ [MARGIN DEMO] 5M SCALP EXPIRY: ${closed.symbol} auto-closed at 5m cap. Realized Net: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}${feeStr}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'INFO');
           } else if (closed.exitReason === 'MOMENTUM_EXHAUSTION_EXIT') {
-            this.log(`🔒 [MARGIN] FAST SCALP LOCK: ${closed.symbol} gain banked before 5m cap. Realized: +$${closed.finalPnL}`, 'SUCCESS');
+            this.log(`🔒 [MARGIN DEMO] FAST SCALP LOCK: ${closed.symbol} gain banked before 5m cap. Realized Net: +$${closed.finalPnL}${feeStr}`, 'SUCCESS');
           } else if (closed.exitReason === 'TRAILING_STOP_TRIGGER') {
-            this.log(`🛡️ [MARGIN] TRAIL STOP: ${closed.symbol} ${closed.side}! Profit: +$${closed.finalPnL}`, 'SUCCESS');
+            this.log(`🛡️ [MARGIN DEMO] TRAIL STOP: ${closed.symbol} ${closed.side}! Profit: +$${closed.finalPnL}${feeStr}`, 'SUCCESS');
           } else if (closed.exitReason === 'BREAKEVEN_STOP_TRIGGER') {
-            this.log(`🔒 [MARGIN] BREAK-EVEN: ${closed.symbol} ${closed.side}. $0 Loss protected.`, 'INFO');
+            this.log(`🔒 [MARGIN DEMO] BREAK-EVEN: ${closed.symbol} ${closed.side}. Loss protected (Net: $${closed.finalPnL}${feeStr})`, 'INFO');
           } else if (closed.exitReason === 'STOP_LOSS_TRIGGER') {
-            this.log(`🛡️ [MARGIN] STOP HIT: ${closed.symbol} ${closed.side}. Loss capped: -$${Math.abs(closed.finalPnL)}`, 'WARN');
+            this.log(`🛡️ [MARGIN DEMO] STOP HIT: ${closed.symbol} ${closed.side}. Loss capped: -$${Math.abs(closed.finalPnL)}${feeStr}`, 'WARN');
           }
         }
       }
@@ -814,14 +814,15 @@ export class AutonomousAgentLoop {
         // Fast 3-cycle (15s) cooldown on profit/time exit to allow rapid rotation into new setups; 6 cycles on stop loss
         const spotCd = closed.exitReason === 'STOP_LOSS_TRIGGER' ? 6 : 3;
         this.spotCooldowns.set(closed.symbol, spotCd);
+        const feeStr = closed.fee ? ` (Fee: -$${closed.fee})` : '';
         if (closed.exitReason === 'TAKE_PROFIT_TRIGGER') {
-          this.log(`🪙 [SPOT] TARGET HIT: ${closed.symbol}! Sold 100% holding for +$${closed.finalPnL} (+${closed.finalPnLPercent}%)!`, 'SUCCESS');
+          this.log(`🪙 [SPOT] TARGET HIT: ${closed.symbol}! Sold 100% holding for Realized Net: +$${closed.finalPnL} (+${closed.finalPnLPercent}%)${feeStr}!`, 'SUCCESS');
         } else if (closed.exitReason === 'TIME_LIMIT_EXIT') {
-          this.log(`⏱️ [SPOT] 5M SCALP EXPIRY: ${closed.symbol} auto-closed at 5m cap. Realized: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL} (${closed.finalPnLPercent}%)`, closed.finalPnL >= 0 ? 'SUCCESS' : 'INFO');
+          this.log(`⏱️ [SPOT] 5M SCALP EXPIRY: ${closed.symbol} auto-closed at 5m cap. Realized Net: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL} (${closed.finalPnLPercent}%)${feeStr}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'INFO');
         } else if (closed.exitReason === 'STOP_LOSS_TRIGGER') {
-          this.log(`🪙 [SPOT] STOP TRIGGERED: ${closed.symbol} sold at stop. Loss: -$${Math.abs(closed.finalPnL)} (${closed.finalPnLPercent}%)`, 'WARN');
+          this.log(`🪙 [SPOT] STOP TRIGGERED: ${closed.symbol} sold at stop. Loss capped: -$${Math.abs(closed.finalPnL)} (${closed.finalPnLPercent}%)${feeStr}`, 'WARN');
         } else {
-          this.log(`🪙 [SPOT] EXIT: ${closed.symbol} closed (${closed.exitReason}). Realized: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'WARN');
+          this.log(`🪙 [SPOT] EXIT: ${closed.symbol} closed (${closed.exitReason}). Realized Net: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}${feeStr}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'WARN');
         }
 
         // Live Binance Exit Sell

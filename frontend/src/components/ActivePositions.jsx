@@ -198,12 +198,17 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
                     <div className="text-[9px] text-amber-400/80 font-mono mt-0.5">{leverage}x Buying Power</div>
                   </td>
 
-                  {/* Live PnL & Leveraged ROE% */}
+                  {/* Live Net PnL & Leveraged ROE% */}
                   <td className="py-3 px-4 text-right">
                     <div className={`font-bold text-sm ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
                       {isProfit ? '+' : '-'}${Math.abs(pos.unrealizedPnL || 0).toFixed(2)}
                     </div>
                     <div className="flex items-center justify-end gap-1 mt-0.5">
+                      {pos.entryFee != null && (
+                        <span className="text-[10px] text-amber-400/80 font-mono">
+                          Fee: -${((pos.entryFee || 0) + (pos.estimatedExitFee || 0)).toFixed(2)}
+                        </span>
+                      )}
                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                         isProfit ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
                       }`}>

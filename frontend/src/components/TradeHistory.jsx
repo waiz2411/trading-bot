@@ -181,20 +181,25 @@ export default function TradeHistory({ closedTrades = [] }) {
                     </div>
                   </td>
 
-                  {/* Realized PnL */}
+                  {/* Realized PnL & Fee */}
                   <td className="py-3 px-4 text-right">
                     <div className={`font-bold ${isBE ? 'text-indigo-300' : isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
                       {finalPnL >= 0 ? '+' : '-'}${Math.abs(finalPnL).toFixed(2)}
                     </div>
                     <div className="flex items-center justify-end gap-1 text-[10px]">
-                      {trade.finalPnLPercent != null && !isNaN(trade.finalPnLPercent) && (
-                        <span className={isBE ? 'text-indigo-400/80' : isWin ? 'text-emerald-500/80' : 'text-rose-500/80'}>
-                          {trade.finalPnLPercent >= 0 ? '+' : ''}{Number(trade.finalPnLPercent).toFixed(2)}%
+                      {trade.fee != null && Number(trade.fee) > 0 && (
+                        <span className="text-amber-400/90 font-mono">
+                          Fee: -${Number(trade.fee).toFixed(2)}
                         </span>
                       )}
-                      {trade.roePercent != null && !isNaN(trade.roePercent) && (
+                      {trade.finalPnLPercent != null && !isNaN(trade.finalPnLPercent) && (
+                        <span className={isBE ? 'text-indigo-400/80' : isWin ? 'text-emerald-500/80' : 'text-rose-500/80'}>
+                          ({trade.finalPnLPercent >= 0 ? '+' : ''}{Number(trade.finalPnLPercent).toFixed(2)}%)
+                        </span>
+                      )}
+                      {trade.roePercent != null && !isNaN(trade.roePercent) && trade.leverage > 1 && (
                         <span className={`font-bold ${isBE ? 'text-indigo-300' : isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          ({trade.roePercent >= 0 ? '+' : ''}{Number(trade.roePercent).toFixed(1)}% ROE)
+                          • {trade.roePercent >= 0 ? '+' : ''}{Number(trade.roePercent).toFixed(1)}% ROE
                         </span>
                       )}
                     </div>

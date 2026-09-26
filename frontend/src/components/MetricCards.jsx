@@ -161,17 +161,18 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
         <div className={`absolute bottom-0 left-0 right-0 h-[2px] ${isUnrealizedProfit ? 'bg-emerald-500' : 'bg-rose-500'} opacity-60`} />
       </div>
 
-      {/* Card 3: Realized PnL */}
+      {/* Card 3: Realized PnL & Broker Fees */}
       <div className="bg-terminal-850/80 border border-terminal-border rounded-xl p-3.5 relative overflow-hidden">
         <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-          <span className="font-mono uppercase tracking-wider text-[11px]">Realized PnL</span>
+          <span className="font-mono uppercase tracking-wider text-[11px]">Net Realized PnL</span>
           <Target className="w-3.5 h-3.5 text-slate-400" />
         </div>
         <div className={`text-xl font-bold font-mono tracking-tight ${isRealizedProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
           {isRealizedProfit ? '+' : '-'}${Math.abs(realizedPnL).toFixed(2)}
         </div>
-        <div className="text-[11px] font-mono mt-1 text-slate-400">
-          <span>{totalTrades} closed {isSpot ? 'spot trades' : 'scalps'}</span>
+        <div className="text-[11px] font-mono mt-1 text-slate-400 flex items-center justify-between">
+          <span className="text-amber-400/90">Fees: -${(portfolio.totalFeesPaid || 0).toFixed(2)}</span>
+          <span>{totalTrades} closed</span>
         </div>
         <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-slate-600 opacity-60" />
       </div>

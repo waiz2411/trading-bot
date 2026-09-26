@@ -22,6 +22,7 @@ export class PaperTradingEngine {
     this.breakEvenCount = 0;
     this.totalGrossProfit = 0;
     this.totalGrossLoss = 0;
+    this.totalFeesPaid = 0;
     this.trailingStopsEnabled = true;
     this.reversalExitsEnabled = true;
     this.scalpModeEnabled = true;
@@ -29,6 +30,7 @@ export class PaperTradingEngine {
 
   getPortfolioState() {
     const unrealizedPnL = this.activePositions.reduce((acc, pos) => acc + (pos.unrealizedPnL || 0), 0);
+    const unrealizedFees = this.activePositions.reduce((acc, pos) => acc + (pos.entryFee || 0) + (pos.estimatedExitFee || 0), 0);
 
     // Calculate trade performance metrics dynamically from closed trades ledger
     const totalTrades = this.closedTrades.length;
@@ -37,20 +39,24 @@ export class PaperTradingEngine {
     let breakEvenCount = 0;
     let grossProfit = 0;
     let grossLoss = 0;
+    let totalFees = 0;
 
     for (const trade of this.closedTrades) {
-      const pnl = Number(trade.finalPnL || 0);
-      const isBE = trade.exitReason === 'BREAKEVEN_STOP_TRIGGER' || Math.abs(pnl) <= 0.08;
+      const netPnl = Number(trade.finalPnL != null ? trade.finalPnL : trade.netPnL || 0);
+      const fee = Number(trade.fee || (trade.entryFee || 0) + (trade.exitFee || 0));
+      totalFees += fee;
+
+      const isBE = trade.exitReason === 'BREAKEVEN_STOP_TRIGGER' || Math.abs(netPnl) <= 0.05;
       if (isBE) {
         breakEvenCount++;
-        if (pnl > 0) grossProfit += pnl;
-        else if (pnl < 0) grossLoss += Math.abs(pnl);
-      } else if (pnl > 0.08) {
+        if (netPnl > 0) grossProfit += netPnl;
+        else if (netPnl < 0) grossLoss += Math.abs(netPnl);
+      } else if (netPnl > 0.05) {
         winCount++;
-        grossProfit += pnl;
-      } else if (pnl < -0.08) {
+        grossProfit += netPnl;
+      } else if (netPnl < -0.05) {
         lossCount++;
-        grossLoss += Math.abs(pnl);
+        grossLoss += Math.abs(netPnl);
       }
     }
 
@@ -59,6 +65,7 @@ export class PaperTradingEngine {
     this.breakEvenCount = breakEvenCount;
     this.totalGrossProfit = Number(grossProfit.toFixed(2));
     this.totalGrossLoss = Number(grossLoss.toFixed(2));
+    this.totalFeesPaid = Number(totalFees.toFixed(2));
 
     const decisiveTrades = winCount + lossCount;
     const winRate = decisiveTrades > 0
@@ -68,7 +75,7 @@ export class PaperTradingEngine {
       ? Number((grossProfit / grossLoss).toFixed(2))
       : (grossProfit > 0 ? 99.9 : 0);
 
-    // Cumulative Realized PnL strictly from ledger
+    // Cumulative Realized Net PnL strictly from ledger
     const cumulativeRealizedPnL = Number((grossProfit - grossLoss).toFixed(2));
     const equity = Number((this.balance + unrealizedPnL).toFixed(2));
     const totalPnL = Number((equity - this.initialBalance).toFixed(2));
@@ -99,6 +106,8 @@ export class PaperTradingEngine {
       marginLevelPercent,
       unrealizedPnL: Number(unrealizedPnL.toFixed(2)),
       realizedPnL: cumulativeRealizedPnL,
+      totalFeesPaid: Number(totalFees.toFixed(2)),
+      unrealizedFees: Number(unrealizedFees.toFixed(2)),
       totalPnL,
       totalPnLPct,
       winCount,
@@ -131,6 +140,7 @@ export class PaperTradingEngine {
     this.breakEvenCount = 0;
     this.totalGrossProfit = 0;
     this.totalGrossLoss = 0;
+    this.totalFeesPaid = 0;
     return this.getPortfolioState();
   }
 
@@ -169,6 +179,22 @@ export class PaperTradingEngine {
     const calcStopDist = stopDistance || Math.abs(entryPrice - stopLoss);
     const calcTargetDist = targetDistance || Math.abs(takeProfit - entryPrice);
     const posMargin = margin || Number((notional / leverage).toFixed(2));
+
+    // Realistic Broker Fee Matrix:
+    // Spot: 0.10% (0.0010) Binance/MEXC maker-taker fee
+    // Margin: Crypto CFD 0.06% (0.0006) / Forex 0.01% (0.0001) / Commodities 0.02% (0.0002)
+    let feeRate = 0.0001;
+    if (this.accountType === 'SPOT') {
+      feeRate = 0.0010;
+    } else {
+      if (category === 'Crypto') feeRate = 0.0006;
+      else if (category === 'Forex') feeRate = 0.0001;
+      else if (category === 'Commodities' || String(symbol).includes('XAU') || String(symbol).includes('GOLD')) feeRate = 0.0002;
+      else feeRate = 0.00015;
+    }
+
+    const entryFee = Number((notional * feeRate).toFixed(4));
+    const estimatedExitFee = entryFee;
 
     // Fallback liquidation calculation if not supplied (scales up to 500x leverage)
     let liqPrice = liquidationPrice;
@@ -210,7 +236,12 @@ export class PaperTradingEngine {
       maxHoldMinutes: orderData.maxHoldMinutes || 5,
       openTime: new Date().toISOString(),
       cycleCount: 0,
-      unrealizedPnL: 0,
+      feeRate,
+      entryFee,
+      estimatedExitFee,
+      totalFees: entryFee,
+      grossPnL: 0,
+      unrealizedPnL: Number((-entryFee - estimatedExitFee).toFixed(2)),
       pnlPercent: 0,
       highestPrice: entryPrice,
       lowestPrice: entryPrice
@@ -227,30 +258,38 @@ export class PaperTradingEngine {
     const pos = this.activePositions[index];
     const finalExitPrice = exitPrice || pos.currentPrice;
 
-    let pnl = 0;
+    let grossPnL = 0;
     if (pos.side === 'LONG') {
-      pnl = (finalExitPrice - pos.entryPrice) * pos.units;
+      grossPnL = (finalExitPrice - pos.entryPrice) * pos.units;
     } else {
-      pnl = (pos.entryPrice - finalExitPrice) * pos.units;
+      grossPnL = (pos.entryPrice - finalExitPrice) * pos.units;
     }
 
+    // Realistic Exit Fee + Round-Trip Broker Fee Calculation
+    const exitNotional = finalExitPrice * pos.units;
+    const exitFee = Number((exitNotional * (pos.feeRate || 0.0001)).toFixed(4));
+    const totalFee = Number(((pos.entryFee || 0) + exitFee).toFixed(4));
+    let netPnL = grossPnL - totalFee;
+
     // Cap loss to allocated margin in case of liquidation
-    if (exitReason === 'LIQUIDATION_TRIGGER' && pnl < -pos.margin) {
-      pnl = -pos.margin;
+    if (exitReason === 'LIQUIDATION_TRIGGER' && netPnL < -pos.margin) {
+      netPnL = -pos.margin;
     }
 
     // Preserve micro-cents for tiny balances ($5 - $10 accounts)
-    const pnlRounded = Math.abs(pnl) < 0.01 && pnl !== 0
-      ? Number(pnl.toFixed(4))
-      : Number(pnl.toFixed(2));
-    const pnlPercent = Number(((pnl / pos.notional) * 100).toFixed(2));
-    const roePercent = Number(((pnl / pos.margin) * 100).toFixed(2));
+    const pnlRounded = Math.abs(netPnL) < 0.01 && netPnL !== 0
+      ? Number(netPnL.toFixed(4))
+      : Number(netPnL.toFixed(2));
+    const grossPnLRounded = Number(grossPnL.toFixed(2));
+    const pnlPercent = Number(((pnlRounded / pos.notional) * 100).toFixed(2));
+    const roePercent = Number(((pnlRounded / pos.margin) * 100).toFixed(2));
 
-    this.balance += pnlRounded;
+    this.balance = Number((this.balance + pnlRounded).toFixed(2));
+    this.totalFeesPaid = Number((this.totalFeesPaid + totalFee).toFixed(2));
 
-    const isWin = pnlRounded > 0;
-    const isLoss = pnlRounded < 0;
-    const isBreakEven = pnlRounded === 0;
+    const isWin = pnlRounded > 0.05;
+    const isLoss = pnlRounded < -0.05;
+    const isBreakEven = !isWin && !isLoss;
 
     if (isBreakEven) {
       this.breakEvenCount++;
@@ -268,6 +307,10 @@ export class PaperTradingEngine {
       exitReason,
       exitNote: exitNote || exitReason,
       closeTime: new Date().toISOString(),
+      grossPnL: grossPnLRounded,
+      fee: totalFee,
+      entryFee: pos.entryFee || 0,
+      exitFee,
       finalPnL: pnlRounded,
       finalPnLPercent: pnlPercent,
       roePercent,
@@ -299,16 +342,24 @@ export class PaperTradingEngine {
       pos.highestPrice = Math.max(pos.highestPrice, livePrice);
       pos.lowestPrice = Math.min(pos.lowestPrice, livePrice);
 
-      let pnl = 0;
+      let grossPnL = 0;
       if (pos.side === 'LONG') {
-        pnl = (livePrice - pos.entryPrice) * pos.units;
+        grossPnL = (livePrice - pos.entryPrice) * pos.units;
       } else {
-        pnl = (pos.entryPrice - livePrice) * pos.units;
+        grossPnL = (pos.entryPrice - livePrice) * pos.units;
       }
 
-      pos.unrealizedPnL = Number(pnl.toFixed(2));
-      pos.pnlPercent = Number(((pnl / pos.notional) * 100).toFixed(2));
-      pos.roePercent = Number(((pnl / pos.margin) * 100).toFixed(2));
+      // Net Unrealized PnL strictly accounts for entry + estimated exit broker fee
+      const currentExitNotional = livePrice * pos.units;
+      const estimatedExitFee = Number((currentExitNotional * (pos.feeRate || 0.0001)).toFixed(4));
+      const totalEstimatedFee = Number(((pos.entryFee || 0) + estimatedExitFee).toFixed(4));
+      const netUnrealizedPnL = Number((grossPnL - totalEstimatedFee).toFixed(2));
+
+      pos.grossPnL = Number(grossPnL.toFixed(2));
+      pos.estimatedExitFee = estimatedExitFee;
+      pos.unrealizedPnL = netUnrealizedPnL;
+      pos.pnlPercent = Number(((netUnrealizedPnL / pos.notional) * 100).toFixed(2));
+      pos.roePercent = Number(((netUnrealizedPnL / pos.margin) * 100).toFixed(2));
 
       // ====================================================
       // 0. LIQUIDATION TRIGGER SAFETY
@@ -370,33 +421,31 @@ export class PaperTradingEngine {
       }
 
       // ====================================================
-      // 2. SCALP TIME-LIMIT (15m for Margin, 5m for Spot)
+      // 2. STRICT 5-MINUTE SCALP TIME-LIMIT & 2.5M MOMENTUM BANK
       // ====================================================
       const openTimeMs = pos.openTime ? new Date(pos.openTime).getTime() : 0;
       const ageMs = openTimeMs > 0 ? (Date.now() - openTimeMs) : ((pos.cycleCount || 0) * 5000);
       const cyclesElapsed = pos.cycleCount || 0;
-      const maxHoldMinutes = this.accountType === 'SPOT' ? 5 : 15;
+      const maxHoldMinutes = pos.maxHoldMinutes || 5;
       const maxHoldMs = maxHoldMinutes * 60 * 1000;
       const maxHoldCycles = maxHoldMinutes * 12;
 
-      // A. Holding Cap: Exit at market price to rotate capital if profitable or cycle expired
+      // A. Strict 5-Minute Holding Cap: Auto-close to bank gain and free slots for fresh scalps
       if (ageMs >= maxHoldMs || cyclesElapsed >= maxHoldCycles) {
-        if (pos.unrealizedPnL >= 0 || ageMs >= 900000) {
-          const isProfitable = pos.unrealizedPnL >= 0;
-          const exitNote = isProfitable
-            ? `${maxHoldMinutes}m Scalp Expiry: Banked profit at ${maxHoldMinutes}m cap (+${pos.pnlPercent}%)`
-            : `${maxHoldMinutes}m Scalp Expiry: Scalp duration reached ${maxHoldMinutes}m cap (${pos.pnlPercent}%)`;
-          const closed = this.closePosition(pos.id, livePrice, 'TIME_LIMIT_EXIT', exitNote);
-          if (closed) {
-            closedTriggers.push(closed);
-            continue;
-          }
+        const isProfitable = pos.unrealizedPnL >= 0;
+        const exitNote = isProfitable
+          ? `${maxHoldMinutes}m Scalp Expiry: Banked profit at ${maxHoldMinutes}m cap (+${pos.pnlPercent}%)`
+          : `${maxHoldMinutes}m Scalp Expiry: Scalp duration reached ${maxHoldMinutes}m cap (${pos.pnlPercent}%)`;
+        const closed = this.closePosition(pos.id, livePrice, 'TIME_LIMIT_EXIT', exitNote);
+        if (closed) {
+          closedTriggers.push(closed);
+          continue;
         }
       }
 
-      // B. Stalled Momentum Soft Exit (After 3.5m / 42 cycles)
-      // If scalp reached profit but starts pulling back from micro peak, lock it in!
-      if ((ageMs >= 210000 || cyclesElapsed >= 42) && pos.unrealizedPnL > 0) {
+      // B. Fast Momentum Lock (After 2.5m / 30 cycles)
+      // If scalp reached profit after 2.5m, bank it cleanly!
+      if ((ageMs >= 150000 || cyclesElapsed >= 30) && pos.unrealizedPnL > 0) {
         if (pos.side === 'LONG' && livePrice < pos.highestPrice * 0.998) {
           const closed = this.closePosition(pos.id, livePrice, 'MOMENTUM_EXHAUSTION_EXIT', `Fast Scalp Lock: Secured +${pos.pnlPercent}% gain before 5m cap`);
           if (closed) {
