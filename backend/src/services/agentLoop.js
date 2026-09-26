@@ -294,7 +294,7 @@ export class AutonomousAgentLoop {
 
         // 3A. Margin Scalper Confluence: 24/7 Crypto Majors + Top 18 Liquid Forex Pairs
         const MT5_INSTITUTIONAL_MAJORS = new Set([
-          'BTC-USD', 'ETH-USD', 'SOL-USD',
+          'BTC-USD', 'ETH-USD', 'BNB-USD', 'XRP-USD', 'DOGE-USD', 'ADA-USD', 'AVAX-USD', 'LINK-USD', 'SOL-USD',
           'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X', 'USDCHF=X', 'NZDUSD=X',
           'EURGBP=X', 'EURJPY=X', 'AUDJPY=X', 'CADJPY=X', 'EURCAD=X', 'EURAUD=X',
           'GBPAUD=X', 'GBPCAD=X', 'AUDNZD=X', 'EURCHF=X', 'GBPCHF=X'

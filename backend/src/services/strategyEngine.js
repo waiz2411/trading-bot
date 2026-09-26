@@ -234,8 +234,8 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   let targetDistance;
 
   if (asset.category === 'Crypto') {
-    stopDistance = 85.00;
-    targetDistance = 140.00;
+    stopDistance = Number((currentPrice * 0.0040).toFixed(decimals)); // Proportional 0.40% Stop Loss
+    targetDistance = Number((currentPrice * 0.0064).toFixed(decimals)); // Proportional 0.64% Take Profit (1:1.6 Net R:R)
   } else if (asset.category === 'Forex') {
     if (asset.symbol.includes('JPY')) {
       stopDistance = 0.110; // 11.0 pips (10.0 pips + 1.0 pip spread)
