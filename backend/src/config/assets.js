@@ -303,17 +303,17 @@ export const WATCHLIST = [
     halalSector: 'Bitcoin Smart Contracts L2'
   },
   {
-    symbol: 'KAS-USD',
-    name: 'Kaspa',
+    symbol: 'LTC-USD',
+    name: 'Litecoin',
     category: 'Crypto',
-    baseAsset: 'KAS',
+    baseAsset: 'LTC',
     quoteAsset: 'USD',
-    decimals: 5,
-    icon: '🪙',
-    minVolatility: 1.8,
-    isHighVolatility: true,
+    decimals: 2,
+    icon: 'Ł',
+    minVolatility: 0.8,
+    isHighVolatility: false,
     isHalal: true,
-    halalSector: 'GHOSTDAG PoW L1'
+    halalSector: 'Scrypt PoW Layer 1'
   },
   {
     symbol: 'ALGO-USD',

@@ -40,7 +40,7 @@ export const HALAL_APPROVED_ASSETS = {
   'APT': { name: 'Aptos', sector: 'Move-Based Parallel L1', isVolatile: true, minVolatility: 1.7 },
   'NEAR': { name: 'Near Protocol', sector: 'Sharded User-Owned Cloud L1', isVolatile: true, minVolatility: 1.6 },
   'SEI': { name: 'Sei Network', sector: 'Parallelized EVM L1', isVolatile: true, minVolatility: 1.8 },
-  'KAS': { name: 'Kaspa', sector: 'GHOSTDAG PoW L1', isVolatile: true, minVolatility: 1.8 },
+  'LTC': { name: 'Litecoin', sector: 'Scrypt PoW Layer 1', isVolatile: false, minVolatility: 0.8 },
   'FTM': { name: 'Sonic / Fantom', sector: 'DAG L1 Blockchain', isVolatile: true, minVolatility: 1.7 },
   'DOT': { name: 'Polkadot', sector: 'Interoperability Parachain L1', isVolatile: false, minVolatility: 1.0 },
   'ATOM': { name: 'Cosmos Hub', sector: 'Inter-Blockchain Communication', isVolatile: false, minVolatility: 1.1 },
