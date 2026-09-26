@@ -356,6 +356,10 @@ export class AutonomousAgentLoop {
           change24h: asset.change24h,
           high24h: asset.high24h,
           low24h: asset.low24h,
+          isHalal: asset.isHalal ?? (asset.category === 'Crypto' ? isHalalCompliant(asset.symbol) : undefined),
+          halalSector: asset.halalSector,
+          isHighVolatility: asset.isHighVolatility,
+          liveVolatility24h: asset.liveVolatility24h,
           isCooldown,
           cooldownCycles,
           technicals: {
