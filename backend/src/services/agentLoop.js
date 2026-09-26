@@ -292,9 +292,9 @@ export class AutonomousAgentLoop {
         const isMarginCooldown = (this.assetCooldowns.get(asset.symbol) || 0) > 0;
         const isSpotCooldown = (this.spotCooldowns.get(asset.symbol) || 0) > 0;
 
-        // 3A. Margin Scalper Confluence: 24/7 Crypto Majors + Top 18 Liquid Forex Pairs
+        // 3A. Margin Scalper Confluence: 24/7 Exness Tradable Crypto + Top 18 Liquid Forex Pairs
         const MT5_INSTITUTIONAL_MAJORS = new Set([
-          'BTC-USD', 'ETH-USD', 'BNB-USD', 'XRP-USD', 'DOGE-USD', 'ADA-USD', 'AVAX-USD', 'LINK-USD', 'SOL-USD',
+          'BTC-USD', 'ETH-USD', 'BNB-USD', 'XRP-USD', 'DOGE-USD', 'ADA-USD', 'LTC-USD',
           'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X', 'USDCHF=X', 'NZDUSD=X',
           'EURGBP=X', 'EURJPY=X', 'AUDJPY=X', 'CADJPY=X', 'EURCAD=X', 'EURAUD=X',
           'GBPAUD=X', 'GBPCAD=X', 'AUDNZD=X', 'EURCHF=X', 'GBPCHF=X'
@@ -684,12 +684,28 @@ export class AutonomousAgentLoop {
           if (!isBotTrade) continue;
 
           const posVolume = Number(p.volume || 0.01);
-          // M5 Trend Sniper Geometry: 17 pips TP ($1.70 on 0.01 lot) vs 11 pips SL ($1.10 on 0.01 lot)
-          const microTargetProfit = Number((posVolume * 170).toFixed(2)); // +17 pips target profit (+1.75% on $100 / 0.01 lot)
-          const microMaxLoss = Number((posVolume * 110).toFixed(2));      // -11 pips maximum loss (-1.10% on $100 / 0.01 lot)
-          const beThreshold = Number((posVolume * 80).toFixed(2));        // +8 pips peak trigger (+$0.80 profit peak)
-          const beLockFloor = Number((posVolume * 25).toFixed(2));        // +2.5 pips minimum guaranteed lock (+$0.25)
-          const momentumBankThreshold = Number((posVolume * 130).toFixed(2)); // +13 pips fast momentum bank after 5m
+          const symUpper = (p.symbol || '').toUpperCase();
+          const isCrypto = symUpper.includes('BTC') || symUpper.includes('ETH') || symUpper.includes('LTC') || symUpper.includes('XRP') || symUpper.includes('DOGE') || symUpper.includes('BNB') || symUpper.includes('ADA');
+
+          let microTargetProfit, microMaxLoss, beThreshold, beLockFloor, momentumBankThreshold;
+
+          if (isCrypto) {
+            // Proportional Crypto Scalp Geometry (0.45% TP vs 0.30% SL):
+            const priceEst = p.priceOpen || (symUpper.includes('BTC') ? 84000 : 2700);
+            const notional = Number((priceEst * posVolume).toFixed(2));
+            microTargetProfit = Number(Math.max(0.60, notional * 0.0045).toFixed(2)); // +0.45% profit
+            microMaxLoss = Number(Math.max(0.40, notional * 0.0030).toFixed(2));      // -0.30% loss
+            beThreshold = Number((microTargetProfit * 0.35).toFixed(2));              // +35% of target hit triggers break-even shield
+            beLockFloor = Number(Math.max(0.10, notional * 0.0010).toFixed(2));       // Lock in +0.10% min profit
+            momentumBankThreshold = Number((microTargetProfit * 0.55).toFixed(2));    // Bank if 55% of target reached after 2m
+          } else {
+            // M5 Forex Scalp Geometry (15 pips TP vs 10 pips SL):
+            microTargetProfit = Number((posVolume * 150).toFixed(2)); // +15 pips target ($1.50 on 0.01, $4.50 on 0.03)
+            microMaxLoss = Number((posVolume * 100).toFixed(2));      // -10 pips maximum loss ($1.00 on 0.01, $3.00 on 0.03)
+            beThreshold = Number((posVolume * 60).toFixed(2));        // +6 pips peak trigger
+            beLockFloor = Number((posVolume * 20).toFixed(2));        // +2 pips minimum guaranteed lock
+            momentumBankThreshold = Number((posVolume * 90).toFixed(2)); // +9 pips fast momentum bank after 2m
+          }
 
           if (!this.livePositionFirstSeen.has(ticket)) {
             this.livePositionFirstSeen.set(ticket, now);
@@ -711,13 +727,13 @@ export class AutonomousAgentLoop {
           let exitMessage = null;
           let logLevel = 'INFO';
 
-          // 1. FULL TAKE PROFIT (17 pips): Bank full 1:1.6 Net R:R gain!
+          // 1. FULL TAKE PROFIT: Bank full scalp gain!
           if (currentProfit >= microTargetProfit) {
             exitReason = 'TAKE_PROFIT_TRIGGER';
-            exitMessage = `🎯 [MT5 LIVE] M5 Scalp TP Target hit (+${currentProfit}) on Ticket #${ticket} (${p.symbol})! Banking 1:1.6 gain...`;
+            exitMessage = `🎯 [MT5 LIVE] Scalp TP Target hit (+${currentProfit}) on Ticket #${ticket} (${p.symbol})! Banking gain...`;
             logLevel = 'SUCCESS';
           }
-          // 2. BREAKEVEN PROFIT SHIELD: If scalp peaked >= +8 pips (+$0.80) and pulls back, lock in profit!
+          // 2. BREAKEVEN PROFIT SHIELD: If scalp peaked in profit and pulls back, lock in gain!
           else if (currentPeak >= beThreshold && (currentProfit <= Number((currentPeak * 0.45).toFixed(2)) || currentProfit <= beLockFloor)) {
             if (currentProfit >= 0.05) {
               exitReason = 'BREAKEVEN_STOP_TRIGGER';
@@ -729,22 +745,22 @@ export class AutonomousAgentLoop {
               logLevel = 'INFO';
             }
           }
-          // 3. FAST MOMENTUM BANK: If scalp is >= 5m old and reached +13 pips+, bank it!
-          else if (actualAgeMs >= 300000 && currentProfit >= momentumBankThreshold) {
+          // 3. FAST MOMENTUM BANK: If scalp is >= 2.5 minutes old and reached positive momentum, bank it!
+          else if (actualAgeMs >= 150000 && currentProfit >= momentumBankThreshold) {
             exitReason = 'MOMENTUM_EXHAUSTION_EXIT';
-            exitMessage = `⚡ [MT5 LIVE] Momentum bank: Ticket #${ticket} locked +$${currentProfit.toFixed(2)} in ${Math.round(actualAgeMs / 1000)}s!`;
+            exitMessage = `⚡ [MT5 LIVE] Fast Momentum Bank: Ticket #${ticket} locked +$${currentProfit.toFixed(2)} in ${Math.round(actualAgeMs / 1000)}s!`;
             logLevel = 'SUCCESS';
           }
-          // 4. STRICT 11 PIPS STOP LOSS: Strict capital protection!
+          // 4. STRICT STOP LOSS: Strict capital protection!
           else if (currentProfit <= -microMaxLoss) {
             exitReason = 'STOP_LOSS_TRIGGER';
-            exitMessage = `🛡️ [MT5 LIVE] 11 Pip Stop Loss triggered (-$${Math.abs(currentProfit)} / max -$${microMaxLoss}). Cutting loss cleanly on Ticket #${ticket}...`;
+            exitMessage = `🛡️ [MT5 LIVE] Scalp Stop Loss triggered (-$${Math.abs(currentProfit)} / max -$${microMaxLoss}). Cutting loss cleanly on Ticket #${ticket}...`;
             logLevel = 'WARN';
           }
-          // 5. MAX 60-MINUTE M5 CYCLE CAP: Allow complete structural trend waves to play out
-          else if (actualAgeMs >= 3600000) {
+          // 5. STRICT 5-MINUTE SCALP CYCLE CAP: Pure Scalping Rule (Never hold scalps for hours!)
+          else if (actualAgeMs >= 300000) {
             exitReason = 'TIME_LIMIT_EXIT';
-            exitMessage = `⏱️ [MT5 LIVE] 60-minute M5 scalp cycle expiry for Ticket #${ticket} (${p.symbol}). Realized: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`;
+            exitMessage = `⏱️ [MT5 LIVE] 5-minute Scalp Cycle Expiry for Ticket #${ticket} (${p.symbol}). Realized P/L: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`;
             logLevel = currentProfit >= 0 ? 'SUCCESS' : 'INFO';
           }
 
