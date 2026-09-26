@@ -292,8 +292,9 @@ export class AutonomousAgentLoop {
         const isMarginCooldown = (this.assetCooldowns.get(asset.symbol) || 0) > 0;
         const isSpotCooldown = (this.spotCooldowns.get(asset.symbol) || 0) > 0;
 
-        // 3A. Margin Scalper Confluence: Top 18 Ultra-Liquid Tight-Spread Forex Pairs
+        // 3A. Margin Scalper Confluence: 24/7 Crypto Majors + Top 18 Liquid Forex Pairs
         const MT5_INSTITUTIONAL_MAJORS = new Set([
+          'BTC-USD', 'ETH-USD', 'SOL-USD',
           'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X', 'USDCHF=X', 'NZDUSD=X',
           'EURGBP=X', 'EURJPY=X', 'AUDJPY=X', 'CADJPY=X', 'EURCAD=X', 'EURAUD=X',
           'GBPAUD=X', 'GBPCAD=X', 'AUDNZD=X', 'EURCHF=X', 'GBPCHF=X'
@@ -503,6 +504,8 @@ export class AutonomousAgentLoop {
                 } catch (err) {
                   if (err.message && (err.message.includes('10027') || err.message.includes('Algo Trading'))) {
                     this.log(`🚨 [MT5 LIVE] Order blocked: "Algo Trading" is turned OFF in your MetaTrader 5 window. Please click the "Algo Trading" button in the MT5 top toolbar on AWS (or press Ctrl+E) so it turns green!`, 'ERROR');
+                  } else if (err.message && (err.message.includes('10018') || err.message.includes('Market closed'))) {
+                    this.log(`⏱️ [MT5 LIVE] Forex Market is closed for the weekend (Code 10018). Forex orders will automatically resume when markets open on Sunday 5:00 PM EST. 24/7 Crypto scalping is active!`, 'INFO');
                   } else {
                     this.log(`⚠️ [MT5 LIVE] Broker order notice (${asset.symbol}): ${err.message}`, 'WARN');
                   }
