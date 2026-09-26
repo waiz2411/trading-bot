@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowUpRight, ArrowDownRight, XCircle, Shield, Target, ShieldCheck, Lock, Activity, Timer } from 'lucide-react';
+import { formatPrice, formatUnits } from '../utils/formatters.js';
 
 export default function ActivePositions({ positions = [], onCloseTrade, isClosingId, isLive = false, activeAccount = 'MARGIN' }) {
   const [, setNow] = React.useState(Date.now());
@@ -142,12 +143,12 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
 
                   {/* Entry Price */}
                   <td className="py-3 px-4 text-right text-slate-300 font-semibold">
-                    {pos.entryPrice != null ? `$${Number(pos.entryPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}` : '—'}
+                    {pos.entryPrice != null ? `$${formatPrice(pos.entryPrice)}` : '—'}
                   </td>
 
                   {/* Current Live Price */}
                   <td className="py-3 px-4 text-right font-bold text-white">
-                    {pos.currentPrice != null ? `$${Number(pos.currentPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}` : '—'}
+                    {pos.currentPrice != null ? `$${formatPrice(pos.currentPrice)}` : '—'}
                   </td>
 
                   {/* Stop Loss (or Trailing Stop) */}
@@ -161,7 +162,7 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
                           : 'text-rose-400'
                       }`}>
                         <Shield className="w-3 h-3 opacity-80" />
-                        <span>${Number(pos.stopLoss).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
+                        <span>${formatPrice(pos.stopLoss)}</span>
                       </div>
                     ) : (
                       <span className="text-slate-500">—</span>
@@ -173,7 +174,7 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
                     {pos.takeProfit && Number(pos.takeProfit) > 0 ? (
                       <div className="flex items-center justify-end gap-1 text-emerald-400">
                         <Target className="w-3 h-3 opacity-60" />
-                        <span>${Number(pos.takeProfit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
+                        <span>${formatPrice(pos.takeProfit)}</span>
                       </div>
                     ) : (
                       <span className="text-slate-500">—</span>
@@ -183,7 +184,7 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
                   {/* Est. Liquidation Price */}
                   <td className="py-3 px-4 text-right">
                     <div className="font-mono text-amber-400 font-semibold">
-                      {pos.liquidationPrice && Number(pos.liquidationPrice) > 0 ? `$${Number(pos.liquidationPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}` : '—'}
+                      {pos.liquidationPrice && Number(pos.liquidationPrice) > 0 ? `$${formatPrice(pos.liquidationPrice)}` : '—'}
                     </div>
                     <div className="text-[10px] text-slate-500">Liq. Threshold</div>
                   </td>
@@ -194,7 +195,7 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
                       <span className="text-[10px] text-indigo-400 font-normal">Margin:</span>
                       <span>${marginVal}</span>
                     </div>
-                    <div className="text-[10px] text-slate-400 font-medium">{pos.units} units (${pos.notional})</div>
+                    <div className="text-[10px] text-slate-400 font-medium">{formatUnits(pos.units, pos.entryPrice)} units (${pos.notional})</div>
                     <div className="text-[9px] text-amber-400/80 font-mono mt-0.5">{leverage}x Buying Power</div>
                   </td>
 

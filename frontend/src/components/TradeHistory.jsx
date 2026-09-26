@@ -1,5 +1,6 @@
 import React from 'react';
 import { History, ArrowUpRight, ArrowDownRight, CheckCircle2, XCircle, AlertCircle, ShieldCheck, Zap, Lock, Sparkles, Timer } from 'lucide-react';
+import { formatPrice } from '../utils/formatters.js';
 
 export default function TradeHistory({ closedTrades = [] }) {
   if (!closedTrades || closedTrades.length === 0) {
@@ -114,8 +115,9 @@ export default function TradeHistory({ closedTrades = [] }) {
           <tbody className="divide-y divide-terminal-border/60 text-xs font-mono">
             {closedTrades.map((trade, idx) => {
               const finalPnL = trade.finalPnL !== undefined ? Number(trade.finalPnL) : (trade.profit !== undefined ? Number(trade.profit) : 0);
-              const isBE = trade.isBreakEven || trade.exitReason === 'BREAKEVEN_STOP_TRIGGER' || Math.abs(finalPnL) <= 0.08;
-              const isWin = !isBE && (trade.isWin || finalPnL > 0.08);
+              const isWin = finalPnL > 0.00001;
+              const isLoss = finalPnL < -0.00001;
+              const isBE = !isWin && !isLoss;
               const isLong = trade.side === 'LONG' || trade.side === 'BUY';
               const sideLabel = trade.side === 'BUY' ? 'LONG' : (trade.side === 'SELL' ? 'SHORT' : trade.side);
 
@@ -153,24 +155,24 @@ export default function TradeHistory({ closedTrades = [] }) {
 
                   {/* Entry Price */}
                   <td className="py-3 px-4 text-right text-slate-300">
-                    {entryPrice != null ? `$${Number(entryPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}` : '—'}
+                    {entryPrice != null ? `$${formatPrice(entryPrice)}` : '—'}
                   </td>
 
                   {/* Exit Price */}
                   <td className="py-3 px-4 text-right text-white font-semibold">
-                    {exitPrice != null ? `$${Number(exitPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}` : '—'}
+                    {exitPrice != null ? `$${formatPrice(exitPrice)}` : '—'}
                   </td>
 
                   {/* Outcome */}
                   <td className="py-3 px-4 text-center">
                     <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                      isBE
-                        ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-                        : isWin
+                      isWin
                         ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                        : isLoss
+                        ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                        : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
                     }`}>
-                      {isBE ? 'BREAK-EVEN' : isWin ? 'PROFIT' : 'LOSS'}
+                      {isWin ? 'PROFIT' : isLoss ? 'LOSS' : 'BREAK-EVEN'}
                     </span>
                   </td>
 

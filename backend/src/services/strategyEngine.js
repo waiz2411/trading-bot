@@ -1,4 +1,5 @@
 import { isHalalCompliant } from './halalFilter.js';
+import { getAssetPrecision } from '../config/assets.js';
 
 /**
  * High-Frequency Scalping Confluence Engine
@@ -230,7 +231,7 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   // Guarantees Net Loss -$1.10 (1.1%) vs Net Profit +$1.75 (1.75%) on 0.01 lot ($100 balance)
   // Net Ratio = +$1.75 / -$1.10 = EXACTLY 1 : 1.60 R:R after covering all broker spreads & fees
   // ==========================================
-  const decimals = asset.decimals !== undefined ? asset.decimals : 4;
+  const decimals = getAssetPrecision(currentPrice, asset.decimals !== undefined ? asset.decimals : 4);
 
   let stopDistance;
   let targetDistance;
@@ -502,11 +503,12 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
 
   const finalConfidence = Math.max(0, Math.min(100, Math.round(score)));
 
-  // Calculate Geometry (Strict 1:1.3 R:R)
-  const stopDist = Number((currentPrice * (stopLossPct / 100)).toFixed(asset.decimals || 4));
-  const targetDist = Number((currentPrice * (takeProfitPct / 100)).toFixed(asset.decimals || 4));
-  const stopLoss = Number((currentPrice - stopDist).toFixed(asset.decimals || 4));
-  const takeProfit = Number((currentPrice + targetDist).toFixed(asset.decimals || 4));
+  // Calculate Dynamic High-Precision Geometry (Strict 1:1.3 R:R)
+  const precision = getAssetPrecision(currentPrice, asset.decimals || 4);
+  const stopDist = Number((currentPrice * (stopLossPct / 100)).toFixed(precision));
+  const targetDist = Number((currentPrice * (takeProfitPct / 100)).toFixed(precision));
+  const stopLoss = Number((currentPrice - stopDist).toFixed(precision));
+  const takeProfit = Number((currentPrice + targetDist).toFixed(precision));
   const effectiveRR = 1.30;
 
   if (finalConfidence >= minThreshold) {

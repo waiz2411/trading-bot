@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, ArrowUpRight, ArrowDownRight, Shield, Target, Zap, BarChart2, CheckCircle2 } from 'lucide-react';
+import { formatPrice } from '../utils/formatters.js';
 
 export default function AssetDetailModal({ asset, onClose, onExecuteTrade }) {
   if (!asset) return null;
@@ -31,7 +32,7 @@ export default function AssetDetailModal({ asset, onClose, onExecuteTrade }) {
           <div className="flex items-center space-x-4">
             <div className="text-right font-mono">
               <div className="text-lg font-bold text-white">
-                ${price.toLocaleString('en-US', { minimumFractionDigits: symbol.includes('=X') ? 4 : 2 })}
+                ${formatPrice(price)}
               </div>
               <div className={`text-xs font-semibold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {isPositive ? '+' : ''}{change24h}% (24h)
@@ -88,21 +89,21 @@ export default function AssetDetailModal({ asset, onClose, onExecuteTrade }) {
               <div className="grid grid-cols-3 gap-3">
                 <div className="p-3 rounded-lg bg-terminal-850 border border-terminal-border">
                   <div className="text-slate-500 text-[10px] uppercase">Entry Price</div>
-                  <div className="text-sm font-bold text-white mt-1">${signal.entryPrice}</div>
+                  <div className="text-sm font-bold text-white mt-1">${formatPrice(signal.entryPrice)}</div>
                 </div>
 
                 <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20">
                   <div className="text-rose-400 text-[10px] uppercase flex items-center gap-1">
                     <Shield className="w-3 h-3" /> Stop-Loss (SL)
                   </div>
-                  <div className="text-sm font-bold text-rose-300 mt-1">${signal.stopLoss}</div>
+                  <div className="text-sm font-bold text-rose-300 mt-1">${formatPrice(signal.stopLoss)}</div>
                 </div>
 
                 <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                   <div className="text-emerald-400 text-[10px] uppercase flex items-center gap-1">
                     <Target className="w-3 h-3" /> Take-Profit (TP)
                   </div>
-                  <div className="text-sm font-bold text-emerald-300 mt-1">${signal.takeProfit}</div>
+                  <div className="text-sm font-bold text-emerald-300 mt-1">${formatPrice(signal.takeProfit)}</div>
                 </div>
               </div>
             </div>

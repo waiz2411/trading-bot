@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Search, Filter, ArrowUpRight, ArrowDownRight, Compass, ShieldCheck, Zap, Info } from 'lucide-react';
+import { formatPrice } from '../utils/formatters.js';
 
 export default function MarketRadar({ marketScan = [], onSelectAsset, onQuickTrade }) {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -190,10 +191,7 @@ export default function MarketRadar({ marketScan = [], onSelectAsset, onQuickTra
 
                     {/* Price */}
                     <td className="py-3 px-4 text-right font-bold text-white">
-                      ${item.price.toLocaleString('en-US', {
-                        minimumFractionDigits: item.symbol.includes('=X') ? 4 : 2,
-                        maximumFractionDigits: item.symbol.includes('=X') ? 4 : 2
-                      })}
+                      ${formatPrice(item.price)}
                     </td>
 
                     {/* 24h Change */}

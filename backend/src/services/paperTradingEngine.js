@@ -1,4 +1,5 @@
 import { evaluatePositionExit } from './strategyEngine.js';
+import { getAssetPrecision } from '../config/assets.js';
 
 /**
  * Intelligent Paper Trading Engine (Pro Scalp & Leveraged Execution)
@@ -46,17 +47,14 @@ export class PaperTradingEngine {
       const fee = Number(trade.fee || (trade.entryFee || 0) + (trade.exitFee || 0));
       totalFees += fee;
 
-      const isBE = trade.exitReason === 'BREAKEVEN_STOP_TRIGGER' || Math.abs(netPnl) <= 0.05;
-      if (isBE) {
-        breakEvenCount++;
-        if (netPnl > 0) grossProfit += netPnl;
-        else if (netPnl < 0) grossLoss += Math.abs(netPnl);
-      } else if (netPnl > 0.05) {
+      if (netPnl > 0.00001) {
         winCount++;
         grossProfit += netPnl;
-      } else if (netPnl < -0.05) {
+      } else if (netPnl < -0.00001) {
         lossCount++;
         grossLoss += Math.abs(netPnl);
+      } else {
+        breakEvenCount++;
       }
     }
 
@@ -67,10 +65,9 @@ export class PaperTradingEngine {
     this.totalGrossLoss = Number(grossLoss.toFixed(2));
     this.totalFeesPaid = Number(totalFees.toFixed(2));
 
-    const decisiveTrades = winCount + lossCount;
-    const winRate = decisiveTrades > 0
-      ? Number(((winCount / decisiveTrades) * 100).toFixed(1))
-      : (lossCount === 0 && (winCount > 0 || breakEvenCount > 0) ? 100 : 0);
+    const winRate = totalTrades > 0
+      ? Number(((winCount / totalTrades) * 100).toFixed(1))
+      : 0;
     const profitFactor = grossLoss > 0
       ? Number((grossProfit / grossLoss).toFixed(2))
       : (grossProfit > 0 ? 99.9 : 0);
@@ -212,7 +209,7 @@ export class PaperTradingEngine {
       symbol,
       name,
       category,
-      decimals: orderData.decimals !== undefined ? orderData.decimals : 4,
+      decimals: orderData.decimals !== undefined ? orderData.decimals : getAssetPrecision(entryPrice),
       side, // 'SHORT' or 'LONG'
       entryPrice,
       currentPrice: entryPrice,
@@ -287,18 +284,18 @@ export class PaperTradingEngine {
     this.balance = Number((this.balance + pnlRounded).toFixed(2));
     this.totalFeesPaid = Number((this.totalFeesPaid + totalFee).toFixed(2));
 
-    const isWin = pnlRounded > 0.05;
-    const isLoss = pnlRounded < -0.05;
+    const isWin = pnlRounded > 0.00001;
+    const isLoss = pnlRounded < -0.00001;
     const isBreakEven = !isWin && !isLoss;
 
-    if (isBreakEven) {
-      this.breakEvenCount++;
-    } else if (isWin) {
+    if (isWin) {
       this.winCount++;
       this.totalGrossProfit += pnlRounded;
     } else if (isLoss) {
       this.lossCount++;
       this.totalGrossLoss += Math.abs(pnlRounded);
+    } else {
+      this.breakEvenCount++;
     }
 
     const closedRecord = {

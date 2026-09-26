@@ -7,6 +7,7 @@ import { binanceConnector } from './binanceConnector.js';
 import { mt5Connector } from './mt5Connector.js';
 import { authService } from './authService.js';
 import { isHalalCompliant } from './halalFilter.js';
+import { getAssetPrecision, formatAssetPrice } from '../config/assets.js';
 
 export class AutonomousAgentLoop {
   constructor() {
@@ -617,8 +618,9 @@ export class AutonomousAgentLoop {
           if (notional < 0.5) break; // Insufficient remaining cash for another portion
 
           const entryPrice = candidate.signal.entryPrice;
+          const precision = getAssetPrecision(entryPrice, candidate.asset.decimals || 4);
           const rawUnits = notional / entryPrice;
-          const units = Number(rawUnits.toFixed(candidate.asset.decimals || 4));
+          const units = Number(rawUnits.toFixed(Math.max(4, precision)));
 
           const stopDist = candidate.signal.stopDistance;
           const targetDist = candidate.signal.targetDistance;
@@ -632,6 +634,7 @@ export class AutonomousAgentLoop {
             symbol: candidate.asset.symbol,
             name: candidate.asset.name,
             category: 'Crypto',
+            decimals: precision,
             side: 'LONG',
             entryPrice,
             stopLoss,
@@ -651,7 +654,7 @@ export class AutonomousAgentLoop {
           });
 
           this.log(
-            `🪙 [SPOT] SCALP OPEN${scaleLabel}: Bought ${candidate.asset.symbol} with $${notional} (Portion ${this.spotTradingEngine.activePositions.length}/${spotSlots}) @ $${entryPrice} (Confidence: ${candidate.signal.confidence}%, Fee: -$${spotPos?.entryFee || 0}). Target: +${this.spotRiskManager.takeProfitPct}% ($${takeProfit}) | Stop: -${this.spotRiskManager.stopLossPct}% ($${stopLoss}) | Cap: ${this.spotRiskManager.maxHoldMinutes || 5}m`,
+            `🪙 [SPOT] SCALP OPEN${scaleLabel}: Bought ${candidate.asset.symbol} with $${notional} (Portion ${this.spotTradingEngine.activePositions.length}/${spotSlots}) @ $${formatAssetPrice(entryPrice, precision)} (Confidence: ${candidate.signal.confidence}%, Fee: -$${spotPos?.entryFee || 0}). Target: +${this.spotRiskManager.takeProfitPct}% ($${formatAssetPrice(takeProfit, precision)}) | Stop: -${this.spotRiskManager.stopLossPct}% ($${formatAssetPrice(stopLoss, precision)}) | Cap: ${this.spotRiskManager.maxHoldMinutes || 5}m`,
             'SUCCESS'
           );
 

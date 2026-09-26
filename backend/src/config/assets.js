@@ -87,7 +87,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'AVAX',
     quoteAsset: 'USD',
-    decimals: 2,
+    decimals: 3,
     icon: '🔺',
     minVolatility: 1.5,
     isHighVolatility: true,
@@ -126,7 +126,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'NEAR',
     quoteAsset: 'USD',
-    decimals: 3,
+    decimals: 4,
     icon: 'Ⓝ',
     minVolatility: 1.6,
     isHighVolatility: true,
@@ -139,7 +139,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'APT',
     quoteAsset: 'USD',
-    decimals: 3,
+    decimals: 4,
     icon: '🌐',
     minVolatility: 1.7,
     isHighVolatility: true,
@@ -152,7 +152,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'INJ',
     quoteAsset: 'USD',
-    decimals: 3,
+    decimals: 4,
     icon: '⚡',
     minVolatility: 1.8,
     isHighVolatility: true,
@@ -165,7 +165,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'SEI',
     quoteAsset: 'USD',
-    decimals: 4,
+    decimals: 6,
     icon: '🌊',
     minVolatility: 1.8,
     isHighVolatility: true,
@@ -178,7 +178,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'TIA',
     quoteAsset: 'USD',
-    decimals: 3,
+    decimals: 4,
     icon: '✨',
     minVolatility: 1.9,
     isHighVolatility: true,
@@ -191,7 +191,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'RENDER',
     quoteAsset: 'USD',
-    decimals: 3,
+    decimals: 4,
     icon: '🎨',
     minVolatility: 1.8,
     isHighVolatility: true,
@@ -204,7 +204,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'FET',
     quoteAsset: 'USD',
-    decimals: 4,
+    decimals: 5,
     icon: '🤖',
     minVolatility: 1.9,
     isHighVolatility: true,
@@ -217,7 +217,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'AR',
     quoteAsset: 'USD',
-    decimals: 3,
+    decimals: 4,
     icon: '💾',
     minVolatility: 1.7,
     isHighVolatility: true,
@@ -230,7 +230,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'FIL',
     quoteAsset: 'USD',
-    decimals: 3,
+    decimals: 4,
     icon: '📁',
     minVolatility: 1.5,
     isHighVolatility: true,
@@ -243,7 +243,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'ICP',
     quoteAsset: 'USD',
-    decimals: 3,
+    decimals: 4,
     icon: '♾️',
     minVolatility: 1.6,
     isHighVolatility: true,
@@ -256,7 +256,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'DOT',
     quoteAsset: 'USD',
-    decimals: 3,
+    decimals: 4,
     icon: '●',
     minVolatility: 1.0,
     isHighVolatility: false,
@@ -269,7 +269,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'ATOM',
     quoteAsset: 'USD',
-    decimals: 3,
+    decimals: 4,
     icon: '⚛️',
     minVolatility: 1.1,
     isHighVolatility: false,
@@ -282,7 +282,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'POL',
     quoteAsset: 'USD',
-    decimals: 4,
+    decimals: 5,
     icon: '💜',
     minVolatility: 1.1,
     isHighVolatility: false,
@@ -321,7 +321,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'ALGO',
     quoteAsset: 'USD',
-    decimals: 4,
+    decimals: 5,
     icon: 'Ⱥ',
     minVolatility: 1.0,
     isHighVolatility: false,
@@ -334,7 +334,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'HBAR',
     quoteAsset: 'USD',
-    decimals: 4,
+    decimals: 5,
     icon: 'ℏ',
     minVolatility: 1.0,
     isHighVolatility: false,
@@ -360,7 +360,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'VET',
     quoteAsset: 'USD',
-    decimals: 5,
+    decimals: 7,
     icon: '⛓️',
     minVolatility: 1.1,
     isHighVolatility: false,
@@ -373,7 +373,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'GALA',
     quoteAsset: 'USD',
-    decimals: 5,
+    decimals: 7,
     icon: '🎮',
     minVolatility: 2.0,
     isHighVolatility: true,
@@ -386,7 +386,7 @@ export const WATCHLIST = [
     category: 'Crypto',
     baseAsset: 'OP',
     quoteAsset: 'USD',
-    decimals: 3,
+    decimals: 4,
     icon: '🔴',
     minVolatility: 1.6,
     isHighVolatility: true,
@@ -859,3 +859,33 @@ export const WATCHLIST = [
     minVolatility: 0.22
   }
 ];
+
+/**
+ * Returns dynamic decimal precision based on price magnitude
+ * Ensures micro-altcoins never round to 0.0000 or lose decimal fidelity
+ */
+export function getAssetPrecision(price, defaultDecimals = 4) {
+  const p = Math.abs(Number(price) || 0);
+  if (p === 0) return defaultDecimals;
+  if (p < 0.0001) return Math.max(8, defaultDecimals);
+  if (p < 0.01) return Math.max(7, defaultDecimals);
+  if (p < 0.1) return Math.max(6, defaultDecimals);
+  if (p < 1.0) return Math.max(5, defaultDecimals);
+  if (p < 10) return Math.max(4, defaultDecimals);
+  if (p < 1000) return Math.max(2, defaultDecimals);
+  return 2;
+}
+
+/**
+ * Formats a price number to its exact required decimal representation
+ */
+export function formatAssetPrice(price, decimals = null) {
+  if (price === null || price === undefined || isNaN(price)) return '—';
+  const num = Number(price);
+  const prec = decimals !== null ? decimals : getAssetPrecision(num);
+  return num.toLocaleString('en-US', {
+    minimumFractionDigits: Math.min(2, prec),
+    maximumFractionDigits: prec
+  });
+}
+
