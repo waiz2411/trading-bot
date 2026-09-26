@@ -356,12 +356,7 @@ export class AutonomousAgentLoop {
         // Rank all candidate setups across global markets by confidence score!
         validMarginSignals.sort((a, b) => b.signal.confidence - a.signal.confidence);
 
-        // Stagger trade entries by 2.5 seconds to allow fast multi-slot filling across distinct pairs
-        const timeSinceLastMarginTrade = Date.now() - (this.lastTradeOpenedAt || 0);
-        const canOpenNextSlot = timeSinceLastMarginTrade >= 2500;
-
-        if (canOpenNextSlot) {
-          for (const { asset, signal } of validMarginSignals) {
+        for (const { asset, signal } of validMarginSignals) {
           const portfolioState = this.marginTradingEngine.getPortfolioState();
 
           // Dynamic Cent vs Standard Account Adaptation
@@ -372,18 +367,18 @@ export class AutonomousAgentLoop {
 
           if (accountType === 'CENT') {
             maxAllowedSlots = 20; // 20 simultaneous slots on Cent accounts with zero margin stress
-            lotVolume = Math.max(0.10, Math.min(1.00, Number(((liveBal / 1000) * 0.10).toFixed(2))));
+            lotVolume = Math.max(0.20, Math.min(2.00, Number(((liveBal / 1000) * 0.30).toFixed(2))));
           } else {
-            // Standard USD Account: Strict margin protection for small $10-$30 accounts
+            // Standard USD Account: Dynamic lot sizing & margin protection
             if (liveBal < 35) {
               maxAllowedSlots = 2; // Exactly 2 slots for $10-$30 balance ($4.56 margin used, $5.44 free buffer)
               lotVolume = 0.01;
             } else if (liveBal < 75) {
               maxAllowedSlots = 6;
-              lotVolume = 0.01;
+              lotVolume = 0.02;
             } else {
               maxAllowedSlots = 20; // Full 20 slots for $100+ accounts
-              lotVolume = Math.max(0.01, Math.min(0.05, Math.round((liveBal / 100) * 0.01 * 100) / 100));
+              lotVolume = Math.max(0.02, Math.min(0.10, Math.round((liveBal / 100) * 0.03 * 100) / 100)); // Calibrated 0.03 lot for $100 balance!
             }
           }
 
@@ -499,7 +494,6 @@ export class AutonomousAgentLoop {
                       'SUCCESS'
                     );
                     this.lastTradeOpenedAt = Date.now();
-                    break;
                   }
                 } catch (err) {
                   if (err.message && (err.message.includes('10027') || err.message.includes('Algo Trading'))) {
@@ -548,7 +542,6 @@ export class AutonomousAgentLoop {
           }
         }
       }
-    }
 
       // ==========================================
       // 4B. PURE SPOT CRYPTO AUTO-OPEN (Multi-Portion 1-8 Scalps)
