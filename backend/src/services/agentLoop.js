@@ -773,6 +773,10 @@ export class AutonomousAgentLoop {
           let exitMessage = null;
           let logLevel = 'INFO';
 
+          const maxHoldMinutes = this.marginRiskManager.maxHoldMinutes || 5;
+          const maxHoldMs = maxHoldMinutes * 60 * 1000;
+          const momentumAgeMs = Math.min(150000, Math.floor(maxHoldMs * 0.5));
+
           // 1. FULL TAKE PROFIT: Bank full scalp gain!
           if (currentProfit >= microTargetProfit) {
             exitReason = 'TAKE_PROFIT_TRIGGER';
@@ -791,10 +795,6 @@ export class AutonomousAgentLoop {
               logLevel = 'INFO';
             }
           }
-          const maxHoldMinutes = this.marginRiskManager.maxHoldMinutes || 5;
-          const maxHoldMs = maxHoldMinutes * 60 * 1000;
-          const momentumAgeMs = Math.min(150000, Math.floor(maxHoldMs * 0.5));
-
           // 3. FAST MOMENTUM BANK: If scalp reached positive momentum after holding for half duration, bank it!
           else if (actualAgeMs >= momentumAgeMs && currentProfit >= momentumBankThreshold) {
             exitReason = 'MOMENTUM_EXHAUSTION_EXIT';
