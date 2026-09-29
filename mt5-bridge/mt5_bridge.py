@@ -726,6 +726,7 @@ def close_order():
 
     return jsonify({'success': True, 'closed': closed_count})
 
+HOSTINGER_BACKEND = "https://slategrey-reindeer-680249.hostingersite.com"
 RENDER_BACKEND = "https://trading-bot-test-z6bi.onrender.com"
 
 def register_tunnel_with_render(tunnel_url):
@@ -735,6 +736,7 @@ def register_tunnel_with_render(tunnel_url):
     backends = [
         "http://localhost:5000",
         os.environ.get("BACKEND_URL"),
+        HOSTINGER_BACKEND,
         RENDER_BACKEND
     ]
     registered_any = False
