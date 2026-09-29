@@ -358,7 +358,6 @@ export class MarketDataService {
             asset.price = latest.close;
           }
         }
-      } catch (_) {}
     };
 
     // Parallel fetch in batches of 6
