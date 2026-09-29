@@ -14,7 +14,7 @@ CTrade trade;
 
 //--- Inputs
 input string   InpSyncToken       = "YOUR_SYNC_TOKEN"; // Your Personal Sync Token (From Web Dashboard)
-input string   InpServerUrl       = "https://trading-bot-lm51.onrender.com/api/broker/mt5/sync"; // SaaS Endpoint
+input string   InpServerUrl       = "https://slategrey-reindeer-680249.hostingersite.com/api/broker/mt5/sync"; // SaaS Endpoint
 input int      InpHeartbeatSec    = 2;                       // Sync Interval (Seconds)
 input double   InpMaxSlippage     = 10.0;                    // Max Slippage in Points
 input ulong    InpMagicNumber     = 241100;                  // Magic Number

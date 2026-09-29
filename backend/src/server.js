@@ -308,7 +308,7 @@ app.get('/api/broker/mt5/account', (req, res) => {
 });
 
 // MT5 Expert Advisor (EA) Heartbeat & Order Sync (100% Free / Unlimited SaaS Clients)
-app.post('/api/broker/mt5/sync', (req, res) => {
+app.post(['/api/broker/mt5/sync', '/api/broker/mt5/ea/sync'], (req, res) => {
   try {
     const { syncToken, login, server, balance, equity, freeMargin, leverage, currency } = req.body;
     if (!syncToken) {
