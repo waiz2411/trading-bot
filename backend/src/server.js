@@ -428,15 +428,21 @@ app.get('/api/system/ip', async (req, res) => {
 });
 
 // API: Get complete dashboard state
-app.get('/api/dashboard', (req, res) => {
+app.get('/api/dashboard', async (req, res) => {
   try {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace(/^Bearer\s+/i, '');
-    const user = authService.validateToken(token);
+    const user = await authService.validateToken(token);
+    
+    const userEmail = user ? user.email : agentLoop.currentUser;
+    const userMode = user ? user.mode : agentLoop.currentMode;
+    const userAccount = user ? user.accountType : agentLoop.activeAccount;
+
     if (user && user.email !== agentLoop.currentUser) {
-      agentLoop.setUserMode(user.email, user.mode);
+      await agentLoop.setUserMode(user.email, userMode);
     }
-    const data = agentLoop.getDashboardData();
+
+    const data = agentLoop.getDashboardData(userMode, userAccount);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });

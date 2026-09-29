@@ -8,7 +8,7 @@ export default function MarketRadar({ marketScan = [], onSelectAsset, onQuickTra
   const [searchQuery, setSearchQuery] = useState('');
   const [highConfidenceOnly, setHighConfidenceOnly] = useState(false);
   const [page, setPage] = useState(1);
-  const pageSize = 50;
+  const pageSize = 10;
 
   React.useEffect(() => {
     if (activeAccount === 'SPOT') {
@@ -142,8 +142,8 @@ export default function MarketRadar({ marketScan = [], onSelectAsset, onQuickTra
         </div>
       </div>
 
-      {/* Asset Table */}
-      <div className="overflow-x-auto">
+      {/* Asset Table Container */}
+      <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-terminal-border bg-terminal-900/70 text-[11px] font-mono text-slate-400 uppercase tracking-wider">

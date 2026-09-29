@@ -1019,9 +1019,7 @@ export class AutonomousAgentLoop {
 
   syncLiveSpotPositions(balances = [], pricesMap = {}) {
     if (!Array.isArray(balances) || balances.length === 0) {
-      if (this.currentMode === 'LIVE') {
-        this.spotTradingEngine.activePositions = [];
-      }
+      this.liveSpotPositions = [];
       return [];
     }
 
@@ -1038,7 +1036,7 @@ export class AutonomousAgentLoop {
     });
 
     const validAssetNames = new Set(validHoldings.map(b => b.asset.toUpperCase()));
-    const currentActive = this.spotTradingEngine.activePositions || [];
+    const currentActive = this.liveSpotPositions || [];
 
     // 1. Detect and record positions that were sold / closed on Binance
     for (const pos of currentActive) {
@@ -1086,23 +1084,22 @@ export class AutonomousAgentLoop {
         this.spotCooldowns.set(`${posAsset}USDT`, spotCd);
         this.spotCooldowns.set(posAsset, spotCd);
 
-        if (this.currentMode === 'LIVE') {
-          if (!this.liveSpotClosedTrades) this.liveSpotClosedTrades = [];
-          this.liveSpotClosedTrades.unshift(closedRecord);
-          this.liveSpotRealizedPnL = Number(((this.liveSpotRealizedPnL || 0) + finalPnL).toFixed(2));
-          this.savePersistedSpotTrades();
-          this.log(`🪙 [BINANCE LIVE] Trade Closed: ${pos.symbol} sold on Binance! Realized Net: ${finalPnL >= 0 ? '+' : ''}$${finalPnL} (${finalPnLPct}%)`, finalPnL >= 0 ? 'SUCCESS' : 'INFO');
-        }
+        if (!this.liveSpotClosedTrades) this.liveSpotClosedTrades = [];
+        this.liveSpotClosedTrades.unshift(closedRecord);
+        this.liveSpotRealizedPnL = Number(((this.liveSpotRealizedPnL || 0) + finalPnL).toFixed(2));
+        this.savePersistedSpotTrades();
+        this.log(`🪙 [BINANCE LIVE] Trade Closed: ${pos.symbol} sold on Binance! Realized Net: ${finalPnL >= 0 ? '+' : ''}$${finalPnL} (${finalPnLPct}%)`, finalPnL >= 0 ? 'SUCCESS' : 'INFO');
       }
     }
 
     // 2. Retain only genuinely active holdings with >= $1.00 value
-    this.spotTradingEngine.activePositions = currentActive.filter(p => {
+    const remainingLive = currentActive.filter(p => {
       const assetUpper = (p.name || p.symbol.replace(/[-_/]/g, '').replace(/USD$/, '')).toUpperCase();
       return validAssetNames.has(assetUpper);
     });
 
     // 3. Register or update live holdings
+    const updatedLivePositions = [];
     for (const coin of validHoldings) {
       const assetUpper = coin.asset.toUpperCase();
       const symbol = `${assetUpper}-USD`;
@@ -1111,7 +1108,7 @@ export class AutonomousAgentLoop {
       const entryPrice = livePrice || (scan ? scan.price : 0) || 0;
       const notionalEst = entryPrice > 0 ? Number((entryPrice * coin.free).toFixed(2)) : 0;
 
-      let trackedPos = this.spotTradingEngine.activePositions.find(p => {
+      let trackedPos = remainingLive.find(p => {
         const pSym = (p.name || p.symbol.replace(/[-_/]/g, '').replace(/USD$/, '')).toUpperCase();
         return pSym === assetUpper;
       });
@@ -1157,25 +1154,22 @@ export class AutonomousAgentLoop {
           liquidationPrice: 0,
           isLiveBrokerOrder: true
         };
-
-        this.spotTradingEngine.activePositions.push(trackedPos);
       } else {
-        trackedPos.units = coin.free;
-        if (trackedPos.maxHoldMinutes !== this.spotRiskManager.maxHoldMinutes) {
-          trackedPos.maxHoldMinutes = this.spotRiskManager.maxHoldMinutes || 60;
-        }
-        if (trackedPos.feeRate !== this.spotRiskManager.feeRate) {
-          trackedPos.feeRate = this.spotRiskManager.feeRate || 0.00075;
-        }
+        trackedPos.currentPrice = livePrice || trackedPos.currentPrice;
+        trackedPos.highestPrice = Math.max(trackedPos.highestPrice || 0, livePrice || 0);
+        trackedPos.lowestPrice = Math.min(trackedPos.lowestPrice || Infinity, livePrice || Infinity);
+        trackedPos.notional = notionalEst;
       }
+      updatedLivePositions.push(trackedPos);
     }
-
-    return this.spotTradingEngine.activePositions;
+    return this.liveSpotPositions || [];
   }
 
-  getDashboardData() {
-    const isLive = this.currentMode === 'LIVE';
-    const isSpot = this.activeAccount === 'SPOT';
+  getDashboardData(forcedMode = null, forcedAccount = null) {
+    const currentMode = forcedMode || this.currentMode;
+    const activeAccount = (forcedAccount || this.activeAccount || 'MARGIN').toUpperCase();
+    const isLive = currentMode === 'LIVE';
+    const isSpot = activeAccount === 'SPOT';
 
     const binanceStatus = binanceConnector.getStatus();
     const mt5Status = mt5Connector.getStatus();
@@ -1184,11 +1178,7 @@ export class AutonomousAgentLoop {
     // 1. Resolve Margin Portfolio (MetaTrader 5 Only)
     let marginPortfolio;
     if (isLive) {
-      if (this.marginTradingEngine) {
-        this.marginTradingEngine.activePositions = (this.marginTradingEngine.activePositions || []).filter(p => !!p.ticket);
-      }
-
-      if (mt5Status.connected) {
+      if (mt5Status.connected && mt5Status.accountInfo) {
         const bal = Number(mt5Status.accountInfo.balance || 0);
         const eq = Number(mt5Status.accountInfo.equity || bal);
         const liveMargin = Number(mt5Status.accountInfo.margin || 0);
@@ -1232,12 +1222,6 @@ export class AutonomousAgentLoop {
           };
         });
 
-        let activePositionsList = terminalPositions;
-        if (this.marginTradingEngine) {
-          const liveTickets = new Set(terminalPositions.map(p => Number(p.ticket)));
-          this.marginTradingEngine.activePositions = (this.marginTradingEngine.activePositions || []).filter(p => liveTickets.has(Number(p.ticket)));
-        }
-
         const liveRealized = (mt5Status.realizedProfit !== undefined && mt5Status.realizedProfit !== null)
           ? mt5Status.realizedProfit
           : (this.liveRealizedPnL || 0);
@@ -1276,7 +1260,7 @@ export class AutonomousAgentLoop {
           lossCount,
           breakEvenCount,
           totalTrades: liveClosed.length,
-          activePositions: activePositionsList,
+          activePositions: terminalPositions,
           closedTrades: liveClosed
         };
       } else {
@@ -1291,11 +1275,11 @@ export class AutonomousAgentLoop {
           freeMargin: null,
           leverage: 500,
           unrealizedPnL: 0,
-          realizedPnL: this.liveRealizedPnL || 0,
+          realizedPnL: 0,
           totalPnL: 0,
           totalPnLPct: 0,
           activePositions: [],
-          closedTrades: this.liveClosedTrades || [],
+          closedTrades: [],
           statusMessage: 'MetaTrader 5 Margin Account Not Connected. Connect MT5 to view real balance and trade.'
         };
       }
@@ -1324,7 +1308,7 @@ export class AutonomousAgentLoop {
         let totalSpotUnrealizedPnL = 0;
         let totalSpotFees = 0;
 
-        const activeSpotHoldings = this.spotTradingEngine.activePositions.map(pos => {
+        const activeSpotHoldings = (this.liveSpotPositions || []).map(pos => {
           const livePrice = pricesMap[pos.symbol] || pos.currentPrice || pos.entryPrice;
           const currentNotional = Number((livePrice * pos.units).toFixed(2));
           let pnl = pos.unrealizedPnL;
@@ -1466,8 +1450,8 @@ export class AutonomousAgentLoop {
     };
 
     return {
-      activeAccount: this.activeAccount,
-      mode: this.currentMode,
+      activeAccount,
+      mode: currentMode,
       currentUser: this.currentUser,
       brokers: {
         binance: binanceStatus,

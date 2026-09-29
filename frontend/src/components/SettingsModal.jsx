@@ -155,32 +155,22 @@ export default function SettingsModal({
           </button>
         </div>
 
-        {/* Account Selector Tabs */}
-        <div className="flex border-b border-terminal-border bg-terminal-950 px-6 pt-3 gap-2">
-          <button
-            type="button"
-            onClick={() => setSelectedTab('MARGIN')}
-            className={`flex items-center gap-1.5 pb-2.5 px-3 border-b-2 font-mono text-xs font-bold transition-all ${
-              selectedTab === 'MARGIN'
-                ? 'border-amber-400 text-amber-300'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Zap className="w-3.5 h-3.5 text-amber-400" />
-            <span>Margin Scalper (500x)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedTab('SPOT')}
-            className={`flex items-center gap-1.5 pb-2.5 px-3 border-b-2 font-mono text-xs font-bold transition-all ${
-              selectedTab === 'SPOT'
-                ? 'border-emerald-400 text-emerald-300'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Coins className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Pure Spot Crypto (100% Capital)</span>
-          </button>
+        {/* Account Type Title Strip (Strictly locked to assigned account type) */}
+        <div className="flex items-center justify-between border-b border-terminal-border bg-terminal-950 px-6 py-2.5">
+          {activeAccount === 'SPOT' ? (
+            <div className="flex items-center gap-2 text-emerald-300 font-mono text-xs font-bold">
+              <Coins className="w-4 h-4 text-emerald-400" />
+              <span>Pure Spot Crypto Settings (100% Cash Allocation)</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-amber-300 font-mono text-xs font-bold">
+              <Zap className="w-4 h-4 text-amber-400" />
+              <span>Margin Scalper Settings (500x Leverage)</span>
+            </div>
+          )}
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-terminal-900 border border-terminal-border text-slate-400 uppercase">
+            {activeAccount} TRADING
+          </span>
         </div>
 
         <form onSubmit={handleSave} className="p-6 space-y-5 font-mono text-xs max-h-[75vh] overflow-y-auto">
