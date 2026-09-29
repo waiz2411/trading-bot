@@ -444,6 +444,35 @@ export default function App() {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />;
   }
 
+  // Admin Account: Render Dedicated SaaS Admin Portal (No trading terminal clutter)
+  if (user?.role === 'ADMIN') {
+    return (
+      <>
+        <AdminPanel
+          user={user}
+          token={token}
+          onLogout={handleLogout}
+          showNotification={showNotification}
+        />
+        {notification && (
+          <div
+            className={`fixed bottom-4 right-4 z-50 px-4 py-2.5 rounded-xl border text-xs font-mono shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 ${
+              notification.type === 'SUCCESS'
+                ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300'
+                : notification.type === 'ERROR'
+                ? 'bg-rose-950/90 border-rose-500 text-rose-300'
+                : notification.type === 'WARN'
+                ? 'bg-amber-950/90 border-amber-500 text-amber-300'
+                : 'bg-terminal-900/90 border-terminal-border text-slate-200'
+            }`}
+          >
+            <span>{notification.msg}</span>
+          </div>
+        )}
+      </>
+    );
+  }
+
   const isLiveMode = user?.mode === 'LIVE' || user?.email === 'test@gmail.com';
   const isBrokerConnected = isSpot ? data.brokers?.binance?.connected : data.brokers?.mt5?.connected;
 

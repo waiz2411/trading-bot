@@ -271,12 +271,104 @@ export class AuthService {
 
   // --- ADMIN MANAGEMENT METHODS ---
   async getAllUsers() {
-    const [rows] = await db.query(`
+    const [users] = await db.query(`
       SELECT id, email, name, phone, account_type, status, role, active_mode, is_auto_trading, created_at, updated_at
       FROM users
       ORDER BY created_at DESC
     `);
-    return rows;
+
+    // Fetch broker configs for all users
+    const [brokerRows] = await db.query('SELECT user_id, broker, config_json FROM user_broker_configs');
+    const brokerMap = {};
+    for (const r of brokerRows) {
+      if (!brokerMap[r.user_id]) brokerMap[r.user_id] = {};
+      try {
+        const parsed = JSON.parse(r.config_json);
+        brokerMap[r.user_id][r.broker] = {
+          connected: Boolean(parsed.connected),
+          status: parsed.status || (parsed.connected ? 'CONNECTED' : 'DISCONNECTED'),
+          lastChecked: parsed.lastChecked || null,
+          server: parsed.server || '',
+          isTestnet: parsed.isTestnet
+        };
+      } catch (_) {}
+    }
+
+    // Fetch aggregate trade stats per user from user_trades table
+    const [tradeStatsRows] = await db.query(`
+      SELECT 
+        user_id,
+        COUNT(*) as totalTrades,
+        SUM(CASE WHEN exit_price IS NOT NULL THEN 1 ELSE 0 END) as closedTrades,
+        SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) as winTrades,
+        SUM(CASE WHEN pnl < 0 THEN 1 ELSE 0 END) as lossTrades,
+        COALESCE(SUM(pnl), 0) as totalRealizedPnL,
+        SUM(CASE WHEN exit_price IS NULL THEN 1 ELSE 0 END) as openTradesCount
+      FROM user_trades
+      GROUP BY user_id
+    `);
+
+    const statsMap = {};
+    for (const s of tradeStatsRows) {
+      const closed = Number(s.closedTrades) || 0;
+      const wins = Number(s.winTrades) || 0;
+      statsMap[s.user_id] = {
+        totalTrades: Number(s.totalTrades) || 0,
+        closedTrades: closed,
+        winTrades: wins,
+        lossTrades: Number(s.lossTrades) || 0,
+        winRate: closed > 0 ? Number(((wins / closed) * 100).toFixed(1)) : 0,
+        totalRealizedPnL: Number(Number(s.totalRealizedPnL || 0).toFixed(2)),
+        openTradesCount: Number(s.openTradesCount) || 0
+      };
+    }
+
+    return users.map(u => ({
+      ...u,
+      brokerConnections: brokerMap[u.id] || {
+        binance: { connected: false, status: 'DISCONNECTED' },
+        mt5: { connected: false, status: 'DISCONNECTED' }
+      },
+      stats: statsMap[u.id] || {
+        totalTrades: 0,
+        closedTrades: 0,
+        winTrades: 0,
+        lossTrades: 0,
+        winRate: 0,
+        totalRealizedPnL: 0,
+        openTradesCount: 0
+      }
+    }));
+  }
+
+  async getUserTradeHistory(userId) {
+    const [trades] = await db.query(`
+      SELECT id, trade_id, mode, account_type, symbol, side, entry_price, exit_price, pnl, pnl_pct, trade_json, created_at
+      FROM user_trades
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+      LIMIT 100
+    `, [userId]);
+
+    return trades.map(t => {
+      let extra = {};
+      try {
+        extra = JSON.parse(t.trade_json);
+      } catch (_) {}
+      return {
+        id: t.trade_id || t.id,
+        mode: t.mode,
+        accountType: t.account_type,
+        symbol: t.symbol,
+        side: t.side,
+        entryPrice: Number(t.entry_price),
+        exitPrice: t.exit_price ? Number(t.exit_price) : null,
+        pnl: t.pnl ? Number(t.pnl) : null,
+        pnlPct: t.pnl_pct ? Number(t.pnl_pct) : null,
+        timestamp: t.created_at,
+        ...extra
+      };
+    });
   }
 
   async updateUserStatus(userId, status) {

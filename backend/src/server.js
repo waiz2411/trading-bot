@@ -130,6 +130,16 @@ app.post('/api/admin/users/status', requireAdmin, async (req, res) => {
   }
 });
 
+app.get('/api/admin/users/:id/trades', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const trades = await authService.getUserTradeHistory(id);
+    res.json({ success: true, trades });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
