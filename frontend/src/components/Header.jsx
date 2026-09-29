@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, RefreshCw, Sliders, Wallet, Zap, ArrowDownRight, ArrowUpRight, Repeat, Trash2, Coins, Key, LogOut, Globe } from 'lucide-react';
+import { Play, Pause, RefreshCw, Sliders, Wallet, Zap, ArrowDownRight, ArrowUpRight, Repeat, Trash2, Coins, Key, LogOut, ShieldCheck, ShieldAlert, Sparkles, ToggleLeft, ToggleRight } from 'lucide-react';
 
 export default function Header({
   activeAccount = 'MARGIN',
@@ -21,10 +21,15 @@ export default function Header({
   user,
   brokers,
   onOpenBrokerModal,
+  onOpenAdminPanel,
+  onToggleMode,
   onLogout
 }) {
   const isSpot = activeAccount === 'SPOT';
-  const isLive = user?.mode === 'LIVE' || user?.email === 'test@gmail.com';
+  const isLive = user?.mode === 'LIVE';
+  const isAdmin = user?.role === 'ADMIN';
+  const userAccountType = user?.accountType || 'MARGIN';
+
   const isMarginConnected = marginPortfolio?.isConnected ?? (!isLive);
   const isSpotConnected = spotPortfolio?.isConnected ?? (!isLive);
   const marginBal = marginPortfolio?.balance;
@@ -57,7 +62,7 @@ export default function Header({
                 <>
                   <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 font-bold">
                     <Coins className="w-3 h-3" />
-                    PURE SPOT CRYPTO
+                    HALAL SPOT CRYPTO
                   </span>
                   <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold">
                     100% CAPITAL ALLOCATION
@@ -89,7 +94,7 @@ export default function Header({
                     ) : (
                       <>
                         <Repeat className="w-3 h-3" />
-                        BI-DIRECTIONAL (BOTH)
+                        BOTH
                       </>
                     )}
                   </span>
@@ -110,79 +115,109 @@ export default function Header({
           </div>
         </div>
 
-        {/* Center: Dual Account Switcher */}
+        {/* Center: Account Display or Switcher (Admins can toggle, Clients are locked to assigned type) */}
         <div className="flex items-center bg-terminal-950 p-1 rounded-xl border border-terminal-border text-xs font-mono shadow-inner self-start xl:self-center">
-          {/* Account 1: Margin Scalper */}
-          <button
-            onClick={() => onSwitchAccount && onSwitchAccount('MARGIN')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono transition-all ${
-              !isSpot
-                ? 'bg-gradient-to-r from-amber-500/20 to-indigo-600/30 text-amber-300 border border-amber-500/50 shadow-md shadow-amber-500/10 font-bold'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-terminal-800/60'
-            }`}
-            title="Switch to 500x Margin Scalper Account (Multi-asset, MT5 Only)"
-          >
-            <Zap className={`w-3.5 h-3.5 ${!isSpot ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} />
-            <div className="flex flex-col items-start leading-tight">
-              <div className="flex items-center gap-1.5">
-                <span>MARGIN SCALPER</span>
-                <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-semibold">500x</span>
+          {/* Margin Scalper Account (Rendered for MARGIN clients & ADMIN) */}
+          {(userAccountType === 'MARGIN' || isAdmin) && (
+            <button
+              onClick={() => isAdmin && onSwitchAccount && onSwitchAccount('MARGIN')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono transition-all ${
+                !isSpot
+                  ? 'bg-gradient-to-r from-amber-500/20 to-indigo-600/30 text-amber-300 border border-amber-500/50 shadow-md shadow-amber-500/10 font-bold'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-terminal-800/60'
+              } ${!isAdmin ? 'cursor-default' : 'cursor-pointer'}`}
+              title={isAdmin ? "Switch to 500x Margin Scalper Account" : "Your Assigned Margin Scalper Account"}
+            >
+              <Zap className={`w-3.5 h-3.5 ${!isSpot ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} />
+              <div className="flex flex-col items-start leading-tight">
+                <div className="flex items-center gap-1.5">
+                  <span>MARGIN SCALPER</span>
+                  <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-semibold">500x</span>
+                </div>
+                {isLive && !isMarginConnected ? (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenBrokerModal && onOpenBrokerModal('MT5');
+                    }}
+                    className="text-[10px] text-amber-400 font-mono font-semibold flex items-center gap-1 hover:underline cursor-pointer"
+                  >
+                    ⚠️ Connect MT5
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-slate-300 font-mono font-normal">
+                    ${(marginBal ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                )}
               </div>
-              {isLive && !isMarginConnected ? (
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenBrokerModal && onOpenBrokerModal('MT5');
-                  }}
-                  className="text-[10px] text-amber-400 font-mono font-semibold flex items-center gap-1 hover:underline"
-                >
-                  ⚠️ Connect MT5
-                </span>
-              ) : (
-                <span className="text-[10px] text-slate-300 font-mono font-normal">
-                  ${(marginBal ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              )}
-            </div>
-          </button>
+            </button>
+          )}
 
-          {/* Account 2: Pure Spot Crypto */}
-          <button
-            onClick={() => onSwitchAccount && onSwitchAccount('SPOT')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono transition-all ${
-              isSpot
-                ? 'bg-gradient-to-r from-emerald-500/20 to-teal-600/30 text-emerald-300 border border-emerald-500/50 shadow-md shadow-emerald-500/10 font-bold'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-terminal-800/60'
-            }`}
-            title="Switch to Pure Spot Crypto Account (Binance Spot Only, 100% Capital)"
-          >
-            <Coins className={`w-3.5 h-3.5 ${isSpot ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
-            <div className="flex flex-col items-start leading-tight">
-              <div className="flex items-center gap-1.5">
-                <span>PURE SPOT</span>
-                <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-semibold">100%</span>
+          {/* Pure Spot Crypto Account (Rendered for SPOT clients & ADMIN) */}
+          {(userAccountType === 'SPOT' || isAdmin) && (
+            <button
+              onClick={() => isAdmin && onSwitchAccount && onSwitchAccount('SPOT')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono transition-all ${
+                isSpot
+                  ? 'bg-gradient-to-r from-emerald-500/20 to-teal-600/30 text-emerald-300 border border-emerald-500/50 shadow-md shadow-emerald-500/10 font-bold'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-terminal-800/60'
+              } ${!isAdmin ? 'cursor-default' : 'cursor-pointer'}`}
+              title={isAdmin ? "Switch to Pure Spot Crypto Account" : "Your Assigned Pure Spot Account"}
+            >
+              <Coins className={`w-3.5 h-3.5 ${isSpot ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
+              <div className="flex flex-col items-start leading-tight">
+                <div className="flex items-center gap-1.5">
+                  <span>PURE SPOT</span>
+                  <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-semibold">100%</span>
+                </div>
+                {isLive && !isSpotConnected ? (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenBrokerModal && onOpenBrokerModal('BINANCE');
+                    }}
+                    className="text-[10px] text-emerald-400 font-mono font-semibold flex items-center gap-1 hover:underline cursor-pointer"
+                  >
+                    ⚠️ Connect Binance
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-slate-300 font-mono font-normal">
+                    ${(spotBal ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                )}
               </div>
-              {isLive && !isSpotConnected ? (
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenBrokerModal && onOpenBrokerModal('BINANCE');
-                  }}
-                  className="text-[10px] text-emerald-400 font-mono font-semibold flex items-center gap-1 hover:underline"
-                >
-                  ⚠️ Connect Binance
-                </span>
-              ) : (
-                <span className="text-[10px] text-slate-300 font-mono font-normal">
-                  ${(spotBal ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              )}
-            </div>
-          </button>
+            </button>
+          )}
         </div>
 
         {/* Action Controls */}
         <div className="flex items-center flex-wrap gap-2">
+          {/* REAL vs DEMO Mode Switcher Button */}
+          <button
+            onClick={onToggleMode}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-xs font-bold transition-all shadow-md cursor-pointer border ${
+              isLive
+                ? 'bg-gradient-to-r from-rose-950/80 to-amber-950/80 border-rose-500/50 text-rose-300 hover:border-rose-400 shadow-rose-500/10'
+                : 'bg-gradient-to-r from-emerald-950/80 to-teal-950/80 border-emerald-500/50 text-emerald-300 hover:border-emerald-400 shadow-emerald-500/10'
+            }`}
+            title="Click to toggle between Real Live Broker & Simulated Demo Mode"
+          >
+            <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-rose-400 animate-ping' : 'bg-emerald-400'}`} />
+            <span>{isLive ? '🔴 REAL BROKER' : '🟢 DEMO PAPER'}</span>
+          </button>
+
+          {/* Admin Control Panel Button (Only visible for ADMIN) */}
+          {isAdmin && (
+            <button
+              onClick={onOpenAdminPanel}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/50 text-indigo-300 font-mono text-xs font-bold transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
+              title="Open Admin User Approval & SaaS Panel"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Admin Panel</span>
+            </button>
+          )}
+
           {/* Trade Direction Selector (Short Only vs Both vs Long for Margin; Locked for Spot) */}
           {isSpot ? (
             <div className="flex items-center gap-1.5 bg-terminal-950 px-3 py-1.5 rounded-lg border border-emerald-500/30 text-xs font-mono text-emerald-300">
@@ -203,7 +238,7 @@ export default function Header({
                 title="Only open Short / Sell trades"
               >
                 <ArrowDownRight className="w-3 h-3" />
-                SHORT ONLY
+                SHORT
               </button>
               <button
                 onClick={() => onChangeDirection('BOTH')}
@@ -227,7 +262,7 @@ export default function Header({
                 title="Only open Long trades"
               >
                 <ArrowUpRight className="w-3 h-3" />
-                LONG ONLY
+                LONG
               </button>
             </div>
           )}
@@ -236,7 +271,7 @@ export default function Header({
           {isLive ? (
             <button
               onClick={() => onOpenBrokerModal && onOpenBrokerModal(isSpot ? 'BINANCE' : 'MT5')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono font-semibold transition-all shadow-sm ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono font-semibold transition-all shadow-sm cursor-pointer ${
                 isSpot
                   ? 'bg-emerald-600/20 hover:bg-emerald-600/30 border-emerald-500/40 text-emerald-300 hover:text-white'
                   : 'bg-amber-600/20 hover:bg-amber-600/30 border-amber-500/40 text-amber-300 hover:text-white'
@@ -249,22 +284,22 @@ export default function Header({
           ) : (
             <button
               onClick={onOpenBalanceModal}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono font-semibold transition-all shadow-sm ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono font-semibold transition-all shadow-sm cursor-pointer ${
                 isSpot
                   ? 'bg-emerald-600/20 hover:bg-emerald-600/30 border-emerald-500/40 text-emerald-300 hover:text-white'
                   : 'bg-indigo-600/20 hover:bg-indigo-600/30 border-indigo-500/40 text-indigo-300 hover:text-white'
               }`}
-              title={`Edit ${isSpot ? 'Spot' : 'Margin'} Account Balance`}
+              title={`Edit ${isSpot ? 'Spot' : 'Margin'} Virtual Demo Balance`}
             >
               <Wallet className={`w-3.5 h-3.5 ${isSpot ? 'text-emerald-400' : 'text-indigo-400'}`} />
-              <span>Edit Balance</span>
+              <span>Edit Demo Balance</span>
             </button>
           )}
 
           {/* Auto-Trading Master Switch */}
           <button
             onClick={onToggleAutoTrading}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-xs font-semibold transition-all shadow-md ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-xs font-semibold transition-all shadow-md cursor-pointer ${
               isAutoTrading
                 ? 'bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25 shadow-emerald-500/10'
                 : 'bg-amber-500/15 border border-amber-500/40 text-amber-400 hover:bg-amber-500/25'
@@ -273,7 +308,7 @@ export default function Header({
             {isAutoTrading ? (
               <>
                 <Pause className="w-3.5 h-3.5" />
-                <span>{isSpot ? 'SPOT AUTO-BUY ACTIVE' : 'BOT ACTIVE: AUTO-SCALPING'}</span>
+                <span>{isSpot ? 'SPOT AUTO-BUY ACTIVE' : 'BOT ACTIVE'}</span>
               </>
             ) : (
               <>
@@ -287,7 +322,7 @@ export default function Header({
           {activePositionsCount > 0 && (
             <button
               onClick={onCloseAllTrades}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-xs font-mono transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-xs font-mono transition-colors cursor-pointer"
               title="Close all open trades in active account"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -299,7 +334,7 @@ export default function Header({
           <button
             onClick={onManualScan}
             disabled={isScanning}
-            className="p-2 rounded-lg bg-terminal-800 hover:bg-terminal-700 border border-terminal-border text-slate-300 text-xs transition-colors disabled:opacity-50"
+            className="p-2 rounded-lg bg-terminal-800 hover:bg-terminal-700 border border-terminal-border text-slate-300 text-xs transition-colors disabled:opacity-50 cursor-pointer"
             title="Trigger instant market scan"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin text-indigo-400' : ''}`} />
@@ -308,46 +343,25 @@ export default function Header({
           {/* Settings */}
           <button
             onClick={onOpenSettings}
-            className="p-2 rounded-lg bg-terminal-800 hover:bg-terminal-750 border border-terminal-border text-slate-300 text-xs transition-colors"
+            className="p-2 rounded-lg bg-terminal-800 hover:bg-terminal-750 border border-terminal-border text-slate-300 text-xs transition-colors cursor-pointer"
             title="Risk & Strategy Settings"
           >
             <Sliders className={`w-3.5 h-3.5 ${isSpot ? 'text-emerald-400' : 'text-indigo-400'}`} />
           </button>
 
-          {/* Dedicated Broker Connector Button */}
-          {(() => {
-            const isBrokerOnline = isSpot ? brokers?.binance?.connected : brokers?.mt5?.connected;
-            const brokerName = isSpot ? 'Binance Spot' : 'MT5 Margin';
-            return (
-              <button
-                onClick={() => onOpenBrokerModal && onOpenBrokerModal(isSpot ? 'BINANCE' : 'MT5')}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all shadow-sm ${
-                  isBrokerOnline
-                    ? 'bg-emerald-950/40 hover:bg-emerald-900/50 border-emerald-500/50 text-emerald-300'
-                    : 'bg-terminal-800 hover:bg-amber-950/30 border-terminal-border hover:border-amber-500/40 text-slate-300 hover:text-amber-300'
-                }`}
-                title={`Configure ${brokerName} (${isBrokerOnline ? 'Online' : 'Offline / Standby'})`}
-              >
-                <Key className={`w-3.5 h-3.5 ${isBrokerOnline ? 'text-emerald-400' : 'text-amber-400'}`} />
-                <span className="hidden md:inline">{isSpot ? 'Binance' : 'MT5'}</span>
-                <span className={`w-2 h-2 rounded-full ${isBrokerOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-500'}`} />
-              </button>
-            );
-          })()}
-
-          {/* User Account / Mode Badge */}
+          {/* User Account Details */}
           {user && (
             <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-mono text-xs border ${
-              user.email === 'test@gmail.com'
-                ? 'bg-gradient-to-r from-emerald-950/60 to-cyan-950/60 border-emerald-500/40 text-emerald-300'
+              isAdmin
+                ? 'bg-gradient-to-r from-indigo-950/60 to-purple-950/60 border-indigo-500/40 text-indigo-300'
                 : 'bg-terminal-950 border-terminal-border text-slate-300'
             }`}>
-              <span className={`w-2 h-2 rounded-full ${user.email === 'test@gmail.com' ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
-              <span className="font-semibold">{user.email.split('@')[0]}</span>
+              <span className={`w-2 h-2 rounded-full ${isAdmin ? 'bg-indigo-400 animate-pulse' : 'bg-emerald-400'}`} />
+              <span className="font-semibold">{user.name || user.email.split('@')[0]}</span>
               <span className={`text-[10px] px-1 py-0.2 rounded uppercase font-bold ${
-                user.email === 'test@gmail.com' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'
+                isAdmin ? 'bg-indigo-500/30 text-indigo-200 border border-indigo-500/40' : 'bg-slate-800 text-slate-400'
               }`}>
-                {user.mode === 'LIVE' ? 'LIVE' : 'DEMO'}
+                {user.role}
               </span>
             </div>
           )}
@@ -356,7 +370,7 @@ export default function Header({
           {onLogout && (
             <button
               onClick={onLogout}
-              className="p-2 rounded-lg bg-terminal-800 hover:bg-rose-500/20 border border-terminal-border hover:border-rose-500/40 text-slate-400 hover:text-rose-300 text-xs transition-colors"
+              className="p-2 rounded-lg bg-terminal-800 hover:bg-rose-500/20 border border-terminal-border hover:border-rose-500/40 text-slate-400 hover:text-rose-300 text-xs transition-colors cursor-pointer"
               title="Log out of session"
             >
               <LogOut className="w-3.5 h-3.5" />

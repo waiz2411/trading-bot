@@ -24,23 +24,22 @@ app.use(cors({
 app.use(express.json());
 
 // ====================================================
-// AUTHENTICATION ROUTES
+// AUTHENTICATION & MULTI-TENANT SAAS ROUTES
 // ====================================================
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   try {
-    const { email, password, name } = req.body;
-    const result = authService.register({ email, password, name });
-    agentLoop.setUserMode(result.user.email, result.user.mode);
+    const { email, password, name, phone, accountType } = req.body;
+    const result = await authService.register({ email, password, name, phone, accountType });
     res.json({ success: true, ...result });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const result = authService.login(email, password);
+    const result = await authService.login(email, password);
     agentLoop.setUserMode(result.user.email, result.user.mode);
     res.json({ success: true, ...result });
   } catch (err) {
@@ -48,11 +47,11 @@ app.post('/api/auth/login', (req, res) => {
   }
 });
 
-app.get('/api/auth/me', (req, res) => {
+app.get('/api/auth/me', async (req, res) => {
   try {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace(/^Bearer\s+/i, '');
-    const user = authService.validateToken(token);
+    const user = await authService.validateToken(token);
     if (!user) {
       return res.status(401).json({ error: 'Session expired or invalid' });
     }
@@ -63,15 +62,81 @@ app.get('/api/auth/me', (req, res) => {
   }
 });
 
-app.post('/api/auth/logout', (req, res) => {
+app.post('/api/auth/logout', async (req, res) => {
   try {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace(/^Bearer\s+/i, '');
-    authService.logout(token);
-    // Note: Background auto-trading bot continues running 24/7 autonomously on server
+    await authService.logout(token);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Switch User Mode: SIMULATED (Demo) vs LIVE (Real Broker)
+app.post('/api/user/mode', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = await authService.validateToken(token);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { mode } = req.body;
+    const updatedMode = await authService.setUserActiveMode(user.email, mode);
+    agentLoop.setUserMode(user.email, updatedMode);
+
+    const updatedUser = await authService.getUserByEmail(user.email);
+    res.json({ success: true, mode: updatedMode, user: authService.sanitizeUser(updatedUser) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ====================================================
+// ADMIN USER MANAGEMENT ROUTES (Admin Only)
+// ====================================================
+// Middleware to verify Admin role
+const requireAdmin = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = await authService.validateToken(token);
+    if (!user || user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Forbidden: Admin privileges required.' });
+    }
+    req.adminUser = user;
+    next();
+  } catch (err) {
+    res.status(403).json({ error: 'Unauthorized access.' });
+  }
+};
+
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+  try {
+    const users = await authService.getAllUsers();
+    res.json({ success: true, users });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/users/status', requireAdmin, async (req, res) => {
+  try {
+    const { userId, status } = req.body;
+    const result = await authService.updateUserStatus(userId, status);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await authService.deleteUser(id);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 
@@ -936,7 +1001,14 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
-// Start agent loop and web server
+// Start database, agent loop and web server
+try {
+  await authService.init();
+  console.log('✅ Multi-tenant SaaS database initialized.');
+} catch (dbErr) {
+  console.error('⚠️ Database init error (will retry on query):', dbErr.message);
+}
+
 agentLoop.setUserMode('test@gmail.com', 'LIVE');
 agentLoop.isAutoTradingEnabled = false; // Always start in PAUSED mode until user explicitly clicks Start
 agentLoop.start();

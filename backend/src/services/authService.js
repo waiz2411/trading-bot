@@ -1,247 +1,31 @@
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const DATA_DIR = path.join(__dirname, '../../data');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
-const SECRET_FILE = path.join(DATA_DIR, 'auth_secret.key');
+import { db } from './db.js';
 
 /**
- * Multi-Tenant Authentication & User Storage Service for NexusQuant SaaS
- * - Supports self-registration of client accounts
- * - Persistent disk storage across server restarts
- * - Per-user isolated broker credentials and live connection states
+ * Enterprise Multi-Tenant SaaS Authentication & User Management Service
+ * - Backed by Hostinger MySQL Database
+ * - Strict Account Type Isolation (MARGIN vs SPOT)
+ * - Admin Approval Workflow (PENDING -> ACTIVE)
+ * - Per-User Isolated Broker Credentials & Risk Configurations
  */
+
 export class AuthService {
   constructor() {
-    this.users = {};
     this.sessions = new Map();
-    this.secretKey = '';
-    this.ensureDataDir();
-    this.ensureSecretKey();
-    this.loadUsers();
+    this.secretKey = process.env.JWT_SECRET || 'nexusquant-prod-auth-salt-9817234';
   }
 
-  ensureSecretKey() {
-    try {
-      if (process.env.JWT_SECRET) {
-        this.secretKey = process.env.JWT_SECRET.trim();
-        return;
-      }
-      if (fs.existsSync(SECRET_FILE)) {
-        this.secretKey = fs.readFileSync(SECRET_FILE, 'utf-8').trim();
-      }
-      if (!this.secretKey) {
-        this.secretKey = crypto.randomBytes(32).toString('hex');
-        fs.writeFileSync(SECRET_FILE, this.secretKey, 'utf-8');
-      }
-    } catch (err) {
-      console.warn('Failed to ensure auth secret file, using fallback salt:', err.message);
-      this.secretKey = process.env.JWT_SECRET || 'nexusquant-prod-auth-salt-9817234';
-    }
-  }
-
-  ensureDataDir() {
-    try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      }
-    } catch (err) {
-      console.error('Failed to create data directory:', err);
-    }
-  }
-
-  loadUsers() {
-    try {
-      if (fs.existsSync(USERS_FILE)) {
-        const raw = fs.readFileSync(USERS_FILE, 'utf-8');
-        this.users = JSON.parse(raw);
-      }
-    } catch (err) {
-      console.warn('Could not load users.json, re-initializing defaults:', err.message);
-      this.users = {};
-    }
-
-    // Seed default demo and test accounts if missing
-    if (!this.users['demo@gmail.com']) {
-      this.users['demo@gmail.com'] = {
-        id: 'usr_demo_001',
-        email: 'demo@gmail.com',
-        password: 'demoPass',
-        name: 'Demo Paper Trader',
-        role: 'DEMO',
-        mode: 'SIMULATED',
-        isAutoTradingEnabled: false,
-        activeAccount: 'MARGIN',
-        createdAt: '2026-09-01T00:00:00.000Z',
-        brokerConnections: {
-          binance: { connected: false, apiKey: '', isTestnet: true },
-          mt5: { connected: false, login: '', server: '', syncToken: 'NQ-DEMO-001' }
-        }
-      };
-    }
-
-const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://grid-air-telescope-object.trycloudflare.com';
-
-    if (!this.users['test@gmail.com']) {
-      this.users['test@gmail.com'] = {
-        id: 'usr_live_002',
-        email: 'test@gmail.com',
-        password: 'testPass',
-        name: 'Main Live Account',
-        role: 'LIVE_BROKER',
-        mode: 'LIVE',
-        isAutoTradingEnabled: false,
-        activeAccount: 'MARGIN',
-        createdAt: '2026-09-01T00:00:00.000Z',
-        brokerConnections: {
-          binance: {
-            connected: false,
-            apiKey: '',
-            apiSecret: '',
-            isTestnet: true,
-            status: 'STANDBY',
-            lastChecked: null
-          },
-          mt5: {
-            connected: false,
-            login: '474636066',
-            password: 'Test@123',
-            server: 'Exness-MT5Trial15',
-            gatewayUrl: LIVE_MT5_GATEWAY_URL,
-            syncToken: 'NQ-SYNC-TEST002',
-            status: 'DISCONNECTED',
-            lastChecked: new Date().toISOString()
-          }
-        }
-      };
-    }
-
-    // Ensure all existing users have syncToken, isAutoTradingEnabled, activeAccount, and live gatewayUrl
-    for (const user of Object.values(this.users)) {
-      if (user.email === 'test@gmail.com') {
-        user.mode = 'LIVE';
-        user.isAutoTradingEnabled = true;
-        user.activeAccount = 'MARGIN';
-        if (!user.brokerConnections) user.brokerConnections = {};
-        if (!user.brokerConnections.mt5) {
-          user.brokerConnections.mt5 = {
-            connected: false,
-            login: '474636066',
-            password: 'Test@123',
-            server: 'Exness-MT5Trial15',
-            gatewayUrl: LIVE_MT5_GATEWAY_URL,
-            syncToken: 'NQ-SYNC-TEST002',
-            status: 'DISCONNECTED',
-            lastChecked: new Date().toISOString()
-          };
-        } else {
-          user.brokerConnections.mt5.login = '474636066';
-          user.brokerConnections.mt5.password = 'Test@123';
-          user.brokerConnections.mt5.server = 'Exness-MT5Trial15';
-          if (!user.brokerConnections.mt5.gatewayUrl || user.brokerConnections.mt5.gatewayUrl.includes('abu-solve')) {
-            user.brokerConnections.mt5.gatewayUrl = LIVE_MT5_GATEWAY_URL;
-          }
-        }
-      }
-      if (user.isAutoTradingEnabled === undefined) {
-        user.isAutoTradingEnabled = false;
-      }
-      if (!user.activeAccount) {
-        user.activeAccount = 'MARGIN';
-      }
-      if (!user.brokerConnections) user.brokerConnections = {};
-      if (!user.brokerConnections.mt5) user.brokerConnections.mt5 = {};
-      if (!user.brokerConnections.mt5.gatewayUrl || user.brokerConnections.mt5.gatewayUrl.includes('abu-solve')) {
-        user.brokerConnections.mt5.gatewayUrl = LIVE_MT5_GATEWAY_URL;
-      }
-      if (!user.brokerConnections.mexc) {
-        user.brokerConnections.mexc = {
-          connected: false,
-          apiKey: '',
-          apiSecret: '',
-          defaultLeverage: 50,
-          status: 'DISCONNECTED',
-          lastChecked: null
-        };
-      }
-      if (!user.brokerConnections.mt5.syncToken) {
-        user.brokerConnections.mt5.syncToken = `NQ-SYNC-${(user.id || 'usr').slice(-6).toUpperCase()}`;
-      }
-    }
-
-    this.saveUsers();
-  }
-
-  saveUsers() {
-    try {
-      fs.writeFileSync(USERS_FILE, JSON.stringify(this.users, null, 2), 'utf-8');
-    } catch (err) {
-      console.error('Failed to persist users to disk:', err);
-    }
-  }
-
-  register({ email, password, name }) {
-    const cleanEmail = (email || '').trim().toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      throw new Error('Please enter a valid email address.');
-    }
-    if (!password || password.length < 5) {
-      throw new Error('Password must be at least 5 characters long.');
-    }
-    if (this.users[cleanEmail]) {
-      throw new Error('An account with this email already exists. Please sign in.');
-    }
-
-    const userId = `usr_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-    const newUser = {
-      id: userId,
-      email: cleanEmail,
-      password,
-      name: (name || cleanEmail.split('@')[0]).trim(),
-      role: 'CLIENT',
-      mode: 'LIVE', // New client accounts are real live accounts ready to connect brokers
-      isAutoTradingEnabled: false,
-      activeAccount: 'MARGIN',
-      createdAt: new Date().toISOString(),
-      brokerConnections: {
-        binance: {
-          connected: false,
-          apiKey: '',
-          apiSecret: '',
-          isTestnet: true,
-          status: 'DISCONNECTED',
-          lastChecked: null
-        },
-        mt5: {
-          connected: false,
-          login: '',
-          password: '',
-          server: '',
-          gatewayUrl: LIVE_MT5_GATEWAY_URL,
-          syncToken: `NQ-SYNC-${userId.slice(-6).toUpperCase()}`,
-          status: 'DISCONNECTED',
-          lastChecked: null
-        }
-      }
-    };
-
-    this.users[cleanEmail] = newUser;
-    this.saveUsers();
-
-    // Automatically create authenticated persistent session token (30 days validity)
-    const token = this.createSessionToken(newUser);
-    return { token, user: this.sanitizeUser(newUser) };
+  async init() {
+    await db.init();
   }
 
   createSessionToken(user) {
-    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days validity
     const payload = JSON.stringify({
       userId: user.id,
       email: user.email,
+      role: user.role,
+      accountType: user.account_type || user.accountType,
       expiresAt
     });
     const b64Payload = Buffer.from(payload).toString('base64url');
@@ -251,39 +35,29 @@ const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://grid-air-te
     this.sessions.set(token, {
       userId: user.id,
       email: user.email,
+      role: user.role,
+      accountType: user.account_type || user.accountType,
       expiresAt
     });
 
     return token;
   }
 
-  login(email, password) {
-    const cleanEmail = (email || '').trim().toLowerCase();
-    const user = this.users[cleanEmail];
-
-    if (!user || user.password !== password) {
-      throw new Error('Invalid email or password. Please verify credentials.');
-    }
-
-    const token = this.createSessionToken(user);
-    return { token, user: this.sanitizeUser(user) };
-  }
-
-  validateToken(token) {
+  async validateToken(token) {
     if (!token || typeof token !== 'string') return null;
 
-    // Fast path: In-memory session hit
-    const session = this.sessions.get(token);
-    if (session) {
-      if (Date.now() > session.expiresAt) {
+    // Fast memory path
+    const cachedSession = this.sessions.get(token);
+    if (cachedSession) {
+      if (Date.now() > cachedSession.expiresAt) {
         this.sessions.delete(token);
         return null;
       }
-      const user = this.users[session.email];
-      return user ? this.sanitizeUser(user) : null;
+      const user = await this.getUserById(cachedSession.userId);
+      return user && user.status === 'ACTIVE' ? this.sanitizeUser(user) : null;
     }
 
-    // Persistent path: Verify cryptographic HMAC-SHA256 signature
+    // Cryptographic signature path
     if (token.startsWith('nq_') && token.includes('.')) {
       try {
         const withoutPrefix = token.slice(3);
@@ -301,23 +75,22 @@ const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://grid-air-te
           return null;
         }
 
-        const payloadStr = Buffer.from(b64Payload, 'base64url').toString('utf-8');
-        const payload = JSON.parse(payloadStr);
-
+        const payload = JSON.parse(Buffer.from(b64Payload, 'base64url').toString('utf-8'));
         if (payload.expiresAt && Date.now() <= payload.expiresAt) {
-          const user = this.users[payload.email];
-          if (user) {
-            // Re-cache in memory for sub-millisecond future lookups
+          const user = await this.getUserById(payload.userId);
+          if (user && user.status === 'ACTIVE') {
             this.sessions.set(token, {
               userId: user.id,
               email: user.email,
+              role: user.role,
+              accountType: user.account_type,
               expiresAt: payload.expiresAt
             });
             return this.sanitizeUser(user);
           }
         }
       } catch (err) {
-        console.warn('Stateless token verification error:', err.message);
+        console.warn('Token validation error:', err.message);
         return null;
       }
     }
@@ -325,116 +98,246 @@ const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://grid-air-te
     return null;
   }
 
-  logout(token) {
+  async register({ email, password, name, phone, accountType }) {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanPhone = (phone || '').trim();
+    const targetType = (accountType || 'MARGIN').toUpperCase() === 'SPOT' ? 'SPOT' : 'MARGIN';
+
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      throw new Error('Please enter a valid email address.');
+    }
+    if (!password || password.length < 5) {
+      throw new Error('Password must be at least 5 characters long.');
+    }
+    if (!cleanPhone || cleanPhone.length < 7) {
+      throw new Error('Please enter a valid phone number (at least 7 digits).');
+    }
+
+    // Check if email already exists
+    const [existing] = await db.query('SELECT id FROM users WHERE email = ?', [cleanEmail]);
+    if (existing.length > 0) {
+      throw new Error('An account with this email already exists. Please sign in.');
+    }
+
+    const userId = `usr_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const cleanName = (name || cleanEmail.split('@')[0]).trim();
+
+    // Insert user into MySQL with status = 'PENDING'
+    await db.query(`
+      INSERT INTO users (id, email, password, name, phone, account_type, status, role, active_mode, is_auto_trading)
+      VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 'CLIENT', 'SIMULATED', FALSE)
+    `, [userId, cleanEmail, password, cleanName, cleanPhone, targetType]);
+
+    // Initialize default broker connections
+    const defaultMt5 = {
+      connected: false,
+      login: '',
+      password: '',
+      server: '',
+      gatewayUrl: process.env.MT5_GATEWAY_URL || 'https://grid-air-telescope-object.trycloudflare.com',
+      syncToken: `NQ-SYNC-${userId.slice(-6).toUpperCase()}`,
+      status: 'DISCONNECTED',
+      lastChecked: null
+    };
+
+    const defaultBinance = {
+      connected: false,
+      apiKey: '',
+      apiSecret: '',
+      isTestnet: true,
+      status: 'DISCONNECTED',
+      lastChecked: null
+    };
+
+    await db.query(`
+      INSERT INTO user_broker_configs (user_id, broker, config_json)
+      VALUES (?, 'mt5', ?), (?, 'binance', ?)
+    `, [userId, JSON.stringify(defaultMt5), userId, JSON.stringify(defaultBinance)]);
+
+    return {
+      pendingApproval: true,
+      message: 'Account registered successfully! Your account is currently PENDING admin approval. You will be able to log in once an administrator approves your account.'
+    };
+  }
+
+  async login(email, password) {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [cleanEmail]);
+
+    if (rows.length === 0) {
+      throw new Error('Invalid email or password. Please verify your credentials.');
+    }
+
+    const user = rows[0];
+
+    if (user.password !== password) {
+      throw new Error('Invalid email or password. Please verify your credentials.');
+    }
+
+    // Check Approval Status
+    if (user.status === 'PENDING') {
+      throw new Error('Your account is pending admin approval. You will be able to log in once an administrator approves your account.');
+    }
+
+    if (user.status === 'SUSPENDED') {
+      throw new Error('Your account is currently suspended. Please contact platform support.');
+    }
+
+    if (user.status === 'REJECTED') {
+      throw new Error('Your account application was not approved.');
+    }
+
+    // Fetch broker configs
+    const brokerConfigs = await this.getUserBrokerConfigs(user.id);
+    user.brokerConnections = brokerConfigs;
+
+    const token = this.createSessionToken(user);
+    return { token, user: this.sanitizeUser(user) };
+  }
+
+  async logout(token) {
     if (token) {
       this.sessions.delete(token);
     }
     return true;
   }
 
-  getUser(email) {
+  async getUserById(id) {
+    const [rows] = await db.query('SELECT * FROM users WHERE id = ?', [id]);
+    if (rows.length === 0) return null;
+    const user = rows[0];
+    user.brokerConnections = await this.getUserBrokerConfigs(user.id);
+    return user;
+  }
+
+  async getUserByEmail(email) {
     const cleanEmail = (email || '').trim().toLowerCase();
-    return this.users[cleanEmail] || null;
+    const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [cleanEmail]);
+    if (rows.length === 0) return null;
+    const user = rows[0];
+    user.brokerConnections = await this.getUserBrokerConfigs(user.id);
+    return user;
   }
 
-  getUserById(id) {
-    return Object.values(this.users).find(u => u.id === id) || null;
+  async getUserBrokerConfigs(userId) {
+    const [rows] = await db.query('SELECT broker, config_json FROM user_broker_configs WHERE user_id = ?', [userId]);
+    const configs = {
+      binance: { connected: false, apiKey: '', isTestnet: true, status: 'DISCONNECTED' },
+      mt5: { connected: false, login: '', server: '', status: 'DISCONNECTED', syncToken: `NQ-SYNC-${userId.slice(-6).toUpperCase()}` },
+      mexc: { connected: false, apiKey: '', defaultLeverage: 50, status: 'DISCONNECTED' }
+    };
+
+    for (const r of rows) {
+      try {
+        configs[r.broker] = JSON.parse(r.config_json);
+      } catch (_) {}
+    }
+
+    return configs;
   }
 
-  getUserBySyncToken(syncToken) {
-    if (!syncToken) return null;
-    const clean = syncToken.toString().trim().toUpperCase();
-    return Object.values(this.users).find(u =>
-      (u.brokerConnections?.mt5?.syncToken || '').toUpperCase() === clean
-    ) || null;
-  }
-
-  updateBrokerConfig(email, broker, config) {
-    const user = this.getUser(email);
+  async updateBrokerConfig(email, broker, config) {
+    const user = await this.getUserByEmail(email);
     if (!user) throw new Error('User not found');
 
-    if (broker === 'binance') {
-      user.brokerConnections.binance = {
-        ...user.brokerConnections.binance,
-        ...config,
-        lastUpdated: new Date().toISOString()
-      };
-      this.saveUsers();
-      return user.brokerConnections.binance;
-    } else if (broker === 'mt5') {
-      user.brokerConnections.mt5 = {
-        ...user.brokerConnections.mt5,
-        ...config,
-        lastUpdated: new Date().toISOString()
-      };
-      this.saveUsers();
-      return user.brokerConnections.mt5;
-    } else if (broker === 'mexc') {
-      user.brokerConnections.mexc = {
-        ...user.brokerConnections.mexc,
-        ...config,
-        lastUpdated: new Date().toISOString()
-      };
-      this.saveUsers();
-      return user.brokerConnections.mexc;
-    }
-    throw new Error('Unknown broker type');
+    const existingConfigs = await this.getUserBrokerConfigs(user.id);
+    const updated = { ...existingConfigs[broker], ...config, lastUpdated: new Date().toISOString() };
+
+    await db.query(`
+      INSERT INTO user_broker_configs (user_id, broker, config_json)
+      VALUES (?, ?, ?)
+      ON DUPLICATE KEY UPDATE config_json = VALUES(config_json), updated_at = NOW()
+    `, [user.id, broker, JSON.stringify(updated)]);
+
+    return updated;
   }
 
-  setUserAutoTrading(email, isEnabled) {
+  async setUserAutoTrading(email, isEnabled) {
     const cleanEmail = (email || '').trim().toLowerCase();
-    const user = this.users[cleanEmail];
-    if (user) {
-      user.isAutoTradingEnabled = Boolean(isEnabled);
-      this.saveUsers();
-      return user.isAutoTradingEnabled;
-    }
-    return false;
+    await db.query('UPDATE users SET is_auto_trading = ? WHERE email = ?', [Boolean(isEnabled), cleanEmail]);
+    return Boolean(isEnabled);
   }
 
-  setUserActiveAccount(email, activeAccount) {
+  async setUserActiveMode(email, mode) {
     const cleanEmail = (email || '').trim().toLowerCase();
-    const user = this.users[cleanEmail];
-    if (user) {
-      user.activeAccount = (activeAccount || 'MARGIN').toUpperCase();
-      this.saveUsers();
-      return user.activeAccount;
+    const cleanMode = (mode || 'SIMULATED').toUpperCase() === 'LIVE' ? 'LIVE' : 'SIMULATED';
+    await db.query('UPDATE users SET active_mode = ? WHERE email = ?', [cleanMode, cleanEmail]);
+    return cleanMode;
+  }
+
+  // --- ADMIN MANAGEMENT METHODS ---
+  async getAllUsers() {
+    const [rows] = await db.query(`
+      SELECT id, email, name, phone, account_type, status, role, active_mode, is_auto_trading, created_at, updated_at
+      FROM users
+      ORDER BY created_at DESC
+    `);
+    return rows;
+  }
+
+  async updateUserStatus(userId, status) {
+    const validStatuses = ['PENDING', 'ACTIVE', 'SUSPENDED', 'REJECTED'];
+    if (!validStatuses.includes(status)) {
+      throw new Error(`Invalid status: ${status}. Must be one of: ${validStatuses.join(', ')}`);
     }
-    return 'MARGIN';
+
+    const [res] = await db.query('UPDATE users SET status = ? WHERE id = ?', [status, userId]);
+    if (res.affectedRows === 0) {
+      throw new Error('User not found');
+    }
+    return { success: true, userId, status };
+  }
+
+  async deleteUser(userId) {
+    // Prevent deleting main admin
+    const [rows] = await db.query('SELECT role, email FROM users WHERE id = ?', [userId]);
+    if (rows.length > 0 && rows[0].role === 'ADMIN' && rows[0].email === 'test@gmail.com') {
+      throw new Error('Cannot delete primary administrator account.');
+    }
+
+    await db.query('DELETE FROM user_broker_configs WHERE user_id = ?', [userId]);
+    await db.query('DELETE FROM user_settings WHERE user_id = ?', [userId]);
+    await db.query('DELETE FROM user_trades WHERE user_id = ?', [userId]);
+    const [res] = await db.query('DELETE FROM users WHERE id = ?', [userId]);
+    return { success: res.affectedRows > 0, userId };
   }
 
   sanitizeUser(user) {
+    const b = user.brokerConnections || {};
     return {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role,
-      mode: user.mode,
-      isAutoTradingEnabled: Boolean(user.isAutoTradingEnabled),
-      activeAccount: user.activeAccount || 'MARGIN',
+      phone: user.phone || '',
+      accountType: user.account_type || user.accountType || 'MARGIN',
+      status: user.status || 'PENDING',
+      role: user.role || 'CLIENT',
+      mode: user.active_mode || user.mode || 'SIMULATED',
+      isAutoTradingEnabled: Boolean(user.is_auto_trading || user.isAutoTradingEnabled),
+      createdAt: user.created_at,
       brokerConnections: {
         binance: {
-          connected: user.brokerConnections?.binance?.connected || false,
-          apiKey: user.brokerConnections?.binance?.apiKey ? `${user.brokerConnections.binance.apiKey.slice(0, 6)}...` : '',
-          isTestnet: user.brokerConnections?.binance?.isTestnet ?? true,
-          status: user.brokerConnections?.binance?.status || 'DISCONNECTED',
-          lastChecked: user.brokerConnections?.binance?.lastChecked || null
+          connected: b.binance?.connected || false,
+          apiKey: b.binance?.apiKey ? `${b.binance.apiKey.slice(0, 6)}...` : '',
+          isTestnet: b.binance?.isTestnet ?? true,
+          status: b.binance?.status || 'DISCONNECTED',
+          lastChecked: b.binance?.lastChecked || null
         },
         mt5: {
-          connected: user.brokerConnections?.mt5?.connected || false,
-          login: user.brokerConnections?.mt5?.login ? `${user.brokerConnections.mt5.login.toString().slice(0, 3)}****` : '',
-          server: user.brokerConnections?.mt5?.server || '',
-          gatewayUrl: user.brokerConnections?.mt5?.gatewayUrl || '',
-          syncToken: user.brokerConnections?.mt5?.syncToken || `NQ-SYNC-${(user.id || 'usr').slice(-6).toUpperCase()}`,
-          status: user.brokerConnections?.mt5?.status || (user.brokerConnections?.mt5?.connected ? 'CONNECTED' : 'DISCONNECTED'),
-          lastChecked: user.brokerConnections?.mt5?.lastChecked || null
+          connected: b.mt5?.connected || false,
+          login: b.mt5?.login ? `${b.mt5.login.toString().slice(0, 3)}****` : '',
+          server: b.mt5?.server || '',
+          gatewayUrl: b.mt5?.gatewayUrl || '',
+          syncToken: b.mt5?.syncToken || `NQ-SYNC-${(user.id || 'usr').slice(-6).toUpperCase()}`,
+          status: b.mt5?.status || (b.mt5?.connected ? 'CONNECTED' : 'DISCONNECTED'),
+          lastChecked: b.mt5?.lastChecked || null
         },
         mexc: {
-          connected: user.brokerConnections?.mexc?.connected || false,
-          apiKey: user.brokerConnections?.mexc?.apiKey ? `${user.brokerConnections.mexc.apiKey.slice(0, 6)}...` : '',
-          defaultLeverage: user.brokerConnections?.mexc?.defaultLeverage || 50,
-          status: user.brokerConnections?.mexc?.status || 'DISCONNECTED',
-          lastChecked: user.brokerConnections?.mexc?.lastChecked || null
+          connected: b.mexc?.connected || false,
+          apiKey: b.mexc?.apiKey ? `${b.mexc.apiKey.slice(0, 6)}...` : '',
+          defaultLeverage: b.mexc?.defaultLeverage || 50,
+          status: b.mexc?.status || 'DISCONNECTED',
+          lastChecked: b.mexc?.lastChecked || null
         }
       }
     };

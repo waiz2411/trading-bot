@@ -10,6 +10,7 @@ import AssetDetailModal from './components/AssetDetailModal';
 import BalanceModal from './components/BalanceModal';
 import BrokerModal from './components/BrokerModal';
 import LoginPage from './components/LoginPage';
+import AdminPanel from './components/AdminPanel';
 import { Compass, Target, History, Terminal, Zap, ArrowDownRight, ArrowUpRight, Repeat, Coins, Key, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
   });
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isBrokerModalOpen, setIsBrokerModalOpen] = useState(false);
+  const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [brokerModalTab, setBrokerModalTab] = useState('BINANCE');
 
   const [data, setData] = useState({
@@ -177,7 +179,32 @@ export default function App() {
     return () => clearInterval(interval);
   }, [fetchDashboard, token, user]);
 
+  const handleToggleMode = async () => {
+    const newMode = user?.mode === 'LIVE' ? 'SIMULATED' : 'LIVE';
+    try {
+      const res = await fetch('/api/user/mode', {
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ mode: newMode })
+      });
+      const resData = await res.json();
+      if (resData.success && resData.user) {
+        setUser(resData.user);
+        localStorage.setItem('nexus_user', JSON.stringify(resData.user));
+        showNotification(`Switched to ${newMode === 'LIVE' ? '🔴 Real Broker Mode' : '🟢 Demo Paper Mode'}`, 'SUCCESS');
+        fetchDashboard();
+      }
+    } catch (err) {
+      showNotification('Failed to toggle mode: ' + err.message, 'ERROR');
+    }
+  };
+
   const handleSwitchAccount = async (account) => {
+    if (user?.role !== 'ADMIN' && user?.accountType && user.accountType !== account) {
+      showNotification(`Your account is strictly allocated to ${user.accountType} trading.`, 'WARN');
+      return;
+    }
+
     try {
       const res = await fetch('/api/account/switch', {
         method: 'POST',
@@ -424,7 +451,7 @@ export default function App() {
     <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col font-sans selection:bg-indigo-600 selection:text-white">
       {/* Top Header */}
       <Header
-        activeAccount={data.activeAccount || 'MARGIN'}
+        activeAccount={user?.role === 'ADMIN' ? (data.activeAccount || 'MARGIN') : (user?.accountType || data.activeAccount || 'MARGIN')}
         onSwitchAccount={handleSwitchAccount}
         marginPortfolio={data.margin?.portfolio}
         spotPortfolio={data.spot?.portfolio}
@@ -443,6 +470,8 @@ export default function App() {
         user={user}
         brokers={data.brokers}
         onOpenBrokerModal={openBrokerModal}
+        onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
+        onToggleMode={handleToggleMode}
         onLogout={handleLogout}
       />
 
@@ -801,6 +830,16 @@ export default function App() {
               .then(d => { if (d.success && d.user) setUser(d.user); })
               .catch(() => {});
           }}
+        />
+      )}
+
+      {/* Admin User Approval & SaaS Panel */}
+      {isAdminPanelOpen && (
+        <AdminPanel
+          isOpen={isAdminPanelOpen}
+          onClose={() => setIsAdminPanelOpen(false)}
+          token={token}
+          showNotification={showNotification}
         />
       )}
     </div>
