@@ -210,6 +210,10 @@ export class AuthService {
     return user;
   }
 
+  async getUser(email) {
+    return this.getUserByEmail(email);
+  }
+
   async getUserByEmail(email) {
     const cleanEmail = (email || '').trim().toLowerCase();
     const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [cleanEmail]);
