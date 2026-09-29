@@ -254,18 +254,19 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
 
   const effectiveRR = 1.60;
 
-  // Active Sniper Scalping Threshold (75%+ confluence for high-probability trend entries)
-  const SNIPER_THRESHOLD = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 75;
+  // Active Sniper Scalping Threshold (80%+ confluence for high-probability trend entries)
+  const SNIPER_THRESHOLD = options.minConfidenceThreshold !== undefined ? Number(options.minConfidenceThreshold) : 80;
+  const maxHoldMinutes = Number(options.maxHoldMinutes) || 60;
 
-  // Clear directional edge requirement (must be >= threshold and have >= 4% lead over opposite side)
+  // Clear directional edge requirement (must be >= threshold and have >= 5% lead over opposite side)
   const isLongWinning = finalLongConfidence >= SNIPER_THRESHOLD && (
     tradeDirection === 'LONG_ONLY' || 
-    (tradeDirection === 'BOTH' && finalLongConfidence >= finalShortConfidence + 4)
+    (tradeDirection === 'BOTH' && finalLongConfidence >= finalShortConfidence + 5)
   );
 
   const isShortWinning = finalShortConfidence >= SNIPER_THRESHOLD && (
     tradeDirection === 'SHORT_ONLY' || 
-    (tradeDirection === 'BOTH' && finalShortConfidence >= finalLongConfidence + 4)
+    (tradeDirection === 'BOTH' && finalShortConfidence >= finalLongConfidence + 5)
   );
 
   // 1. Check LONG Scalp Setup (Prioritize whichever has the true directional lead)
@@ -277,13 +278,14 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
       action: 'STRONG_BUY',
       side: 'LONG',
       confidence: finalLongConfidence,
+      winProbability: Number((finalLongConfidence * 0.95).toFixed(1)),
       entryPrice: currentPrice,
       stopLoss,
       takeProfit,
       stopDistance,
       targetDistance,
       riskRewardRatio: effectiveRR,
-      maxHoldMinutes: 5,
+      maxHoldMinutes,
       tradingStyle: 'SCALPING',
       tradeDirection,
       reason: longReasons.slice(0, 3).join('. ') || 'High-probability Bullish Scalp Confluence',
@@ -300,13 +302,14 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
       action: 'STRONG_SELL',
       side: 'SHORT',
       confidence: finalShortConfidence,
+      winProbability: Number((finalShortConfidence * 0.95).toFixed(1)),
       entryPrice: currentPrice,
       stopLoss,
       takeProfit,
       stopDistance,
       targetDistance,
       riskRewardRatio: effectiveRR,
-      maxHoldMinutes: 5,
+      maxHoldMinutes,
       tradingStyle: 'SCALPING',
       tradeDirection,
       reason: shortReasons.slice(0, 3).join('. ') || 'High-probability Bearish Scalp Confluence',

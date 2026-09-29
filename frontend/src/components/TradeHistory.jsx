@@ -109,7 +109,8 @@ export default function TradeHistory({ closedTrades = [] }) {
               <th className="py-2.5 px-4 text-center">Outcome</th>
               <th className="py-2.5 px-4 text-center">Auto-Close Trigger</th>
               <th className="py-2.5 px-4 text-right">Realized Return</th>
-              <th className="py-2.5 px-4 text-right">Close Time</th>
+              <th className="py-2.5 px-4 text-center">Open Time</th>
+              <th className="py-2.5 px-4 text-right">Close Time & Duration</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-terminal-border/60 text-xs font-mono">
@@ -124,12 +125,30 @@ export default function TradeHistory({ closedTrades = [] }) {
               const entryPrice = trade.entryPrice != null ? trade.entryPrice : trade.price;
               const exitPrice = trade.exitPrice != null ? trade.exitPrice : trade.price;
 
-              const closeTimeRaw = trade.closeTime || trade.exitTime || (trade.time ? trade.time * 1000 : null);
+              const openTimeRaw = trade.openTime || trade.open_time || (trade.openTimeMs ? new Date(trade.openTimeMs).toISOString() : null);
+              const closeTimeRaw = trade.closeTime || trade.exitTime || trade.exit_time || (trade.time ? trade.time * 1000 : null);
+              
+              const openDate = openTimeRaw ? new Date(openTimeRaw) : null;
               const closeDate = closeTimeRaw ? new Date(closeTimeRaw) : null;
-              const isValidDate = closeDate && !isNaN(closeDate.getTime());
-              const formattedTime = isValidDate
+              
+              const isValidOpen = openDate && !isNaN(openDate.getTime());
+              const isValidClose = closeDate && !isNaN(closeDate.getTime());
+
+              const formattedOpen = isValidOpen
+                ? `${openDate.toLocaleDateString([], { month: 'numeric', day: 'numeric' })} ${openDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+                : '—';
+
+              const formattedClose = isValidClose
                 ? `${closeDate.toLocaleDateString([], { month: 'numeric', day: 'numeric' })} ${closeDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
                 : '—';
+
+              let durationStr = '';
+              if (isValidOpen && isValidClose) {
+                const diffSec = Math.max(0, Math.floor((closeDate.getTime() - openDate.getTime()) / 1000));
+                const mins = Math.floor(diffSec / 60);
+                const secs = diffSec % 60;
+                durationStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+              }
 
               return (
                 <tr key={trade.id || idx} className="hover:bg-terminal-800/30 transition-colors">
@@ -207,9 +226,19 @@ export default function TradeHistory({ closedTrades = [] }) {
                     </div>
                   </td>
 
-                  {/* Time */}
+                  {/* Open Time */}
+                  <td className="py-3 px-4 text-center text-slate-400 text-[11px]">
+                    <span className="text-slate-300">{formattedOpen}</span>
+                  </td>
+
+                  {/* Close Time & Duration */}
                   <td className="py-3 px-4 text-right text-slate-400 text-[11px]">
-                    {formattedTime}
+                    <div className="text-slate-200">{formattedClose}</div>
+                    {durationStr && (
+                      <div className="text-[10px] text-cyan-400/90 font-mono mt-0.5">
+                        ⏱️ {durationStr}
+                      </div>
+                    )}
                   </td>
                 </tr>
               );

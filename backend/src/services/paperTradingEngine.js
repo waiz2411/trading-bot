@@ -384,20 +384,21 @@ export class PaperTradingEngine {
       // ====================================================
       if (this.trailingStopsEnabled) {
         const dec = pos.decimals !== undefined ? pos.decimals : 4;
-        const roundTripFeeBuffer = pos.entryPrice * ((pos.feeRate || 0.0010) * 2.2);
+        const feeMultiplier = pos.category === 'Forex' ? 0.00030 : ((pos.feeRate || 0.0010) * 2.5);
+        const roundTripFeeBuffer = pos.entryPrice * feeMultiplier;
 
         if (pos.side === 'SHORT') {
           const runDown = pos.entryPrice - pos.lowestPrice;
 
-          // Fee-Compensated Break-Even: Price moved 40% of target distance -> Lock in True Break-Even (Covering fees)!
-          if (!pos.breakEvenLocked && (runDown >= pos.targetDistance * 0.40 || runDown >= pos.entryPrice * 0.0050)) {
-            pos.stopLoss = Number((pos.entryPrice - Math.max(roundTripFeeBuffer, pos.stopDistance * 0.08)).toFixed(dec));
+          // Fee-Compensated Break-Even: Price moved 35% of target distance -> Lock in True Break-Even (Covering fees)!
+          if (!pos.breakEvenLocked && (runDown >= pos.targetDistance * 0.35 || runDown >= pos.entryPrice * 0.0040)) {
+            pos.stopLoss = Number((pos.entryPrice - Math.max(roundTripFeeBuffer, pos.stopDistance * 0.12)).toFixed(dec));
             pos.breakEvenLocked = true;
           }
 
-          // Dynamic Scalp Trailing Stop: Price reached 60% of target distance -> Trail closely behind lowest price!
-          if (runDown >= pos.targetDistance * 0.60) {
-            const newTrailStop = Number((pos.lowestPrice + pos.stopDistance * 0.25).toFixed(dec));
+          // Dynamic Scalp Trailing Stop: Price reached 55% of target distance -> Trail closely behind lowest price!
+          if (runDown >= pos.targetDistance * 0.55) {
+            const newTrailStop = Number((pos.lowestPrice + pos.stopDistance * 0.22).toFixed(dec));
             if (newTrailStop < pos.stopLoss) {
               pos.stopLoss = newTrailStop;
               pos.trailingStopActive = true;
@@ -406,15 +407,15 @@ export class PaperTradingEngine {
         } else if (pos.side === 'LONG') {
           const runUp = pos.highestPrice - pos.entryPrice;
 
-          // Fee-Compensated Break-Even: Price gained 35% of target distance or +0.80% -> Lock in True Break-Even (Covering fees)!
-          if (!pos.breakEvenLocked && (runUp >= pos.targetDistance * 0.35 || runUp >= pos.entryPrice * 0.0080)) {
-            pos.stopLoss = Number((pos.entryPrice + Math.max(roundTripFeeBuffer, pos.stopDistance * 0.08)).toFixed(dec));
+          // Fee-Compensated Break-Even: Price gained 35% of target distance or +0.40% -> Lock in True Break-Even (Covering fees)!
+          if (!pos.breakEvenLocked && (runUp >= pos.targetDistance * 0.35 || runUp >= pos.entryPrice * 0.0040)) {
+            pos.stopLoss = Number((pos.entryPrice + Math.max(roundTripFeeBuffer, pos.stopDistance * 0.12)).toFixed(dec));
             pos.breakEvenLocked = true;
           }
 
           // Dynamic Scalp Trailing Stop: Price reached 55% of target distance -> Trail closely behind highest price!
           if (runUp >= pos.targetDistance * 0.55) {
-            const newTrailStop = Number((pos.highestPrice - pos.stopDistance * 0.25).toFixed(dec));
+            const newTrailStop = Number((pos.highestPrice - pos.stopDistance * 0.22).toFixed(dec));
             if (newTrailStop > pos.stopLoss) {
               pos.stopLoss = newTrailStop;
               pos.trailingStopActive = true;
@@ -424,14 +425,14 @@ export class PaperTradingEngine {
       }
 
       // ====================================================
-      // 2. STRICT TIME-LIMIT AUTO-CLOSE & MOMENTUM LOCK
+      // 2. STRICT TIME-LIMIT AUTO-CLOSE & MOMENTUM LOCK (1-Hour Duration Cap)
       // ====================================================
       const openTimeMs = pos.openTime ? new Date(pos.openTime).getTime() : 0;
-      const ageMs = openTimeMs > 0 ? (Date.now() - openTimeMs) : ((pos.cycleCount || 0) * 5000);
+      const ageMs = openTimeMs > 0 ? (Date.now() - openTimeMs) : ((pos.cycleCount || 0) * 1500);
       const cyclesElapsed = pos.cycleCount || 0;
       const maxHoldMinutes = pos.maxHoldMinutes || 60;
       const maxHoldMs = maxHoldMinutes * 60 * 1000;
-      const maxHoldCycles = maxHoldMinutes * 12;
+      const maxHoldCycles = maxHoldMinutes * 40; // 40 cycles per minute (1.5s scan interval)
 
       // A. Maximum Holding Cap (Strict 60-Minute Hard Time Limit Exit)
       // When the trade reaches the maximum holding time, execute an auto-close to free up capital
