@@ -241,7 +241,7 @@ app.get('/api/broker/mt5/gateway-url', (req, res) => {
 
 app.post('/api/broker/mt5/config', (req, res) => {
   try {
-    const { email, login, password, server, gatewayUrl, metaApiToken } = req.body;
+    const { email, login, password, server, gatewayUrl, metaApiToken, connectionType } = req.body;
     const existing = email ? authService.getUser(email)?.brokerConnections?.mt5 : null;
     const isSameCreds = existing && String(existing.login) === String(login) && existing.server === server;
     const connected = isSameCreds ? Boolean(existing.connected) : false;
@@ -252,6 +252,7 @@ app.post('/api/broker/mt5/config', (req, res) => {
       server,
       gatewayUrl,
       metaApiToken,
+      connectionType,
       connected,
       status: connected ? 'CONNECTED' : (login && server ? 'STANDBY' : 'DISCONNECTED')
     });
@@ -263,6 +264,7 @@ app.post('/api/broker/mt5/config', (req, res) => {
         server,
         gatewayUrl,
         metaApiToken,
+        connectionType,
         connected,
         status: connected ? 'CONNECTED' : (login && server ? 'STANDBY' : 'DISCONNECTED')
       });
@@ -275,9 +277,9 @@ app.post('/api/broker/mt5/config', (req, res) => {
 
 app.post('/api/broker/mt5/test', async (req, res) => {
   try {
-    const { email, login, password, server, gatewayUrl, metaApiToken } = req.body;
-    if (login || server) {
-      mt5Connector.configure({ login, password, server, gatewayUrl, metaApiToken });
+    const { email, login, password, server, gatewayUrl, metaApiToken, connectionType } = req.body;
+    if (login || server || connectionType) {
+      mt5Connector.configure({ login, password, server, gatewayUrl, metaApiToken, connectionType });
     }
     const result = await mt5Connector.testConnection();
     if (result.connected && email) {
@@ -287,6 +289,7 @@ app.post('/api/broker/mt5/test', async (req, res) => {
         server,
         gatewayUrl,
         metaApiToken,
+        connectionType,
         connected: true,
         status: 'CONNECTED',
         accountInfo: result.accountInfo,

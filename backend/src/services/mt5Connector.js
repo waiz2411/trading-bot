@@ -39,7 +39,7 @@ export function getMt5Decimals(symbol) {
   return 5;
 }
 
-const OPERATOR_MASTER_TOKEN = 'eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI0M2VkZGI5NGFiYzIwNDQ4MDQ3ZTI5ODU5YmQyMGE4MCIsImFjY2Vzc1J1bGVzIjpbeyJpZCI6InRyYWRpbmctYWNjb3VudC1tYW5hZ2VtZW50LWFwaSIsIm1ldGhvZHMiOlsidHJhZGluZy1hY2NvdW50LW1hbmFnZW1lbnQtYXBpOnJlc3Q6cHVibGljOio6KiJdLCJyb2xlcyI6WyJyZWFkZXIiLCJ3cml0ZXIiXSwicmVzb3VyY2VzIjpbIio6JFVTRVJfSUQkOioiXX0seyJpZCI6Im1ldGFhcGktcmVzdC1hcGkiLCJtZXRob2RzIjpbIm1ldGFhcGktYXBpOnJlc3Q6cHVibGljOio6KiJdLCJyb2xlcyI6WyJyZWFkZXIiLCJ3cml0ZXIiXSwicmVzb3VyY2VzIjpbIio6JFVTRVJfSUQkOioiXX0seyJpZCI6Im1ldGFhcGktcnBjLWFwaSIsIm1ldGhvZHMiOlsibWV0YWFwaS1hcGk6d3M6cHVibGljOio6KiJdLCJyb2xlcyI6WyJyZWFkZXIiLCJ3cml0ZXIiXSwicmVzb3VyY2VzIjpbIio6JFVTRVJfSUQkOioiXX0seyJpZCI6Im1ldGFhcGktcmVhbC10aW1lLXN0cmVhbWluZy1hcGkiLCJtZXRob2RzIjpbIm1ldGFhcGktYXBpOndzOnB1YmxpYzoqOioiXSwicm9sZXMiOlsicmVhZGVyIiwid3JpdGVyIl0sInJlc291cmNlcyI6WyIqOiRVU0VSX0lEJDoqIl19LHsiaWQiOiJtZXRhc3RhdHMtYXBpIiwibWV0aG9kcyI6WyJtZXRhc3RhdHMtYXBpOnJlc3Q6cHVibGljOio6KiJdLCJyb2xlcyI6WyJyZWFkZXIiLCJ3cml0ZXIiXSwicmVzb3VyY2VzIjpbIio6JFVTRVJfSUQkOioiXX0seyJpZCI6InJpc2stbWFuYWdlbWVudC1hcGkiLCJtZXRob2RzIjpbInJpc2stbWFuYWdlbWVudC1hcGk6cmVzdDpwdWJsaWM6KjoqIl0sInJvbGVzIjpbInJlYWRlciIsIndyaXRlciJdLCJyZXNvdXJjZXMiOlsiKjokVVNFUl9JRCQ6KiJdfSx7ImlkIjoiY29weWZhY3RvcnktYXBpIiwibWV0aG9kcyI6WyJjb3B5ZmFjdG9yeS1hcGk6cmVzdDpwdWJsaWM6KjoqIl0sInJvbGVzIjpbInJlYWRlciIsIndyaXRlciJdLCJyZXNvdXJjZXMiOlsiKjokVVNFUl9JRCQ6KiJdfSx7ImlkIjoibXQtbWFuYWdlci1hcGkiLCJtZXRob2RzIjpbIm10LW1hbmFnZXItYXBpOnJlc3Q6ZGVhbGluZzoqOioiLCJtdC1tYW5hZ2VyLWFwaTpyZXN0OnB1YmxpYzoqOioiXSwicm9sZXMiOlsicmVhZGVyIiwid3JpdGVyIl0sInJlc291cmNlcyI6WyIqOiRVU0VSX0lEJDoqIl19LHsiaWQiOiJiaWxsaW5nLWFwaSIsIm1ldGhvZHMiOlsiYmlsbGluZy1hcGk6cmVzdDpwdWJsaWM6KjoqIl0sInJvbGVzIjpbInJlYWRlciJdLCJyZXNvdXJjZXMiOlsiKjokVVNFUl9JRCQ6KiJdfV0sImlnbm9yZVJhdGVMaW1pdHMiOmZhbHNlLCJ0b2tlbklkIjoiMjAyMTAyMTMiLCJpbXBlcnNvbmF0ZWQiOmZhbHNlLCJyZWFsVXNlcklkIjoiNDNlZGRiOTRhYmMyMDQ0ODA0N2UyOTg1OWJkMjBhODAiLCJpYXQiOjE3ODk4MzU4NTksImV4cCI6MTc5NzYxMTg1OX0.SOzddmqgpiR72vjttAejUt6irNFVDda14-CkkXrRagvrm5a3iU1ZypMsRuafo2lwjA9dqecHJd1TB7yk4lb_kNnMQVgKOR_7GN_E3suDKuyDvGU_FeHWNI-5wXyw0VcLhXzfxaCQ9GxSF9JkDrrVosHOZ4cfOsgSSiUeiN2qVcNeQ1Y674GjETWFQXkYvp9tvnVRCN7v_fKafbvrLC-69V84hwXOL0aAhZylHyfa6s7pdaH96TUeGp-8LBxGitwnBpW28NrlWLd9HPA7tEVKMCRKYhkhy2be4yAC4H15v3HSL9pZ2ZD3PhaGRYy0J7QgBphKdkLp5r4ZV2vARuBPJSX0b-8RNv_FKrejf-WEOAFJRrY3teWP7DRNU2TJskQ0bmRWgJi_vJ40Yf6JknY0WfXjqUf9hz75Z4MHoiqr7XP8E93Mq77zqPuVMgXnCnv8aRKbv_hwvxudkW33KsmIui9l3AwIZVAFH-p114ZnWQZtJC5c6urDbwhh5vnvEwHCjv9PYnVkvWTsktbNqK_1U3hbN69DSDfUg41XuEgdbBp0bTztGVR9V9G-A3X8dhMArjIeQeAXIyexrxSFnYaOSxqvkfuIBnmD3ihOv4HQbbSUf-3-wLK4tZUjMRm0y8-e4FOCKqA2jgzBDoeB1PQcnC00DBTIHxks3KK6rwicrpM';
+const OPERATOR_MASTER_TOKEN = 'eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI0M2VkZGI5NGFiYzIwNDQ4MDQ3ZTI5ODU5YmQyMGE4MCIsImFjY2Vzc1J1bGVzIjpbeyJpZCI6InRyYWRpbmctYWNjb3VudC1tYW5hZ2VtZW50LWFwaSIsIm1ldGhvZHMiOlsidHJhZGluZy1hY2NvdW50LW1hbmFnZW1lbnQtYXBpOnJlc3Q6cHVibGljOio6KiJdLCJyb2xlcyI6WyJyZWFkZXIiLCJ3cml0ZXIiXSwicmVzb3VyY2VzIjpbIio6JFVTRVJfSUQkOioiXX0seyJpZCI6Im1ldGFhcGktcmVzdC1hcGkiLCJtZXRob2RzIjpbIm1ldGFhcGktYXBpOnJlc3Q6cHVibGljOio6KiJdLCJyb2xlcyI6WyJyZWFkZXIiLCJ3cml0ZXIiXSwicmVzb3VyY2VzIjpbIio6JFVTRVJfSUQkOioiXX0seyJpZCI6Im1ldGFhcGktcnBjLWFwaSIsIm1ldGhvZHMiOlsibWV0YWFwaS1hcGk6d3M6cHVibGljOio6KiJdLCJyb2xlcyI6WyJyZWFkZXIiLCJ3cml0ZXIiXSwicmVzb3VyY2VzIjpbIio6JFVTRVJfSUQkOioiXX0seyJpZCI6Im1ldGFhcGktcmVhbC10aW1lLXN0cmVhbWluZy1hcGkiLCJtZXRob2RzIjpbIm1ldGFhcGktYXBpOndzOnB1YmxpYzoqOioiXSwicm9sZXMiOlsicmVhZGVyIiwid3JpdGVyIl0sInJlc291cmNlcyI6WyIqOiRVU0VSX0lEJDoqIl19LHsiaWQiOiJtZXRhc3RhdHMtYXBpIiwibWV0aG9kcyI6WyJtZXRhc3RhdHMtYXBpOnJlc3Q6cHVibGljOio6KiJdLCJyb2xlcyI6WyJyZWFkZXIiLCJ3cml0ZXIiXSwicmVzb3VyY2VzIjpbIio6JFVTRVJfSUQkOioiXX0seyJpZCI6InJpc2stbWFuYWdlbWVudC1hcGkiLCJtZXRob2RzIjpbInJpc2stbWFuYWdlbWVudC1hcGk6cmVzdDpwdWJsaWM6KjoqIl0sInJvbGVzIjpbInJlYWRlciIsIndyaXRlciJdLCJyZXNvdXJjZXMiOlsiKjokVVNFUl9JRCQ6KiJdfSx7ImlkIjoiY29weWZhY3RvcnktYXBpIiwibWV0aG9kcyI6WyJjb3B5ZmFjdG9yeS1hcGk6cmVzdDpwdWJsaWM6KjoqIl0sInJvbGVzIjpbInJlYWRlciIsIndyaXRlciJdLCJyZXNvdXJjZXMiOlsiKjokVVNFUl9JRCQ6KiJdfSx7ImlkIjoibXQtbWFuYWdlci1hcGkiLCJtZXRob2RzIjpbIm10LW1hbmFnZXItYXBpOnJlc3Q6ZGVhbGluZzoqOioiLCJtdC1tYW5hZ2VyLWFwaTpyZXN0OnB1YmxpYzoqOioiXSwicm9sZXMiOlsicmVhZGVyIiwid3JpdGVyIl0sInJlc291cmNlcyI6WyIqOiRVU0VSX0lEJDoqIl19LHsiaWQiOiJiaWxsaW5nLWFwaSIsIm1ldGhvZHMiOlsiYmlsbGluZy1hcGk6cmVzdDpwdWJsaWM6KjoqIl0sInJvbGVzIjpbInJlYWRlciJdLCJyZXNvdXJjZXMiOlsiKjokVVNFUl9JRCQ6KiJdfV0sImlnbm9yZVJhdGVMaW1pdHMiOmZhbHNlLCJ0b2tlbklkIjoiMjAyMTAyMTMiLCJpbXBlcnNvbmF0ZWQiOmZhbHNlLCJyZWFsVXNlcklkIjoiNDNlZGRiOTRhYmMyMDQ0ODA0N2UyOTg1OWJkMjBhODAiLCJpYXQiOjE3OTA2Nzc2MzksImV4cCI6MTc5ODQ1MzYzOX0.aUFypmzdMmbHvOSY0QlteBT-R-99lhJfGbR57uNFTzmFyuM7E5eg82iTc84cHprvxnh_cT4Ya46fuUwqZJxD4kTUkB4amd8Kt30C6w0kCgnYfv8yjRnfNJY-fddasp2kvN4XdXOQMlul058DlmQ1A3VqbqUlkgncrbbHQvkwQIDsdRFxAVH24Ob3-2gWfHGwgwWnCjf6-NlAkl61mYYcU0hCQ7LkCAEArDLwOvN0-ldS5ABygQWlzsVfZ3OhK_rfz3OGGNaNN0VTZpT0WdMJvLrlkoaC5VleN_k9yp3z-16l3FNtB_IFAEb6NHKDwSNXCMe9gEKmLp05W8MJaA3mkW44QDZRT4hqE5MaQBdrzbgNpTvgJ6k-sYFTlwIotb0FkW6M9qsTCDJuh_Ns42J9G6VOPbEP6gekjTnqEQvxZz2VOoJ6neI7R2mMYjXdl0hgHQcNzyjd4FsM1JenqQhBiQ362dNTQjKUiVGxHkX6BkeJA3nYhENeWLh88AjMsEnfs_UOkkAhgZg0NP4q8UryKKwZt-3Pee0eYcSNAwjA5ktH5Co-v19Qm4HseS20bglRpOXlh3rr-n721a8znlUM0i5fun4SQXFSFccqDyT-IisYTfA7HsvTur2BPhNHsueIaC1UY5f_GwmWJQwwmrkZQgavmleitjEPJf6ApacnE28';
 
 export class MT5Connector {
   constructor() {
@@ -125,20 +125,21 @@ export class MT5Connector {
     }, intervalMs);
   }
 
-  configure({ login, password, server, gatewayUrl, metaApiToken, connected, status, accountInfo }) {
+  configure({ login, password, server, gatewayUrl, metaApiToken, connected, status, accountInfo, connectionType }) {
     const credsChanged = (login && login.toString().trim() !== this.login) ||
                          (server && server.trim() !== this.server);
 
     if (login) this.login = login.toString().trim();
     if (password !== undefined) this.password = password.trim();
     if (server) this.server = server.trim();
+    if (connectionType) this.connectionType = connectionType;
     if (gatewayUrl && typeof gatewayUrl === 'string' && gatewayUrl.trim()) {
       this.gatewayUrl = gatewayUrl.trim().replace(/\/+$/, '');
     }
     if (metaApiToken !== undefined && metaApiToken.trim()) {
       this.metaApiToken = metaApiToken.trim();
     } else if (!this.metaApiToken) {
-      this.metaApiToken = process.env.META_API_TOKEN || '';
+      this.metaApiToken = process.env.META_API_TOKEN || OPERATOR_MASTER_TOKEN || '';
     }
 
     if (accountInfo) {
@@ -153,8 +154,10 @@ export class MT5Connector {
       this.status = this.login && this.server ? 'STANDBY' : 'DISCONNECTED';
     }
 
-    // Ping gateway in background to verify immediately
-    this.tryGatewayConnection().catch(() => {});
+    // Ping gateway in background if gateway method
+    if (this.connectionType === 'GATEWAY' || this.connectionType === 'BRIDGE') {
+      this.tryGatewayConnection().catch(() => {});
+    }
 
     return this.getStatus();
   }
@@ -246,7 +249,28 @@ export class MT5Connector {
 
     const startTime = Date.now();
 
-    // 1. Ensure we have an active gateway URL
+    // 1. If MetaApi method is selected (or token provided)
+    if (this.connectionType === 'METAAPI') {
+      const token = this.metaApiToken || process.env.META_API_TOKEN || OPERATOR_MASTER_TOKEN;
+      if (token) {
+        try {
+          const metaResult = await this.connectViaMetaApi(token);
+          this.latencyMs = Date.now() - startTime;
+          return metaResult;
+        } catch (err) {
+          this.connected = false;
+          this.status = 'DISCONNECTED';
+          return {
+            success: false,
+            connected: false,
+            latencyMs: Date.now() - startTime,
+            error: err.message || 'MetaApi connection failed'
+          };
+        }
+      }
+    }
+
+    // 2. Otherwise try Gateway Bridge
     if (!this.gatewayUrl) {
       await this.discoverActiveGateway();
     }
@@ -263,18 +287,6 @@ export class MT5Connector {
       const retryGw = await this.tryGatewayConnection(startTime);
       if (retryGw && retryGw.connected) {
         return retryGw;
-      }
-    }
-
-    // 2. Only if explicit MetaApi token is configured and gateway is unavailable, try MetaApi
-    const token = this.metaApiToken;
-    if (token && this.connectionType === 'METAAPI') {
-      try {
-        const metaResult = await this.connectViaMetaApi(token);
-        this.latencyMs = Date.now() - startTime;
-        return metaResult;
-      } catch (err) {
-        console.warn('MetaApi connection failed:', err.message);
       }
     }
 
