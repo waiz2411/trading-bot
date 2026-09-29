@@ -94,7 +94,7 @@ export class AutonomousAgentLoop {
     } catch (_) {}
   }
 
-  setUserMode(userEmail, mode = 'SIMULATED') {
+  async setUserMode(userEmail, mode = 'SIMULATED') {
     this.currentUser = userEmail;
     this.currentMode = mode;
 
@@ -105,42 +105,42 @@ export class AutonomousAgentLoop {
 
     // Synchronize broker connectors and persistent user state
     try {
-      const user = authService.getUser(userEmail);
+      const user = await authService.getUserByEmail(userEmail);
       if (user) {
-        if (user.isAutoTradingEnabled !== undefined) {
-          this.isAutoTradingEnabled = Boolean(user.isAutoTradingEnabled);
+        if (user.is_auto_trading !== undefined || user.isAutoTradingEnabled !== undefined) {
+          this.isAutoTradingEnabled = Boolean(user.is_auto_trading ?? user.isAutoTradingEnabled);
         }
-        if (user.activeAccount) {
-          this.activeAccount = user.activeAccount;
+        if (user.account_type || user.accountType) {
+          this.activeAccount = user.account_type || user.accountType;
         }
-          if (user.brokerConnections.binance) {
-            binanceConnector.configure({
-              apiKey: user.brokerConnections.binance.apiKey || '',
-              apiSecret: user.brokerConnections.binance.apiSecret || '',
-              isTestnet: user.brokerConnections.binance.isTestnet ?? true,
-              connected: user.brokerConnections.binance.connected,
-              status: user.brokerConnections.binance.status,
-              balances: user.brokerConnections.binance.balances
-            });
-          }
-          if (user.brokerConnections.mt5) {
-            const activeGw = mt5Connector.gatewayUrl;
-            const userGw = user.brokerConnections.mt5.gatewayUrl;
-            const gwToUse = (userGw && !userGw.includes('abu-solve'))
-              ? userGw
-              : (activeGw || process.env.MT5_GATEWAY_URL || 'http://localhost:5001');
+        if (user.brokerConnections?.binance) {
+          binanceConnector.configure({
+            apiKey: user.brokerConnections.binance.apiKey || '',
+            apiSecret: user.brokerConnections.binance.apiSecret || '',
+            isTestnet: user.brokerConnections.binance.isTestnet ?? true,
+            connected: user.brokerConnections.binance.connected,
+            status: user.brokerConnections.binance.status,
+            balances: user.brokerConnections.binance.balances
+          });
+        }
+        if (user.brokerConnections?.mt5) {
+          const activeGw = mt5Connector.gatewayUrl;
+          const userGw = user.brokerConnections.mt5.gatewayUrl;
+          const gwToUse = (userGw && !userGw.includes('abu-solve'))
+            ? userGw
+            : (activeGw || process.env.MT5_GATEWAY_URL || 'http://localhost:5001');
 
-            mt5Connector.configure({
-              login: user.brokerConnections.mt5.login || '',
-              password: user.brokerConnections.mt5.password || '',
-              server: user.brokerConnections.mt5.server || '',
-              gatewayUrl: gwToUse,
-              connected: user.brokerConnections.mt5.connected,
-              status: user.brokerConnections.mt5.status,
-              accountInfo: user.brokerConnections.mt5.accountInfo
-            });
-          }
+          mt5Connector.configure({
+            login: user.brokerConnections.mt5.login || '',
+            password: user.brokerConnections.mt5.password || '',
+            server: user.brokerConnections.mt5.server || '',
+            gatewayUrl: gwToUse,
+            connected: user.brokerConnections.mt5.connected,
+            status: user.brokerConnections.mt5.status,
+            accountInfo: user.brokerConnections.mt5.accountInfo
+          });
         }
+      }
     } catch (err) {
       console.warn('Could not sync user configs:', err.message);
     }
