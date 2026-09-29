@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { evaluatePositionExit } from './strategyEngine.js';
 import { getAssetPrecision } from '../config/assets.js';
 
@@ -8,7 +10,7 @@ import { getAssetPrecision } from '../config/assets.js';
  * - Return on Equity (ROE%) & Liquidation Price Safeguards
  * - Dynamic Break-Even & Trailing Stops
  * - Early Signal Reversal & Momentum Exhaustion Auto-Exits
- * - Complete Win/Loss Performance Ledger
+ * - Complete Win/Loss Performance Ledger (Persisted 24/7)
  */
 
 export class PaperTradingEngine {
@@ -27,6 +29,54 @@ export class PaperTradingEngine {
     this.trailingStopsEnabled = true;
     this.reversalExitsEnabled = true;
     this.scalpModeEnabled = true;
+    this.loadPersistedState();
+  }
+
+  loadPersistedState() {
+    try {
+      const fileName = `persisted_engine_${this.accountType.toLowerCase()}.json`;
+      const filePath = path.resolve('backend/src/data', fileName);
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const data = JSON.parse(raw);
+        if (data && typeof data === 'object') {
+          if (data.balance != null) this.balance = Number(data.balance);
+          if (data.initialBalance != null) this.initialBalance = Number(data.initialBalance);
+          if (Array.isArray(data.closedTrades)) this.closedTrades = data.closedTrades;
+          if (Array.isArray(data.activePositions)) this.activePositions = data.activePositions;
+          if (data.winCount != null) this.winCount = Number(data.winCount);
+          if (data.lossCount != null) this.lossCount = Number(data.lossCount);
+          if (data.breakEvenCount != null) this.breakEvenCount = Number(data.breakEvenCount);
+          if (data.totalGrossProfit != null) this.totalGrossProfit = Number(data.totalGrossProfit);
+          if (data.totalGrossLoss != null) this.totalGrossLoss = Number(data.totalGrossLoss);
+          if (data.totalFeesPaid != null) this.totalFeesPaid = Number(data.totalFeesPaid);
+        }
+      }
+    } catch (_) {}
+  }
+
+  savePersistedState() {
+    try {
+      const dirPath = path.resolve('backend/src/data');
+      if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+      const fileName = `persisted_engine_${this.accountType.toLowerCase()}.json`;
+      const filePath = path.join(dirPath, fileName);
+      const state = {
+        accountType: this.accountType,
+        balance: this.balance,
+        initialBalance: this.initialBalance,
+        activePositions: this.activePositions,
+        closedTrades: this.closedTrades.slice(-300),
+        winCount: this.winCount,
+        lossCount: this.lossCount,
+        breakEvenCount: this.breakEvenCount,
+        totalGrossProfit: this.totalGrossProfit,
+        totalGrossLoss: this.totalGrossLoss,
+        totalFeesPaid: this.totalFeesPaid,
+        updatedAt: new Date().toISOString()
+      };
+      fs.writeFileSync(filePath, JSON.stringify(state, null, 2), 'utf8');
+    } catch (_) {}
   }
 
   getPortfolioState() {
@@ -139,6 +189,7 @@ export class PaperTradingEngine {
     this.totalGrossProfit = 0;
     this.totalGrossLoss = 0;
     this.totalFeesPaid = 0;
+    this.savePersistedState();
     return this.getPortfolioState();
   }
 
@@ -149,6 +200,7 @@ export class PaperTradingEngine {
     const newBal = Math.max(1, this.balance + Number(delta));
     this.balance = newBal;
     this.initialBalance = newBal;
+    this.savePersistedState();
     return this.getPortfolioState();
   }
 
@@ -248,6 +300,7 @@ export class PaperTradingEngine {
     };
 
     this.activePositions.push(position);
+    this.savePersistedState();
     return position;
   }
 
@@ -321,6 +374,7 @@ export class PaperTradingEngine {
 
     this.closedTrades.push(closedRecord);
     this.activePositions.splice(index, 1);
+    this.savePersistedState();
 
     return closedRecord;
   }
