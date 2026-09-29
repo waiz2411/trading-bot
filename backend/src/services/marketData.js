@@ -188,7 +188,7 @@ export class MarketDataService {
 
     // Primary: Binance Public 24hr Ticker (All Pairs)
     try {
-      const res = await fetch('https://api.binance.com/api/v3/ticker/24hr', {
+      const res = await fetch('https://data-api.binance.vision/api/v3/ticker/24hr', {
         signal: AbortSignal.timeout(4000)
       });
       if (res.ok) {
@@ -196,10 +196,10 @@ export class MarketDataService {
       }
     } catch (_) {}
 
-    // Fallback 1: Binance Vision Mirror
+    // Fallback 1: Binance Main API
     if (!tickerList) {
       try {
-        const res = await fetch('https://data-api.binance.vision/api/v3/ticker/24hr', {
+        const res = await fetch('https://api.binance.com/api/v3/ticker/24hr', {
           signal: AbortSignal.timeout(4000)
         });
         if (res.ok) {
@@ -324,13 +324,24 @@ export class MarketDataService {
     const fetchKline = async (asset) => {
       const baseAsset = asset.baseAsset || asset.symbol.replace(/[-_/]/g, '').replace(/USD$/, '');
       const binanceSymbol = `${baseAsset}USDT`;
+      let data = null;
       try {
-        const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${binanceSymbol}&interval=5m&limit=70`, {
+        const res = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${binanceSymbol}&interval=5m&limit=70`, {
           signal: AbortSignal.timeout(3500)
         });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (Array.isArray(data) && data.length >= 15) {
+        if (res.ok) data = await res.json();
+      } catch (_) {}
+
+      if (!data) {
+        try {
+          const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${binanceSymbol}&interval=5m&limit=70`, {
+            signal: AbortSignal.timeout(3500)
+          });
+          if (res.ok) data = await res.json();
+        } catch (_) {}
+      }
+
+      if (Array.isArray(data) && data.length >= 15) {
           const dec = asset.decimals || 4;
           const realCandles = data.map(k => ({
             time: new Date(k[0]).toISOString(),
