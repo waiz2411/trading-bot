@@ -22,16 +22,16 @@ export default function SettingsModal({
   const [maxTradesPerPair, setMaxTradesPerPair] = useState(initialMargin.maxTradesPerPair || 1);
   const [marginMaxHoldMinutes, setMarginMaxHoldMinutes] = useState(initialMargin.maxHoldMinutes || 5);
 
-  // Spot Settings State (Fast 5-Minute Scalping & Halal Filtering)
+  // Spot Settings State (Calibrated Spot Scalping & Halal Filtering)
   const initialSpot = spotSettings || {};
-  const [spotStopLossPct, setSpotStopLossPct] = useState(initialSpot.stopLossPct || 0.6);
-  const [spotTakeProfitPct, setSpotTakeProfitPct] = useState(initialSpot.takeProfitPct || 1.0);
-  const [spotMinConfidence, setSpotMinConfidence] = useState(initialSpot.minConfidenceThreshold || 90);
-  const [spotMaxSlots, setSpotMaxSlots] = useState(initialSpot.maxSlots || 4);
-  const [spotMaxTradesPerPair, setSpotMaxTradesPerPair] = useState(initialSpot.maxTradesPerPair || 2);
-  const [spotMaxHoldMinutes, setSpotMaxHoldMinutes] = useState(initialSpot.maxHoldMinutes || 5);
+  const [spotStopLossPct, setSpotStopLossPct] = useState(initialSpot.stopLossPct || 1.6);
+  const [spotTakeProfitPct, setSpotTakeProfitPct] = useState(initialSpot.takeProfitPct || 2.5);
+  const [spotMinConfidence, setSpotMinConfidence] = useState(initialSpot.minConfidenceThreshold || 80);
+  const [spotMaxSlots, setSpotMaxSlots] = useState(initialSpot.maxSlots || 1);
+  const [spotMaxTradesPerPair, setSpotMaxTradesPerPair] = useState(initialSpot.maxTradesPerPair || 1);
+  const [spotMaxHoldMinutes, setSpotMaxHoldMinutes] = useState(initialSpot.maxHoldMinutes || 60);
   const [spotAllowHighVolatility, setSpotAllowHighVolatility] = useState(initialSpot.allowHighVolatility !== undefined ? initialSpot.allowHighVolatility : true);
-  const [spotUseBnbFee, setSpotUseBnbFee] = useState(initialSpot.useBnbFeeDiscount !== undefined ? initialSpot.useBnbFeeDiscount : false);
+  const [spotUseBnbFee, setSpotUseBnbFee] = useState(initialSpot.useBnbFeeDiscount !== undefined ? initialSpot.useBnbFeeDiscount : true);
 
   const [savedSuccess, setSavedSuccess] = useState(false);
 
@@ -90,18 +90,17 @@ export default function SettingsModal({
   ];
 
   const spotSlPresets = [
-    { label: '-0.4%', value: 0.4, tag: 'Ultra Tight' },
-    { label: '-0.6%', value: 0.6, tag: 'Fast Scalp ⭐' },
-    { label: '-0.8%', value: 0.8, tag: 'Tight' },
+    { label: '-0.7% ⭐', value: 0.7, tag: 'High-Vol Scalp (Render Proven)' },
     { label: '-1.0%', value: 1.0, tag: 'Standard' },
-    { label: '-1.5%', value: 1.5, tag: 'Wide' }
+    { label: '-1.4%', value: 1.4, tag: 'Dynamic' },
+    { label: '-1.8%', value: 1.8, tag: 'Wide Swing' }
   ];
 
   const spotTpPresets = [
-    { label: '+0.8%', value: 0.8, tag: 'Net +$0.60 / $100' },
-    { label: '+1.0%', value: 1.0, tag: 'Net +$0.80 ⭐ Optimal' },
-    { label: '+1.4%', value: 1.4, tag: 'Net +$1.20 🔥 High-Vol' },
-    { label: '+2.0%', value: 2.0, tag: 'Net +$1.80 🚀 Runner' }
+    { label: '+1.4% ⭐', value: 1.4, tag: 'Net +$1.25 (Render Proven)' },
+    { label: '+2.0%', value: 2.0, tag: 'Net +$1.85' },
+    { label: '+2.5%', value: 2.5, tag: 'Net +$2.35' },
+    { label: '+3.5%', value: 3.5, tag: 'Net +$3.35 🚀 Alt Runner' }
   ];
 
   const handleSave = (e) => {

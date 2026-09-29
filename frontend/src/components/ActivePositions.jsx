@@ -62,18 +62,18 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
           </thead>
           <tbody className="divide-y divide-terminal-border/60 text-xs font-mono">
             {positions.map(pos => {
+              const isSpot = activeAccount === 'SPOT' || pos.tradingStyle === 'SPOT_BUY' || pos.leverage === 1;
+              const leverage = isSpot ? 1 : (pos.leverage || 10);
+              const marginVal = pos.margin !== undefined ? pos.margin : (isSpot ? pos.notional : Number((pos.notional / leverage).toFixed(2)));
+              const roeVal = pos.roePercent !== undefined ? pos.roePercent : Number(((pos.unrealizedPnL / (marginVal || 1)) * 100).toFixed(1));
               const isLong = pos.side === 'LONG';
-              const isProfit = pos.unrealizedPnL >= 0;
+              const isProfit = (pos.unrealizedPnL || 0) >= 0;
               const isClosing = isClosingId === pos.id;
-              const leverage = pos.leverage || 10;
-              const marginVal = pos.margin !== undefined ? pos.margin : Number((pos.notional / leverage).toFixed(2));
-              const roeVal = pos.roePercent !== undefined ? pos.roePercent : Number(((pos.unrealizedPnL / marginVal) * 100).toFixed(1));
 
               const sameSymbolPositions = positions.filter(p => p.symbol === pos.symbol);
               const isHedged = sameSymbolPositions.some(p => p.side !== pos.side);
               const isMultiTrade = sameSymbolPositions.length > 1;
               const tradeIndex = sameSymbolPositions.findIndex(p => p.id === pos.id) + 1;
-              const isSpot = pos.tradingStyle === 'SPOT_BUY' || leverage === 1;
               const maxHoldMins = pos.maxHoldMinutes || 5;
               const elapsedSec = pos.openTime ? Math.max(0, Math.floor((Date.now() - new Date(pos.openTime).getTime()) / 1000)) : ((pos.cycleCount || 0) * 5);
               const remainSec = Math.max(0, (maxHoldMins * 60) - elapsedSec);
@@ -93,8 +93,12 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
                         {isLong ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
                         {pos.side}
                       </span>
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                        {leverage}x
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                        isSpot
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                          : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                      }`}>
+                        {isSpot ? '1x SPOT' : `${leverage}x`}
                       </span>
                       <div>
                         <div className="font-bold text-white flex items-center gap-1.5">
@@ -115,7 +119,7 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
                             </span>
                           )}
                           <span className="text-[10px] text-slate-400 font-normal">
-                            ({pos.category})
+                            ({pos.category || (isSpot ? 'Crypto' : 'Forex')})
                           </span>
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
@@ -184,19 +188,19 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
                   {/* Est. Liquidation Price */}
                   <td className="py-3 px-4 text-right">
                     <div className="font-mono text-amber-400 font-semibold">
-                      {pos.liquidationPrice && Number(pos.liquidationPrice) > 0 ? `$${formatPrice(pos.liquidationPrice)}` : '—'}
+                      {isSpot ? 'None' : (pos.liquidationPrice && Number(pos.liquidationPrice) > 0 ? `$${formatPrice(pos.liquidationPrice)}` : '—')}
                     </div>
-                    <div className="text-[10px] text-slate-500">Liq. Threshold</div>
+                    <div className="text-[10px] text-slate-500">{isSpot ? 'Pure Spot Holding' : 'Liq. Threshold'}</div>
                   </td>
 
                   {/* Margin & Size */}
                   <td className="py-3 px-4 text-right text-slate-300">
                     <div className="font-bold text-white flex items-center justify-end gap-1">
-                      <span className="text-[10px] text-indigo-400 font-normal">Margin:</span>
+                      <span className="text-[10px] text-indigo-400 font-normal">{isSpot ? 'Cash Value:' : 'Margin:'}</span>
                       <span>${marginVal}</span>
                     </div>
                     <div className="text-[10px] text-slate-400 font-medium">{formatUnits(pos.units, pos.entryPrice)} units (${pos.notional})</div>
-                    <div className="text-[9px] text-amber-400/80 font-mono mt-0.5">{leverage}x Buying Power</div>
+                    <div className="text-[9px] text-amber-400/80 font-mono mt-0.5">{isSpot ? '100% Cash Spot Asset' : `${leverage}x Buying Power`}</div>
                   </td>
 
                   {/* Live Net PnL & Leveraged ROE% */}

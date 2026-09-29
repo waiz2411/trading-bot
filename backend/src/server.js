@@ -105,13 +105,15 @@ app.post('/api/broker/binance/test', async (req, res) => {
       binanceConnector.configure({ apiKey, apiSecret, isTestnet });
     }
     const result = await binanceConnector.testConnection();
-    if (result.connected && email) {
-      authService.updateBrokerConfig(email, 'binance', {
+    const targetEmail = email || agentLoop.currentUser;
+    if (result.connected && targetEmail) {
+      authService.updateBrokerConfig(targetEmail, 'binance', {
         apiKey,
         apiSecret,
         isTestnet: !!isTestnet,
         connected: true,
         status: 'CONNECTED',
+        balances: result.balances || [],
         lastChecked: new Date().toISOString()
       });
     }
@@ -394,17 +396,34 @@ app.post('/api/account/switch', (req, res) => {
 // API: Update risk management settings (supports MARGIN and SPOT)
 app.post('/api/agent/settings', (req, res) => {
   try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = authService.validateToken(token);
+    const userEmail = user ? user.email : agentLoop.currentUser;
+
     const { account, stopLossPct, takeProfitPct, ...otherSettings } = req.body;
     const targetAccount = (account || agentLoop.activeAccount).toUpperCase();
 
     if (targetAccount === 'SPOT') {
       agentLoop.updateSpotSettings({ stopLossPct, takeProfitPct, ...otherSettings });
-      res.json({ success: true, spotSettings: agentLoop.spotRiskManager, settings: agentLoop.getDashboardData().riskSettings });
     } else {
       agentLoop.marginRiskManager.updateSettings(otherSettings);
       agentLoop.log(`Margin settings updated: ${JSON.stringify(otherSettings)}`, 'INFO');
-      res.json({ success: true, settings: agentLoop.marginRiskManager.getSettings() });
     }
+
+    // Always pause bot on configuration change so user can review before launching
+    if (agentLoop.isAutoTradingEnabled) {
+      agentLoop.toggleAutoTrading(false, userEmail);
+      agentLoop.log('⏸️ Bot paused automatically after settings change. Click Start to resume trading.', 'WARN');
+    }
+
+    res.json({
+      success: true,
+      spotSettings: agentLoop.spotRiskManager,
+      marginSettings: agentLoop.marginRiskManager.getSettings(),
+      settings: agentLoop.getDashboardData().riskSettings,
+      isAutoTradingEnabled: agentLoop.isAutoTradingEnabled
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -484,11 +503,96 @@ app.post('/api/portfolio/adjust', (req, res) => {
   }
 });
 
-// API: Close an active trade manually (checks active engine, then fallback)
+// API: Close an active trade manually (supports MT5, Binance Spot, and Demo)
 app.post('/api/trades/close/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    // Check if this is a direct MT5 broker order ticket
+
+    // 1. Direct Binance Spot Position Close (supports BINANCE-PROM-12345, BINANCE-PROM, PROM-USD, pos-xxx)
+    if (id.startsWith('BINANCE-') || id.endsWith('-USD') || agentLoop.spotTradingEngine.activePositions.some(p => p.id === id || p.symbol === id)) {
+      // Find matching position first
+      const matchingPos = agentLoop.spotTradingEngine.activePositions.find(p => 
+        p.id === id || p.symbol === id || id.includes(p.symbol) || (p.name && id.includes(p.name))
+      );
+
+      let assetName = '';
+      if (matchingPos) {
+        assetName = (matchingPos.name || matchingPos.symbol.replace(/[-_/]/g, '').replace(/USD$/, '')).toUpperCase();
+      } else {
+        assetName = id.replace('BINANCE-', '').replace(/-[0-9]+$/, '').replace(/[-_/]/g, '').replace(/USD$/, '').toUpperCase();
+      }
+
+      const binanceSymbol = `${assetName}USDT`;
+      let soldUnits = 0;
+
+      if (binanceConnector.connected) {
+        const balances = await binanceConnector.getBalances();
+        const coinBal = balances.find(b => b.asset.toUpperCase() === assetName);
+
+        if (coinBal && coinBal.free > 0.00001) {
+          try {
+            await binanceConnector.placeSpotMarketOrder({
+              symbol: binanceSymbol,
+              side: 'SELL',
+              quantity: coinBal.free
+            });
+            soldUnits = coinBal.free;
+            agentLoop.log(`🪙 [BINANCE LIVE] Manual Exit: Sold ${coinBal.free} ${assetName} on Binance Spot`, 'SUCCESS');
+          } catch (sellErr) {
+            agentLoop.log(`⚠️ [BINANCE LIVE] Manual exit sell notice for ${assetName}: ${sellErr.message}`, 'WARN');
+          }
+        } else {
+          agentLoop.log(`ℹ️ [BINANCE LIVE] ${assetName} already sold on Binance. Synchronized local portfolio.`, 'INFO');
+        }
+
+        // Immediately refresh cached balances from Binance
+        await binanceConnector.getBalances();
+      }
+
+      // Clean up simulated spot engine active positions and record into liveSpotClosedTrades
+      let tradeFinalPnL = 0;
+      if (matchingPos) {
+        const closed = agentLoop.spotTradingEngine.closePosition(matchingPos.id, null, 'MANUAL_USER_EXIT', 'Manual user exit via dashboard');
+        if (closed) {
+          tradeFinalPnL = closed.finalPnL || 0;
+          if (agentLoop.currentMode === 'LIVE') {
+            if (!agentLoop.liveSpotClosedTrades) agentLoop.liveSpotClosedTrades = [];
+            agentLoop.liveSpotClosedTrades.unshift({
+              ...closed,
+              id: `BINANCE-${assetName}-${Date.now()}`,
+              isLiveBrokerOrder: true,
+              exitTime: new Date().toISOString()
+            });
+            agentLoop.liveSpotRealizedPnL = Number(((agentLoop.liveSpotRealizedPnL || 0) + (closed.finalPnL || 0)).toFixed(2));
+            agentLoop.savePersistedSpotTrades();
+          }
+        }
+      }
+
+      const isLoss = tradeFinalPnL < -0.0001;
+      const lockMs = isLoss ? 15 * 60 * 1000 : 5 * 60 * 1000;
+      const lockExp = Date.now() + lockMs;
+      if (!agentLoop.spotCooldownUntil) agentLoop.spotCooldownUntil = new Map();
+      agentLoop.spotCooldownUntil.set(`${assetName}-USD`, lockExp);
+      agentLoop.spotCooldownUntil.set(`${assetName}USDT`, lockExp);
+      agentLoop.spotCooldownUntil.set(assetName, lockExp);
+
+      agentLoop.spotCooldowns.set(`${assetName}-USD`, isLoss ? 600 : 200);
+      agentLoop.spotCooldowns.set(`${assetName}USDT`, isLoss ? 600 : 200);
+      agentLoop.spotCooldowns.set(assetName, isLoss ? 600 : 200);
+      return res.json({
+        success: true,
+        closedTrade: {
+          id,
+          symbol: `${assetName}-USD`,
+          units: soldUnits,
+          finalPnL: tradeFinalPnL,
+          side: 'SELL'
+        }
+      });
+    }
+
+    // 2. Direct MT5 Broker Order Ticket Close (e.g. MT5-123456)
     if (id.startsWith('MT5-')) {
       const ticket = id.replace('MT5-', '');
       const pos = (mt5Connector.openPositions || []).find(p => String(p.ticket) === String(ticket));
@@ -515,6 +619,7 @@ app.post('/api/trades/close/:id', async (req, res) => {
       return res.json({ success: true, closedTrade: { id, ticket, finalPnL: profit } });
     }
 
+    // 3. Demo / Paper Engine Position Close
     let closed = agentLoop.tradingEngine.closePosition(id, null, 'MANUAL_USER_EXIT', 'Manual user exit via dashboard');
     if (!closed) {
       const otherEngine = agentLoop.activeAccount === 'SPOT' ? agentLoop.marginTradingEngine : agentLoop.spotTradingEngine;
@@ -564,7 +669,7 @@ app.post('/api/trades/close/:id', async (req, res) => {
   }
 });
 
-// API: Close ALL active trades at once
+// API: Close ALL active trades at once (supports Demo, MT5, and Binance Spot)
 app.post('/api/trades/close-all', async (req, res) => {
   try {
     const targetEngine = agentLoop.tradingEngine;
@@ -575,9 +680,30 @@ app.post('/api/trades/close-all', async (req, res) => {
       if (closed) closedList.push(closed);
     }
 
-    if (agentLoop.currentMode === 'LIVE' && mt5Connector.connected) {
-      await mt5Connector.closeAllPositions().catch(() => {});
-      agentLoop.marginTradingEngine.activePositions = [];
+    if (agentLoop.currentMode === 'LIVE') {
+      if (mt5Connector.connected) {
+        await mt5Connector.closeAllPositions().catch(() => {});
+        agentLoop.marginTradingEngine.activePositions = [];
+      }
+      if (binanceConnector.connected) {
+        const balances = await binanceConnector.getBalances();
+        for (const b of balances) {
+          if (b.asset !== 'USDT' && b.asset !== 'BNB' && b.free > 0.00001) {
+            try {
+              await binanceConnector.placeSpotMarketOrder({
+                symbol: `${b.asset}USDT`,
+                side: 'SELL',
+                quantity: b.free
+              });
+              agentLoop.log(`🪙 [BINANCE LIVE] Close All: Sold ${b.free} ${b.asset} on Binance Spot`, 'SUCCESS');
+              closedList.push({ id: `BINANCE-${b.asset}`, symbol: `${b.asset}-USD` });
+            } catch (err) {
+              agentLoop.log(`⚠️ [BINANCE LIVE] Close All notice for ${b.asset}: ${err.message}`, 'WARN');
+            }
+          }
+        }
+        await binanceConnector.getBalances();
+      }
     }
 
     agentLoop.log(`🧹 Closed all active positions in [${agentLoop.activeAccount}].`, 'INFO');
@@ -616,15 +742,32 @@ app.post('/api/trades/execute', async (req, res) => {
       if (asset.category !== 'Crypto') {
         return res.status(400).json({ error: 'Pure Spot trading is only supported for Crypto assets.' });
       }
-      if (agentLoop.spotTradingEngine.activePositions.length > 0) {
-        return res.status(400).json({ error: 'Spot Account allows 1 active coin position at 100% capital allocation. Close current position first.' });
-      }
-      const spotCash = agentLoop.spotTradingEngine.balance;
-      if (spotCash < 0.5) {
-        return res.status(400).json({ error: 'Insufficient Spot balance to open trade.' });
+
+      const isLive = agentLoop.currentMode === 'LIVE';
+      let spotCash = agentLoop.spotTradingEngine.balance;
+      const maxSlots = agentLoop.spotRiskManager.maxSlots || 1;
+
+      if (isLive && binanceConnector.connected) {
+        const balances = await binanceConnector.getBalances();
+        const usdtObj = balances.find(b => b.asset === 'USDT');
+        spotCash = usdtObj ? Number(usdtObj.free) : 0;
+
+        // Count real active positions from engine (ignoring sub-$1.00 dust like 0.009 VIC or 0.3 XLM)
+        if (agentLoop.spotTradingEngine.activePositions.length >= maxSlots) {
+          return res.status(400).json({ error: `Spot Account allows ${maxSlots} active coin position(s) at ${(100 / maxSlots).toFixed(0)}% allocation. Close current position first.` });
+        }
+      } else {
+        if (agentLoop.spotTradingEngine.activePositions.length >= maxSlots) {
+          return res.status(400).json({ error: `Spot Account allows ${maxSlots} active coin position(s) at ${(100 / maxSlots).toFixed(0)}% allocation. Close current position first.` });
+        }
       }
 
-      const notional = Number(spotCash.toFixed(2));
+      if (spotCash < 0.5) {
+        return res.status(400).json({ error: `Insufficient Spot USDT balance ($${spotCash.toFixed(2)}) to open trade.` });
+      }
+
+      const rawNotional = spotCash / maxSlots;
+      const notional = Number((Math.max(0.5, Math.min(rawNotional, spotCash - 0.01))).toFixed(2));
       const entryPrice = asset.price;
       const rawUnits = notional / entryPrice;
       const units = Number(rawUnits.toFixed(asset.decimals || 4));
@@ -632,6 +775,20 @@ app.post('/api/trades/execute', async (req, res) => {
       const targetDist = Number((entryPrice * (agentLoop.spotRiskManager.takeProfitPct / 100)).toFixed(asset.decimals || 4));
       const stopLoss = Number((entryPrice - stopDist).toFixed(asset.decimals || 4));
       const takeProfit = Number((entryPrice + targetDist).toFixed(asset.decimals || 4));
+
+      // Execute on Live Binance if connected
+      if (isLive && binanceConnector.connected) {
+        try {
+          const liveOrder = await binanceConnector.placeSpotMarketOrder({
+            symbol: asset.symbol,
+            side: 'BUY',
+            quoteOrderQty: notional
+          });
+          agentLoop.log(`🪙 [BINANCE LIVE] Manual Market Buy executed on Binance! Order ID: ${liveOrder.orderId} (${asset.symbol} with $${notional} USDT)`, 'SUCCESS');
+        } catch (binanceErr) {
+          return res.status(400).json({ error: `Binance order rejected: ${binanceErr.message}` });
+        }
+      }
 
       const trade = agentLoop.spotTradingEngine.openPosition({
         symbol: asset.symbol,
@@ -645,16 +802,22 @@ app.post('/api/trades/execute', async (req, res) => {
         targetDistance: targetDist,
         units,
         notional,
-        confidence: 90,
-        reason: 'Manual 100% Spot Buy via Dashboard',
+        confidence: 95,
+        reason: `Manual Spot Buy (${(100 / maxSlots).toFixed(0)}% Allocation)`,
         riskRewardRatio: Number((agentLoop.spotRiskManager.takeProfitPct / agentLoop.spotRiskManager.stopLossPct).toFixed(1)),
+        maxHoldMinutes: agentLoop.spotRiskManager.maxHoldMinutes || 60,
         tradingStyle: 'SPOT_BUY',
+        feeRate: agentLoop.spotRiskManager.feeRate || (agentLoop.spotRiskManager.useBnbFeeDiscount ? 0.00075 : 0.0010),
         leverage: 1,
         margin: notional,
         liquidationPrice: 0
       });
 
-      agentLoop.log(`🪙 [SPOT] MANUAL 100% BUY: Bought ${trade.symbol} with $${notional} (100% Spot Balance) @ $${entryPrice}`, 'SUCCESS');
+      if (isLive && binanceConnector.connected) {
+        await binanceConnector.getBalances().catch(() => {});
+      }
+
+      agentLoop.log(`🪙 [SPOT] MANUAL BUY: Bought ${trade.symbol} with $${notional} @ $${entryPrice} (SL: -$${agentLoop.spotRiskManager.stopLossPct}%, TP: +$${agentLoop.spotRiskManager.takeProfitPct}%, Cap: ${agentLoop.spotRiskManager.maxHoldMinutes || 60}m)`, 'SUCCESS');
       return res.json({ success: true, trade });
     }
 
@@ -775,6 +938,7 @@ app.get('*', (req, res) => {
 
 // Start agent loop and web server
 agentLoop.setUserMode('test@gmail.com', 'LIVE');
+agentLoop.isAutoTradingEnabled = false; // Always start in PAUSED mode until user explicitly clicks Start
 agentLoop.start();
 
 app.listen(PORT, '0.0.0.0', () => {

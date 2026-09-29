@@ -23,26 +23,28 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
   const marginLevelPercent = portfolio.marginLevelPercent != null ? Number(portfolio.marginLevelPercent) : 100;
 
   const tradesList = portfolio.closedTrades || [];
-  const totalTrades = (portfolio.totalTrades !== undefined && portfolio.totalTrades > 0)
-    ? portfolio.totalTrades
-    : tradesList.length;
+  const totalTrades = tradesList.length;
 
-  const winCount = (portfolio.totalTrades !== undefined && portfolio.totalTrades > 0)
-    ? (portfolio.winCount || 0)
-    : tradesList.filter(t => (t.finalPnL || 0) > 0).length;
+  // Real profit (> $0.05 / target hit) counts as WIN
+  const winCount = tradesList.filter(t => {
+    const pnl = t.finalPnL !== undefined ? Number(t.finalPnL) : (t.profit !== undefined ? Number(t.profit) : 0);
+    return pnl > 0.05;
+  }).length;
 
-  const lossCount = (portfolio.totalTrades !== undefined && portfolio.totalTrades > 0)
-    ? (portfolio.lossCount || 0)
-    : tradesList.filter(t => (t.finalPnL || 0) < 0).length;
+  // Strictly ANY negative PnL (even -$0.01) counts as LOSS
+  const lossCount = tradesList.filter(t => {
+    const pnl = t.finalPnL !== undefined ? Number(t.finalPnL) : (t.profit !== undefined ? Number(t.profit) : 0);
+    return pnl < -0.0001;
+  }).length;
 
-  const breakEvenCount = portfolio.breakEvenCount !== undefined
-    ? portfolio.breakEvenCount
-    : tradesList.filter(t => t.isBreakEven || (t.finalPnL || 0) === 0).length;
+  // Tiny profit (0 to +$0.05 from break-even shield) counts as BREAK-EVEN
+  const breakEvenCount = tradesList.filter(t => {
+    const pnl = t.finalPnL !== undefined ? Number(t.finalPnL) : (t.profit !== undefined ? Number(t.profit) : 0);
+    return pnl >= -0.0001 && pnl <= 0.05;
+  }).length;
 
   const decisive = winCount + lossCount;
-  const winRate = (portfolio.totalTrades !== undefined && portfolio.totalTrades > 0)
-    ? (totalTrades > 0 && lossCount === 0 ? 100 : portfolio.winRate)
-    : (decisive > 0 ? Number(((winCount / decisive) * 100).toFixed(1)) : (totalTrades > 0 && lossCount === 0 ? 100 : 0));
+  const winRate = decisive > 0 ? Number(((winCount / decisive) * 100).toFixed(1)) : 0;
   const displayWinRate = !isNaN(Number(winRate)) ? Number(winRate) : 0;
 
   const isNetProfit = totalPnL >= 0;
@@ -136,7 +138,7 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
         {isSpot ? (
           <>
             <div className={`text-xl font-bold font-mono tracking-tight ${activePositions.length > 0 ? 'text-white' : 'text-slate-400'}`}>
-              ${activePositions.length > 0 ? (portfolio.holdingValue || ((portfolio.usedMargin || 0) + unrealizedPnL)).toFixed(2) : '0.00'}
+              ${activePositions.length > 0 ? (portfolio.holdingValue || ((portfolio.usedMargin || 0) + unrealizedPnL) || activePositions.reduce((s, p) => s + (p.notional || (p.currentPrice * p.units) || (p.entryPrice * p.units) || 0), 0)).toFixed(2) : '0.00'}
             </div>
             <div className={`text-[11px] font-mono mt-1 ${isUnrealizedProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
               {activePositions.length > 0 ? (

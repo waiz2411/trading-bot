@@ -1,11 +1,12 @@
-import { WATCHLIST } from '../config/assets.js';
+import { WATCHLIST, getAssetPrecision } from '../config/assets.js';
+import { isHalalCompliant, getHalalMetadata } from './halalFilter.js';
 
 /**
- * Universal Market Data Service (100% Real-Time Market Feeds & Shariah Halal Spot)
- * - Fetches real live prices & 24h stats for all 31 Halal Crypto assets directly from Binance/Bybit
- * - Fetches genuine 1m historical klines from Binance for 100% mathematically accurate RSI, MACD, and EMA metrics
+ * Universal Market Data Service (100% Real-Time Market Feeds & Dynamic Shariah Halal Spot)
+ * - Dynamically discovers and tracks ALL Halal Spot pairs listed on Binance (100+ coins)
+ * - Real-time 24h ticker, high/low, volume, and live volatility calculations
+ * - Fetches genuine 5m historical klines from Binance for accurate RSI, MACD, and EMA metrics
  * - Fetches institutional Forex & Commodities data from Yahoo Finance & MetaTrader 5 Bridge
- * - Zero simulated random walks on live feeds: prevents artificial price drift and false triggers
  */
 
 const marketCache = new Map();
@@ -36,7 +37,7 @@ function generateBalancedCandles(basePrice, volatility = 0.003, count = 70) {
   return candles;
 }
 
-// 100% Shariah / Halal Compliant Binance Spot Mappings (All 31 Pairs Verified)
+// Default Seed Mappings for Core Halal Crypto Assets
 const CRYPTO_BINANCE_MAP = {
   'BTC-USD': 'BTCUSDT',
   'ETH-USD': 'ETHUSDT',
@@ -181,6 +182,7 @@ export class MarketDataService {
     }
   }
 
+  // Dynamically discovers and streams live stats for ALL Halal USDT Spot pairs on Binance
   async fetchCryptoBinance() {
     let tickerList = null;
 
@@ -207,27 +209,69 @@ export class MarketDataService {
     }
 
     if (Array.isArray(tickerList)) {
-      const tickerMap = new Map();
       for (const t of tickerList) {
-        if (t.symbol) tickerMap.set(t.symbol, t);
-      }
+        if (!t.symbol || !t.symbol.endsWith('USDT')) continue;
+        if (t.symbol.includes('UP') || t.symbol.includes('DOWN') || t.symbol.includes('BEAR') || t.symbol.includes('BULL')) continue;
 
-      for (const [appSymbol, binanceSymbol] of Object.entries(CRYPTO_BINANCE_MAP)) {
-        const ticker = tickerMap.get(binanceSymbol);
-        const cached = marketCache.get(appSymbol);
-        if (ticker && cached) {
-          const livePrice = parseFloat(ticker.lastPrice);
-          const high = parseFloat(ticker.highPrice);
-          const low = parseFloat(ticker.lowPrice);
-          const change = parseFloat(ticker.priceChangePercent);
-          const vol24h = low > 0 ? Number((((high - low) / low) * 100).toFixed(2)) : 0;
+        const baseAsset = t.symbol.replace(/USDT$/, '');
+        const quoteVol = parseFloat(t.quoteVolume || 0);
 
-          cached.price = Number(livePrice.toFixed(cached.decimals));
+        // Require at least $150k daily volume to ensure active orderbook & tight spread
+        if (quoteVol < 150000 && !CRYPTO_BINANCE_MAP[`${baseAsset}-USD`]) continue;
+
+        // Strict Shariah / Halal Verification
+        if (!isHalalCompliant(baseAsset)) continue;
+
+        const appSymbol = `${baseAsset}-USD`;
+        const livePrice = parseFloat(t.lastPrice);
+        if (isNaN(livePrice) || livePrice <= 0) continue;
+
+        const high = parseFloat(t.highPrice);
+        const low = parseFloat(t.lowPrice);
+        const change = parseFloat(t.priceChangePercent);
+        const vol24h = low > 0 ? Number((((high - low) / low) * 100).toFixed(2)) : 0;
+        const meta = getHalalMetadata(baseAsset);
+        const dec = getAssetPrecision(livePrice);
+
+        let cached = marketCache.get(appSymbol);
+        if (!cached) {
+          // Dynamically register newly discovered Halal Binance Spot Coin
+          const initialCandles = generateBalancedCandles(livePrice, Math.max(0.003, (vol24h / 100) / 24), 70);
+          cached = {
+            symbol: appSymbol,
+            name: meta.name || baseAsset,
+            category: 'Crypto',
+            baseAsset,
+            quoteAsset: 'USD',
+            decimals: dec,
+            icon: '🪙',
+            minVolatility: meta.minVolatility || (vol24h >= 4.0 ? 1.8 : 1.0),
+            isHighVolatility: Boolean(vol24h >= 4.0 || meta.isVolatile || Math.abs(change) >= 3.5),
+            isHalal: true,
+            halalSector: meta.sector || 'Web3 Utility / Infrastructure',
+            price: Number(livePrice.toFixed(dec)),
+            change24h: Number(change.toFixed(2)),
+            high24h: Number(high.toFixed(dec)),
+            low24h: Number(low.toFixed(dec)),
+            liveVolatility24h: vol24h,
+            volume: Number(parseFloat(t.volume).toFixed(0)),
+            quoteVolume: Number(quoteVol.toFixed(0)),
+            candles: initialCandles,
+            trendMomentum: 0,
+            isLiveFeed: true,
+            lastLiveTime: Date.now(),
+            lastFetch: Date.now()
+          };
+          marketCache.set(appSymbol, cached);
+        } else {
+          cached.price = Number(livePrice.toFixed(cached.decimals || dec));
           cached.change24h = Number(change.toFixed(2));
-          cached.high24h = Number(high.toFixed(cached.decimals));
-          cached.low24h = Number(low.toFixed(cached.decimals));
+          cached.high24h = Number(high.toFixed(cached.decimals || dec));
+          cached.low24h = Number(low.toFixed(cached.decimals || dec));
           cached.liveVolatility24h = vol24h;
-          cached.volume = Number(parseFloat(ticker.volume).toFixed(0));
+          cached.isHighVolatility = Boolean(vol24h >= 4.0 || (cached.minVolatility && cached.minVolatility >= 1.4) || Math.abs(change) >= 3.5);
+          cached.volume = Number(parseFloat(t.volume).toFixed(0));
+          cached.quoteVolume = Number(quoteVol.toFixed(0));
           cached.isLiveFeed = true;
           cached.lastLiveTime = Date.now();
 
@@ -258,44 +302,57 @@ export class MarketDataService {
     }
   }
 
-  // Fetch genuine historical 1-minute klines from Binance for real RSI/MACD accuracy
+  // Fetch genuine historical 5-minute klines from Binance for top active/volatile Halal pairs
   async fetchRealCandlesCrypto() {
     const now = Date.now();
-    if (now - this.lastKlineFetch < 60000) return; // Refresh every 60s
+    if (now - this.lastKlineFetch < 25000) return; // Refresh every 25s
     this.lastKlineFetch = now;
 
-    const entries = Object.entries(CRYPTO_BINANCE_MAP);
-    const fetchKline = async ([appSymbol, binanceSymbol]) => {
-      const cached = marketCache.get(appSymbol);
-      if (!cached) return;
+    // Get all crypto assets from marketCache
+    const cryptoAssets = Array.from(marketCache.values()).filter(a => a.category === 'Crypto');
+
+    // Prioritize: (1) Core active pairs (2) High volatility & high volume pairs
+    cryptoAssets.sort((a, b) => {
+      const volA = (a.liveVolatility24h || 0) * (a.quoteVolume ? Math.log10(Math.max(10, a.quoteVolume)) : 1);
+      const volB = (b.liveVolatility24h || 0) * (b.quoteVolume ? Math.log10(Math.max(10, b.quoteVolume)) : 1);
+      return volB - volA;
+    });
+
+    // Take top 42 most volatile/promising Halal coins for full 5m candle sync
+    const targets = cryptoAssets.slice(0, 42);
+
+    const fetchKline = async (asset) => {
+      const baseAsset = asset.baseAsset || asset.symbol.replace(/[-_/]/g, '').replace(/USD$/, '');
+      const binanceSymbol = `${baseAsset}USDT`;
       try {
-        const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${binanceSymbol}&interval=1m&limit=70`, {
+        const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${binanceSymbol}&interval=5m&limit=70`, {
           signal: AbortSignal.timeout(3500)
         });
         if (!res.ok) return;
         const data = await res.json();
         if (Array.isArray(data) && data.length >= 15) {
+          const dec = asset.decimals || 4;
           const realCandles = data.map(k => ({
             time: new Date(k[0]).toISOString(),
-            open: Number(parseFloat(k[1]).toFixed(cached.decimals)),
-            high: Number(parseFloat(k[2]).toFixed(cached.decimals)),
-            low: Number(parseFloat(k[3]).toFixed(cached.decimals)),
-            close: Number(parseFloat(k[4]).toFixed(cached.decimals)),
+            open: Number(parseFloat(k[1]).toFixed(dec)),
+            high: Number(parseFloat(k[2]).toFixed(dec)),
+            low: Number(parseFloat(k[3]).toFixed(dec)),
+            close: Number(parseFloat(k[4]).toFixed(dec)),
             volume: Math.round(parseFloat(k[5]))
           }));
-          cached.candles = realCandles;
-          cached.isRealCandles = true;
+          asset.candles = realCandles;
+          asset.isRealCandles = true;
           const latest = realCandles[realCandles.length - 1];
           if (latest) {
-            cached.price = latest.close;
+            asset.price = latest.close;
           }
         }
       } catch (_) {}
     };
 
     // Parallel fetch in batches of 6
-    for (let i = 0; i < entries.length; i += 6) {
-      const batch = entries.slice(i, i + 6);
+    for (let i = 0; i < targets.length; i += 6) {
+      const batch = targets.slice(i, i + 6);
       await Promise.allSettled(batch.map(fetchKline));
     }
   }

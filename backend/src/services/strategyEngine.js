@@ -391,134 +391,311 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
 
   // 2. User Volatility Mode Filter
   const allowHighVol = spotRiskSettings.allowHighVolatility ?? true;
-  const isVolatileCoin = asset.isHighVolatility || (asset.minVolatility && asset.minVolatility >= 1.4);
+  const isVolatileCoin = Boolean(asset.isHighVolatility || (asset.minVolatility && asset.minVolatility >= 1.4));
+
+  if (allowHighVol && !isVolatileCoin) {
+    return {
+      action: 'NEUTRAL',
+      side: null,
+      confidence: 0,
+      reason: 'Low-volatility coin bypassed (High-Volatility Hunter mode active)',
+      factors: ['Filtered by user setting: Trading high-volatility Halal altcoins only']
+    };
+  }
 
   if (!allowHighVol && isVolatileCoin) {
     return {
       action: 'NEUTRAL',
       side: null,
-      confidence: 30,
-      reason: 'High-volatility coin bypassed (Standard large-cap Halal mode active)',
-      factors: ['Filtered by user setting: Trading established low-volatility Halal coins only']
+      confidence: 0,
+      reason: 'High-volatility coin bypassed (Standard large-cap mode active)',
+      factors: ['Filtered by user setting: Trading established Halal coins only']
     };
   }
 
   const currentPrice = asset.price || technicals.currentPrice;
   const { ema9, ema21, ema50, ema200, rsi, macd, bollingerBands: bb } = technicals;
 
-  // Fee-Compensated Spot Target Geometry:
-  // Binance Fee: 0.10% buy + 0.10% sell = 0.20% round-trip ($0.20 on $100).
-  // Target: Base +1.00% gross delivers +$0.80 net profit after fees on $100 trade.
-  // High-volatility alts scale up to +1.40% - +1.80% gross (delivering +$1.20 - +$1.60 net profit).
-  const baseStopLossPct = Math.max(0.3, Number(spotRiskSettings.stopLossPct) || 0.6);
-  const baseTakeProfitPct = Math.max(0.7, Number(spotRiskSettings.takeProfitPct) || 1.0);
-  const minThreshold = Number(spotRiskSettings.minConfidenceThreshold) || 50;
-  const maxHoldMinutes = Number(spotRiskSettings.maxHoldMinutes) || 5; // Strict 5-minute cap
+  // Fee-Compensated Spot Target Geometry (Live Exchange Calibrated):
+  // Binance Fee: 0.075% buy + 0.075% sell = 0.15% round-trip with BNB discount.
+  // Bid-Ask spread on volatile alts: ~0.15-0.25%.
+  // Total instant friction: ~0.30-0.45%.
+  // SL must be wide enough that friction + noise does NOT trigger stop.
+  const baseStopLossPct = Math.max(0.8, Number(spotRiskSettings.stopLossPct) || 1.6);
+  const baseTakeProfitPct = Math.max(1.5, Number(spotRiskSettings.takeProfitPct) || 2.8);
+  const minThreshold = Number(spotRiskSettings.minConfidenceThreshold) || 95;
+  const maxHoldMinutes = Number(spotRiskSettings.maxHoldMinutes) || 60;
 
-  // Adapt geometry to coin's volatility
-  const volFactor = isVolatileCoin ? Math.min(1.5, Math.max(1.2, (asset.minVolatility || 1.35))) : 1.0;
-  const stopLossPct = Number((baseStopLossPct * (isVolatileCoin ? 1.15 : 1.0)).toFixed(2));
+  // Volatility-adapted geometry
+  const volFactor = isVolatileCoin ? Math.min(1.4, Math.max(1.1, (asset.minVolatility || 1.2))) : 1.0;
+  const stopLossPct = Number((baseStopLossPct * (isVolatileCoin ? 1.05 : 1.0)).toFixed(2));
   const takeProfitPct = Number((baseTakeProfitPct * volFactor).toFixed(2));
 
-  let score = 32; // Constructive baseline
+  // ==========================================
+  // MANDATORY GATE 1: EMA FAN ALIGNMENT
+  // Price >= EMA9 >= EMA21 >= EMA50 = clean uptrend
+  // Without this, we're buying into chop or a downtrend = guaranteed loss.
+  // ==========================================
+  const hasFullFan = ema9 && ema21 && ema50 &&
+                     (currentPrice >= ema9) &&
+                     (ema9 >= ema21) &&
+                     (ema21 >= ema50);
+
+  if (!hasFullFan) {
+    return {
+      action: 'NEUTRAL',
+      side: null,
+      confidence: 25,
+      entryPrice: currentPrice,
+      stopLoss: null,
+      takeProfit: null,
+      riskRewardRatio: null,
+      maxHoldMinutes,
+      tradingStyle: 'SPOT_BUY',
+      tradeDirection: 'LONG_ONLY',
+      reason: 'Anti-Chop Gate: EMA Fan not aligned (need Price >= EMA9 >= EMA21 >= EMA50).',
+      factors: ['Waiting for clean bullish trend alignment']
+    };
+  }
+
+  // ==========================================
+  // MANDATORY GATE 2: RSI OVERBOUGHT REJECTION
+  // RSI > 70 = coin overextended, likely to pull back = don't buy
+  // ==========================================
+  if (rsi !== null && rsi !== undefined && rsi > 70) {
+    return {
+      action: 'NEUTRAL',
+      side: null,
+      confidence: 30,
+      entryPrice: currentPrice,
+      stopLoss: null,
+      takeProfit: null,
+      riskRewardRatio: null,
+      maxHoldMinutes,
+      tradingStyle: 'SPOT_BUY',
+      tradeDirection: 'LONG_ONLY',
+      reason: `RSI Overbought (${rsi.toFixed(1)}): Coin overextended, waiting for pullback.`,
+      factors: [`RSI at ${rsi.toFixed(1)} too high for safe entry`]
+    };
+  }
+
+  // ==========================================
+  // SCORING ENGINE — Conservative baseline (20) requires genuine multi-factor confirmation
+  // ==========================================
+  let score = 20;
   const factors = [];
 
-  // 1. TREND STRUCTURE
-  const isAboveEma50 = ema50 ? currentPrice >= ema50 : true;
-  const isAboveEma200 = ema200 ? currentPrice >= ema200 : true;
-  const isEmaBullish = ema9 && ema21 ? ema9 >= ema21 : false;
+  // 1. EMA Fan already confirmed — award core trend points
+  score += 25;
+  factors.push('Clean Bullish EMA Fan: Price >= EMA9 >= EMA21 >= EMA50');
 
-  if (isEmaBullish) {
-    score += 18;
-    factors.push('Micro Bull Trend: EMA 9 crossed above EMA 21');
-  }
-  if (isAboveEma50) {
+  // Macro trend bonus (Golden Cross: EMA50 > EMA200)
+  if (ema200 && ema50 > ema200 && currentPrice >= ema200) {
     score += 12;
-    if (isAboveEma200) {
-      score += 8;
-      factors.push('Macro Bull Trend: Price above EMA 50 & 200');
-    }
+    factors.push('Golden Macro: EMA50 > EMA200 structural bull trend');
+  } else if (ema200 && currentPrice < ema200) {
+    score -= 15; // Counter-trend penalty
   }
 
-  // 2. VALUE ENTRY ZONE (Pullback to EMA Support)
+  // 2. VALUE ENTRY ZONE (Pullback to EMA support — don't buy at the top!)
   if (ema21) {
-    const distToEma21Pct = Math.abs(currentPrice - ema21) / currentPrice;
-    if (distToEma21Pct <= 0.012 && currentPrice >= ema21) {
+    const distToEma21Pct = (currentPrice - ema21) / currentPrice;
+    if (distToEma21Pct >= 0 && distToEma21Pct <= 0.012) {
       score += 15;
-      factors.push('Value Entry: Dip pullback bouncing off dynamic EMA 21 support');
+      factors.push('Value Entry: Price near EMA21 support (pullback bounce zone)');
+    } else if (distToEma21Pct > 0.025) {
+      score -= 8; // Overextended above EMA21
     }
   }
 
   // 3. RSI VALUE FILTER
   if (rsi !== null && rsi !== undefined) {
-    if (rsi >= 35 && rsi <= 58) {
+    if (rsi >= 40 && rsi <= 60) {
       score += 16;
-      factors.push(`Optimal Buy RSI (${rsi.toFixed(1)}): Healthy momentum runway`);
-    } else if (rsi < 35) {
+      factors.push(`Optimal RSI (${rsi.toFixed(1)}): Maximum upside runway`);
+    } else if (rsi >= 30 && rsi < 40) {
       score += 14;
-      factors.push(`Oversold Rebound RSI (${rsi.toFixed(1)}): Deep dip buyer interest`);
-    } else if (rsi > 70) {
-      score -= 12;
+      factors.push(`Oversold Bounce RSI (${rsi.toFixed(1)}): Deep dip recovery`);
+    } else if (rsi > 60 && rsi <= 70) {
+      score += 6;
+      factors.push(`Moderate RSI (${rsi.toFixed(1)}): Approaching overbought`);
     }
   }
 
   // 4. MACD MOMENTUM
   if (macd) {
-    if (macd.histogram > 0) {
+    if (macd.histogram > 0 && macd.MACD > macd.signal) {
       score += 12;
-      factors.push('Positive MACD: Micro momentum expanding upwards');
-    } else if (macd.histogram > -0.0005) {
+      factors.push('Strong MACD: Histogram positive with bullish crossover');
+    } else if (macd.histogram > 0) {
       score += 8;
-      factors.push('MACD Turning Bullish: Bearish momentum exhausted');
+      factors.push('Positive MACD Histogram: Micro momentum expanding');
+    } else if (macd.histogram > -0.0003 && macd.histogram <= 0) {
+      score += 4;
     }
   }
 
   // 5. BOLLINGER BAND
   if (bb) {
     if (currentPrice <= bb.middle) {
-      score += 10;
-      factors.push('Lower Bollinger Band: Buying in value half of channel');
+      score += 8;
+      factors.push('Lower Bollinger Zone: Buying in value half');
     }
     if (currentPrice >= bb.upper) {
-      score -= 10;
+      score -= 12; // Upper band = overbought danger
     }
   }
 
-  // 6. CANDLESTICK CONFIRMATION
-  if (asset.candles && asset.candles.length >= 2) {
+  // 6. CANDLESTICK CONFIRMATION — require genuine buying pressure
+  if (asset.candles && asset.candles.length >= 3) {
     const lastCandle = asset.candles[asset.candles.length - 1];
+    const prevCandle = asset.candles[asset.candles.length - 2];
     const isGreen = lastCandle.close >= lastCandle.open;
     const bodySize = Math.abs(lastCandle.close - lastCandle.open);
+    const bodyPct = bodySize / lastCandle.open;
     const lowerWick = Math.min(lastCandle.open, lastCandle.close) - lastCandle.low;
 
-    if (isGreen) {
-      score += 12;
-      factors.push('Bullish Candle Confirmation: Upward micro-impulse');
-      if (lowerWick >= bodySize * 0.25) score += 6;
+    if (isGreen && bodyPct >= 0.0015) {
+      score += 10;
+      factors.push('Strong Bullish Candle: Green with significant body');
+      if (lowerWick >= bodySize * 0.5) {
+        score += 5;
+        factors.push('Bullish Wick Rejection: Buyers defending support');
+      }
+    } else if (isGreen) {
+      score += 4;
+    } else {
+      score -= 5; // Red candle = bearish pressure
+    }
+
+    // Consecutive green candles bonus
+    if (isGreen && prevCandle.close >= prevCandle.open) {
+      score += 5;
+      factors.push('Consecutive Green Candles: Sustained buying');
     }
   }
 
   // 7. VOLATILITY BONUS
   if (isVolatileCoin) {
-    score += 12;
-    factors.push(`High-Volatility Momentum (${asset.symbol})`);
+    score += 8;
+    factors.push(`High-Volatility Coin (${asset.symbol})`);
   }
+
+  // 8. 24h Change Confirmation — don't buy into a dump or chase a parabolic pump
+  if (asset.change24h !== undefined) {
+    if (asset.change24h > 0.5 && asset.change24h < 8.0) {
+      score += 6;
+      factors.push(`Positive 24h Trend (+${asset.change24h.toFixed(1)}%)`);
+    } else if (asset.change24h < -2.0) {
+      score -= 10; // Coin dumping today
+    } else if (asset.change24h > 10.0) {
+      score -= 8; // Parabolic pump — don't chase
+    }
+  }
+
+  // ==========================================
+  // COMPREHENSIVE WIN PROBABILITY RATING (50.0 - 99.5%)
+  // Used to compare and select the highest-probability winner when multiple coins hit high/100% confidence
+  // ==========================================
+  let winProbScore = 50;
+
+  // 1. Trend Quality & Slope Expansion (Up to +18 pts)
+  if (ema9 && ema21 && ema50) {
+    const fanSpread1 = (ema9 - ema21) / ema21;
+    const fanSpread2 = (ema21 - ema50) / ema50;
+    if (fanSpread1 > 0.0015 && fanSpread2 > 0.0020) {
+      winProbScore += 18; // Strong widening fan expansion
+    } else if (fanSpread1 > 0.0005 && fanSpread2 > 0.0005) {
+      winProbScore += 12; // Moderate fan expansion
+    } else {
+      winProbScore += 6; // Thin fan
+    }
+  }
+
+  // 2. RSI Sweet Zone Runway (Up to +16 pts)
+  if (rsi !== null && rsi !== undefined) {
+    if (rsi >= 45 && rsi <= 55) {
+      winProbScore += 16; // Optimal mid-range acceleration sweet spot
+    } else if (rsi >= 40 && rsi < 62) {
+      winProbScore += 12;
+    } else if (rsi >= 35 && rsi < 68) {
+      winProbScore += 8;
+    } else {
+      winProbScore += 3;
+    }
+  }
+
+  // 3. Optimal Pullback / Dip Bounce Proximity (Up to +15 pts)
+  if (ema21) {
+    const distToEma21Pct = (currentPrice - ema21) / currentPrice;
+    if (distToEma21Pct >= 0 && distToEma21Pct <= 0.008) {
+      winProbScore += 15; // Tight bounce off EMA21 support (highest R:R & win rate)
+    } else if (distToEma21Pct <= 0.018) {
+      winProbScore += 10;
+    } else {
+      winProbScore += 4; // Extended above support
+    }
+  }
+
+  // 4. Candlestick Confirmation & Lower Wick Defense (Up to +16 pts)
+  if (asset.candles && asset.candles.length >= 2) {
+    const lastCandle = asset.candles[asset.candles.length - 1];
+    const isGreen = lastCandle.close >= lastCandle.open;
+    const bodySize = Math.abs(lastCandle.close - lastCandle.open);
+    const bodyPct = bodySize / Math.max(0.0001, lastCandle.open);
+    const lowerWick = Math.min(lastCandle.open, lastCandle.close) - lastCandle.low;
+
+    if (isGreen && bodyPct >= 0.0020) {
+      winProbScore += 10;
+    } else if (isGreen) {
+      winProbScore += 5;
+    }
+    if (lowerWick >= bodySize * 0.40) {
+      winProbScore += 6; // Strong buyer defense of lows
+    }
+  }
+
+  // 5. Liquidity & Volume Stability (Up to +15 pts)
+  const qVol = Number(asset.quoteVolume) || 0;
+  if (qVol >= 10000000) {
+    winProbScore += 15; // > $10M daily volume: Minimal slippage & tighter spread
+  } else if (qVol >= 2000000) {
+    winProbScore += 12; // > $2M daily volume
+  } else if (qVol >= 500000) {
+    winProbScore += 8;
+  } else {
+    winProbScore += 4;
+  }
+
+  // 6. MACD Expansion Bonus (Up to +10 pts)
+  if (macd && macd.histogram > 0) {
+    winProbScore += 10;
+  }
+
+  // 7. Volatility & Macro Alignment (Up to +10 pts)
+  if (ema200 && ema50 > ema200 && currentPrice >= ema200) {
+    winProbScore += 10;
+  }
+
+  const winProbability = Number(Math.min(99.5, Math.max(50.0, winProbScore)).toFixed(1));
 
   const finalConfidence = Math.max(0, Math.min(100, Math.round(score)));
 
-  // Calculate Dynamic High-Precision Geometry (Strict 1:1.3 R:R)
+  // Calculate geometry
   const precision = getAssetPrecision(currentPrice, asset.decimals || 4);
   const stopDist = Number((currentPrice * (stopLossPct / 100)).toFixed(precision));
   const targetDist = Number((currentPrice * (takeProfitPct / 100)).toFixed(precision));
   const stopLoss = Number((currentPrice - stopDist).toFixed(precision));
   const takeProfit = Number((currentPrice + targetDist).toFixed(precision));
-  const effectiveRR = 1.30;
+  const effectiveRR = Number((takeProfitPct / stopLossPct).toFixed(2));
 
   if (finalConfidence >= minThreshold) {
     return {
       action: 'STRONG_BUY',
       side: 'LONG',
       confidence: finalConfidence,
+      winProbability,
+      rawScore: score,
       volatilityMultiplier: asset.minVolatility || 1.0,
       isHighVolatility: Boolean(isVolatileCoin),
       entryPrice: currentPrice,
@@ -539,6 +716,8 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
     action: 'NEUTRAL',
     side: null,
     confidence: finalConfidence,
+    winProbability,
+    rawScore: score,
     entryPrice: currentPrice,
     stopLoss: null,
     takeProfit: null,
@@ -546,7 +725,7 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
     maxHoldMinutes,
     tradingStyle: 'SPOT_BUY',
     tradeDirection: 'LONG_ONLY',
-    reason: `Scanning spot setup (Confidence: ${finalConfidence}% / ${minThreshold}%).`,
-    factors: ['Scanning active crypto markets for 1:1.3 R:R spot scalps']
+    reason: `Scanning spot (${finalConfidence}% / ${minThreshold}% required).`,
+    factors: ['Scanning crypto markets for high-probability spot setups']
   };
 }

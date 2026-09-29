@@ -2,19 +2,36 @@ import React, { useState } from 'react';
 import { Search, Filter, ArrowUpRight, ArrowDownRight, Compass, ShieldCheck, Zap, Info } from 'lucide-react';
 import { formatPrice } from '../utils/formatters.js';
 
-export default function MarketRadar({ marketScan = [], onSelectAsset, onQuickTrade }) {
-  const [selectedCategory, setSelectedCategory] = useState('ALL');
+export default function MarketRadar({ marketScan = [], onSelectAsset, onQuickTrade, activeAccount = 'MARGIN' }) {
+  const isSpot = activeAccount === 'SPOT';
+  const [selectedCategory, setSelectedCategory] = useState(isSpot ? 'Crypto' : 'ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [highConfidenceOnly, setHighConfidenceOnly] = useState(false);
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
 
-  const categories = ['ALL', 'Crypto', 'Forex', 'Commodities', 'Indices'];
+  React.useEffect(() => {
+    if (activeAccount === 'SPOT') {
+      setSelectedCategory('Crypto');
+    }
+  }, [activeAccount]);
+
+  const categories = isSpot ? ['Crypto', 'ALL'] : ['ALL', 'Crypto', 'Forex', 'Commodities', 'Indices'];
 
   const filtered = marketScan.filter(item => {
     const matchesCategory = selectedCategory === 'ALL' || item.category.toLowerCase() === selectedCategory.toLowerCase();
     const matchesSearch = item.symbol.toLowerCase().includes(searchQuery.toLowerCase()) || item.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesConfidence = !highConfidenceOnly || (item.signal && item.signal.confidence >= 70);
     return matchesCategory && matchesSearch && matchesConfidence;
+  }).sort((a, b) => {
+    const confA = a.signal?.confidence || 0;
+    const confB = b.signal?.confidence || 0;
+    if (confB !== confA) return confB - confA;
+    return (b.liveVolatility24h || 0) - (a.liveVolatility24h || 0);
   });
+
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const getSignalBadge = (signal) => {
     if (!signal) return null;
@@ -148,7 +165,7 @@ export default function MarketRadar({ marketScan = [], onSelectAsset, onQuickTra
                 </td>
               </tr>
             ) : (
-              filtered.map(item => {
+              paginated.map(item => {
                 const isPositive = item.change24h >= 0;
                 const conf = item.signal?.confidence || 0;
                 const isStrong = conf >= 75;
@@ -285,6 +302,34 @@ export default function MarketRadar({ marketScan = [], onSelectAsset, onQuickTra
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Footer */}
+      {totalPages > 1 && (
+        <div className="p-3 border-t border-terminal-border bg-terminal-900/60 flex items-center justify-between text-xs font-mono text-slate-400">
+          <div>
+            Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, filtered.length)} of {filtered.length} live markets
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-2.5 py-1 rounded bg-terminal-800 border border-terminal-border text-white disabled:opacity-40 hover:bg-terminal-700 transition-colors"
+            >
+              Previous
+            </button>
+            <span className="px-2 font-bold text-white">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="px-2.5 py-1 rounded bg-terminal-800 border border-terminal-border text-white disabled:opacity-40 hover:bg-terminal-700 transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

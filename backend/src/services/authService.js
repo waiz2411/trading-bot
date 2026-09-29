@@ -94,7 +94,7 @@ const LIVE_MT5_GATEWAY_URL = process.env.MT5_GATEWAY_URL || 'https://grid-air-te
         name: 'Main Live Account',
         role: 'LIVE_BROKER',
         mode: 'LIVE',
-        isAutoTradingEnabled: true,
+        isAutoTradingEnabled: false,
         activeAccount: 'MARGIN',
         createdAt: '2026-09-01T00:00:00.000Z',
         brokerConnections: {

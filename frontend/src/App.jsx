@@ -705,6 +705,7 @@ export default function App() {
                 marketScan={data.marketScan}
                 onSelectAsset={(asset) => setSelectedAsset(asset)}
                 onQuickTrade={(symbol, side) => handleExecuteTrade(symbol, side)}
+                activeAccount={data.activeAccount}
               />
               <AgentLogs logs={data.logs} />
             </div>
@@ -717,6 +718,7 @@ export default function App() {
               marketScan={data.marketScan}
               onSelectAsset={(asset) => setSelectedAsset(asset)}
               onQuickTrade={(symbol, side) => handleExecuteTrade(symbol, side)}
+              activeAccount={data.activeAccount}
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -29,12 +29,20 @@ export class BinanceConnector {
       : 'https://api.binance.com';
   }
 
-  configure({ apiKey, apiSecret, isTestnet = true }) {
+  configure({ apiKey, apiSecret, isTestnet = true, connected, status, balances }) {
     if (apiKey) this.apiKey = apiKey.trim();
     if (apiSecret) this.apiSecret = apiSecret.trim();
     this.isTestnet = !!isTestnet;
-    this.connected = false;
-    this.status = this.apiKey ? 'STANDBY' : 'DISCONNECTED';
+    if (connected !== undefined) {
+      this.connected = Boolean(connected);
+      this.status = status || (this.connected ? 'CONNECTED' : (this.apiKey ? 'STANDBY' : 'DISCONNECTED'));
+    } else if (!this.apiKey || !this.apiSecret) {
+      this.connected = false;
+      this.status = 'DISCONNECTED';
+    }
+    if (balances && Array.isArray(balances) && balances.length > 0) {
+      this.cachedBalances = balances;
+    }
     return this.getStatus();
   }
 
@@ -68,8 +76,10 @@ export class BinanceConnector {
       const res = await fetch(`${this.baseUrl}/api/v3/time`);
       if (res.ok) {
         const data = await res.json();
-        const roundTrip = Math.round((Date.now() - startTime) / 2);
-        this.timeOffset = (data.serverTime - Date.now()) + roundTrip;
+        const endTime = Date.now();
+        const latency = Math.round((endTime - startTime) / 2);
+        this.timeOffset = data.serverTime - endTime;
+        this.lastTimeSync = Date.now();
       }
     } catch (err) {
       console.warn('Could not sync Binance server time:', err.message);
@@ -77,7 +87,9 @@ export class BinanceConnector {
   }
 
   signQuery(queryString = '') {
-    const timestamp = Date.now() + (this.timeOffset || 0);
+    // 1500ms backward safety buffer guarantees timestamp is never ahead of Binance clock
+    // recvWindow=60000 allows up to 60 seconds of valid window
+    const timestamp = Date.now() + (this.timeOffset || 0) - 1500;
     const windowParam = 'recvWindow=60000';
     const base = queryString
       ? `${queryString}&${windowParam}&timestamp=${timestamp}`
@@ -211,14 +223,54 @@ export class BinanceConnector {
     }
   }
 
+  async getSymbolLotSize(symbol) {
+    if (!this.symbolFilters) this.symbolFilters = {};
+    if (this.symbolFilters[symbol]) return this.symbolFilters[symbol];
+
+    try {
+      const res = await fetch(`${this.baseUrl}/api/v3/exchangeInfo?symbol=${symbol}`);
+      if (res.ok) {
+        const data = await res.json();
+        const symInfo = data.symbols?.[0];
+        const lotFilter = symInfo?.filters?.find(f => f.filterType === 'LOT_SIZE');
+        if (lotFilter) {
+          const stepSize = parseFloat(lotFilter.stepSize) || 0.0001;
+          const minQty = parseFloat(lotFilter.minQty) || 0.0001;
+          this.symbolFilters[symbol] = { stepSize, minQty };
+          return this.symbolFilters[symbol];
+        }
+      }
+    } catch (err) {
+      console.warn(`Could not fetch lot size for ${symbol}:`, err.message);
+    }
+    return { stepSize: 0.01, minQty: 0.01 };
+  }
+
+  async getPrice(symbol) {
+    const binanceSymbol = this.formatSymbol(symbol);
+    try {
+      const res = await fetch(`${this.baseUrl}/api/v3/ticker/price?symbol=${binanceSymbol}`);
+      if (res.ok) {
+        const data = await res.json();
+        return parseFloat(data.price) || null;
+      }
+    } catch (_) {}
+    return null;
+  }
+
   /**
    * Execute Spot Market Order
    * For Buy: Uses quoteOrderQty (e.g. buy with 10 USDT)
    * For Sell: Uses quantity (e.g. sell units of coin)
    */
-  async placeSpotMarketOrder({ symbol, side = 'BUY', quoteOrderQty, quantity }) {
+  async placeSpotMarketOrder({ symbol, side = 'BUY', quoteOrderQty, quantity }, isRetry = false) {
     if (!this.connected || !this.apiKey || !this.apiSecret) {
       throw new Error('Binance Spot is not connected. Configure credentials in Live Broker settings.');
+    }
+
+    // Proactively sync server time if not synced recently
+    if (!this.lastTimeSync || Date.now() - this.lastTimeSync > 60000) {
+      await this.syncTime();
     }
 
     const binanceSymbol = this.formatSymbol(symbol);
@@ -228,9 +280,18 @@ export class BinanceConnector {
     params.append('type', 'MARKET');
 
     if (side.toUpperCase() === 'BUY' && quoteOrderQty) {
-      params.append('quoteOrderQty', quoteOrderQty.toString());
+      params.append('quoteOrderQty', Number(quoteOrderQty).toFixed(2));
     } else if (quantity) {
-      params.append('quantity', quantity.toString());
+      const filter = await this.getSymbolLotSize(binanceSymbol);
+      let formattedQty = Number(quantity);
+      if (filter && filter.stepSize) {
+        const precision = Math.max(0, Math.round(-Math.log10(filter.stepSize)));
+        const factor = Math.pow(10, precision);
+        formattedQty = (Math.floor(formattedQty * factor) / factor).toFixed(precision);
+      } else {
+        formattedQty = formattedQty.toFixed(4);
+      }
+      params.append('quantity', formattedQty.toString());
     }
 
     const signedQuery = this.signQuery(params.toString());
@@ -246,11 +307,16 @@ export class BinanceConnector {
     const data = await res.json();
 
     if (!res.ok) {
+      // Automatic recovery from timestamp drift (code -1021)
+      if (!isRetry && (data.code === -1021 || (data.msg && data.msg.toLowerCase().includes('ahead of the server')))) {
+        await this.syncTime();
+        return this.placeSpotMarketOrder({ symbol, side, quoteOrderQty, quantity }, true);
+      }
       throw new Error(data.msg || `Binance order rejected: ${res.statusText}`);
     }
 
     // Refresh balances after order
-    this.getBalances().catch(() => {});
+    await this.getBalances().catch(() => {});
 
     return {
       success: true,
