@@ -322,14 +322,26 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
 
               {/* Binance API Key */}
               <div>
-                <label className="block text-slate-300 font-bold mb-1.5 uppercase tracking-wider text-[10px]">
-                  Binance API Key
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-slate-300 font-bold uppercase tracking-wider text-[10px]">
+                    Binance {isTestnet ? 'Testnet' : 'Live'} API Key
+                  </label>
+                  {isTestnet && (
+                    <a
+                      href="https://testnet.binance.vision/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[10px] text-emerald-400 hover:underline flex items-center gap-1 font-sans font-medium"
+                    >
+                      <span>Get Free Testnet Keys ($10,000 Demo USDT)</span> &rarr;
+                    </a>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={binanceKey}
                   onChange={(e) => setBinanceKey(e.target.value)}
-                  placeholder="Enter Binance API Key..."
+                  placeholder={isTestnet ? "Paste Binance Testnet API Key from testnet.binance.vision..." : "Enter Binance API Key..."}
                   className="w-full px-3.5 py-2.5 bg-terminal-950 border border-terminal-border rounded-xl text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
                 />
               </div>
