@@ -124,7 +124,7 @@ export class BinanceConnector {
             success: false,
             latencyMs: Date.now() - startTime,
             isGeoBlocked: true,
-            error: 'Binance Global blocked this cloud server (HTTP 451: US Jurisdiction). Render\'s Oregon server is in the United States where Binance.com is restricted. Fix: (1) Re-deploy your Render app in region "Frankfurt (Europe)" or "Singapore" (both free on Render), OR (2) Run the bot locally on your laptop where Binance connects with zero restrictions.'
+            error: 'Binance Global returned HTTP 451 (US Jurisdiction Restriction). The Hostinger cloud server IP (217.196.54.11) is in a US datacenter where Binance restricts API traffic. To trade or test with $100 risk-free with zero restrictions, use the built-in Demo Spot Engine (click the Wallet/Balance button in the top header and set balance to $100).'
           };
         }
         throw new Error(`Binance ping failed with HTTP ${pingRes.status}`);
