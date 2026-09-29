@@ -941,9 +941,27 @@ agentLoop.setUserMode('test@gmail.com', 'LIVE');
 agentLoop.isAutoTradingEnabled = false; // Always start in PAUSED mode until user explicitly clicks Start
 agentLoop.start();
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`=======================================================`);
-  console.log(`🚀 Scalping Agent Backend running on port ${PORT}`);
-  console.log(`📡 Autonomous Scalp Loop active: 27 Global Markets | 500x Lev | 1:1.3 R:R`);
-  console.log(`=======================================================`);
-});
+const SOCKET_PATH = process.env.SOCKET_PATH;
+if (SOCKET_PATH) {
+  try {
+    if (fs.existsSync(SOCKET_PATH)) {
+      fs.unlinkSync(SOCKET_PATH);
+    }
+  } catch (_) {}
+  
+  app.listen(SOCKET_PATH, () => {
+    try { fs.chmodSync(SOCKET_PATH, '777'); } catch (_) {}
+    console.log(`=======================================================`);
+    console.log(`🚀 Scalping Agent Backend running on Unix Socket: ${SOCKET_PATH}`);
+    console.log(`📡 Autonomous Scalp Loop active: 27 Global Markets | 500x Lev | 1:1.3 R:R`);
+    console.log(`=======================================================`);
+  });
+} else {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`=======================================================`);
+    console.log(`🚀 Scalping Agent Backend running on port ${PORT}`);
+    console.log(`📡 Autonomous Scalp Loop active: 27 Global Markets | 500x Lev | 1:1.3 R:R`);
+    console.log(`=======================================================`);
+  });
+}
+
