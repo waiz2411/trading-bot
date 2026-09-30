@@ -150,7 +150,7 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
         longScore += 14;
         longReasons.push(`RSI Runway (${rsi.toFixed(1)}): Ideal bullish expansion zone`);
       } else if (rsi > 70) {
-        longScore -= 30; // Overbought penalty
+        longScore -= 50; // Overbought penalty
       }
     }
     if (shortScore > 0) {
@@ -158,7 +158,7 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
         shortScore += 14;
         shortReasons.push(`RSI Runway (${rsi.toFixed(1)}): Ideal bearish expansion zone`);
       } else if (rsi < 30) {
-        shortScore -= 30; // Oversold penalty
+        shortScore -= 50; // Oversold penalty
       }
     }
   }
@@ -172,7 +172,7 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
         longScore += 10;
         longReasons.push('MACD: Positive bullish momentum acceleration');
       } else {
-        longScore -= 20; // Histogram mismatch penalty
+        longScore -= 40; // Histogram mismatch penalty
       }
     }
     if (shortScore > 0) {
@@ -180,7 +180,7 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
         shortScore += 10;
         shortReasons.push('MACD: Negative bearish momentum acceleration');
       } else {
-        shortScore -= 20; // Histogram mismatch penalty
+        shortScore -= 40; // Histogram mismatch penalty
       }
     }
   }

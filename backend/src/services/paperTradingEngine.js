@@ -285,7 +285,7 @@ export class PaperTradingEngine {
       confidence,
       reason,
       riskRewardRatio: riskRewardRatio || 1.3,
-      maxHoldMinutes: orderData.maxHoldMinutes || 5,
+      maxHoldMinutes: orderData.maxHoldMinutes || 60,
       openTime: new Date().toISOString(),
       cycleCount: 0,
       feeRate,
@@ -444,14 +444,14 @@ export class PaperTradingEngine {
         if (pos.side === 'SHORT') {
           const runDown = pos.entryPrice - pos.lowestPrice;
 
-          // Fee-Compensated Break-Even: Price moved 35% of target distance -> Lock in True Break-Even (Covering fees)!
-          if (!pos.breakEvenLocked && (runDown >= pos.targetDistance * 0.35 || runDown >= pos.entryPrice * 0.0040)) {
+          // Fee-Compensated Break-Even: Price moved 70% of target distance -> Lock in True Break-Even (Covering fees)!
+          if (!pos.breakEvenLocked && (runDown >= pos.targetDistance * 0.70 || runDown >= pos.entryPrice * 0.0080)) {
             pos.stopLoss = Number((pos.entryPrice - Math.max(roundTripFeeBuffer, pos.stopDistance * 0.12)).toFixed(dec));
             pos.breakEvenLocked = true;
           }
 
-          // Dynamic Scalp Trailing Stop: Price reached 55% of target distance -> Trail closely behind lowest price!
-          if (runDown >= pos.targetDistance * 0.55) {
+          // Dynamic Scalp Trailing Stop: Price reached 75% of target distance -> Trail closely behind lowest price!
+          if (runDown >= pos.targetDistance * 0.75) {
             const newTrailStop = Number((pos.lowestPrice + pos.stopDistance * 0.22).toFixed(dec));
             if (newTrailStop < pos.stopLoss) {
               pos.stopLoss = newTrailStop;
@@ -461,14 +461,14 @@ export class PaperTradingEngine {
         } else if (pos.side === 'LONG') {
           const runUp = pos.highestPrice - pos.entryPrice;
 
-          // Fee-Compensated Break-Even: Price gained 35% of target distance or +0.40% -> Lock in True Break-Even (Covering fees)!
-          if (!pos.breakEvenLocked && (runUp >= pos.targetDistance * 0.35 || runUp >= pos.entryPrice * 0.0040)) {
+          // Fee-Compensated Break-Even: Price gained 70% of target distance or +0.80% -> Lock in True Break-Even (Covering fees)!
+          if (!pos.breakEvenLocked && (runUp >= pos.targetDistance * 0.70 || runUp >= pos.entryPrice * 0.0080)) {
             pos.stopLoss = Number((pos.entryPrice + Math.max(roundTripFeeBuffer, pos.stopDistance * 0.12)).toFixed(dec));
             pos.breakEvenLocked = true;
           }
 
-          // Dynamic Scalp Trailing Stop: Price reached 55% of target distance -> Trail closely behind highest price!
-          if (runUp >= pos.targetDistance * 0.55) {
+          // Dynamic Scalp Trailing Stop: Price reached 75% of target distance -> Trail closely behind highest price!
+          if (runUp >= pos.targetDistance * 0.75) {
             const newTrailStop = Number((pos.highestPrice - pos.stopDistance * 0.22).toFixed(dec));
             if (newTrailStop > pos.stopLoss) {
               pos.stopLoss = newTrailStop;

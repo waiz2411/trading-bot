@@ -25,7 +25,8 @@ export class AutonomousAgentLoop {
       tradeDirection: 'BOTH',
       tradingStyle: 'SCALPING',
       defaultLeverage: 500,
-      targetRiskRewardRatio: 1.6
+      targetRiskRewardRatio: 1.6,
+      maxHoldMinutes: 60
     });
     this.marginTradingEngine = new PaperTradingEngine(100, 'MARGIN');
 
@@ -620,7 +621,7 @@ export class AutonomousAgentLoop {
                 reason: signal.reason,
                 riskRewardRatio: signal.riskRewardRatio,
                 tradingStyle: marginRiskSettings.tradingStyle,
-                maxHoldMinutes: marginRiskSettings.maxHoldMinutes || this.marginRiskManager.maxHoldMinutes || 5,
+                maxHoldMinutes: marginRiskSettings.maxHoldMinutes || this.marginRiskManager.maxHoldMinutes || 60,
                 leverage: riskEval.leverage,
                 margin: riskEval.margin,
                 liquidationPrice: riskEval.liquidationPrice
@@ -809,16 +810,16 @@ export class AutonomousAgentLoop {
             const notional = Number((priceEst * posVolume).toFixed(2));
             microTargetProfit = Number(Math.max(0.60, notional * 0.0045).toFixed(2)); // +0.45% profit
             microMaxLoss = Number(Math.max(0.40, notional * 0.0030).toFixed(2));      // -0.30% loss
-            beThreshold = Number((microTargetProfit * 0.35).toFixed(2));              // +35% of target hit triggers break-even shield
+            beThreshold = Number((microTargetProfit * 0.70).toFixed(2));              // +70% of target hit triggers break-even shield
             beLockFloor = Number(Math.max(0.10, notional * 0.0010).toFixed(2));       // Lock in +0.10% min profit
-            momentumBankThreshold = Number((microTargetProfit * 0.55).toFixed(2));    // Bank if 55% of target reached after 2m
+            momentumBankThreshold = Number((microTargetProfit * 0.85).toFixed(2));    // Bank if 85% of target reached after 2m
           } else {
             // M5 Forex Scalp Geometry (15 pips TP vs 10 pips SL):
             microTargetProfit = Number((posVolume * 150).toFixed(2)); // +15 pips target ($1.50 on 0.01, $4.50 on 0.03)
             microMaxLoss = Number((posVolume * 100).toFixed(2));      // -10 pips maximum loss ($1.00 on 0.01, $3.00 on 0.03)
-            beThreshold = Number((posVolume * 60).toFixed(2));        // +6 pips peak trigger
+            beThreshold = Number((posVolume * 105).toFixed(2));        // +10.5 pips peak trigger
             beLockFloor = Number((posVolume * 20).toFixed(2));        // +2 pips minimum guaranteed lock
-            momentumBankThreshold = Number((posVolume * 90).toFixed(2)); // +9 pips fast momentum bank after 2m
+            momentumBankThreshold = Number((posVolume * 125).toFixed(2)); // +12.5 pips fast momentum bank after 2m
           }
 
           if (!this.livePositionFirstSeen.has(ticket)) {
@@ -841,7 +842,7 @@ export class AutonomousAgentLoop {
           let exitMessage = null;
           let logLevel = 'INFO';
 
-          const maxHoldMinutes = this.marginRiskManager.maxHoldMinutes || 5;
+          const maxHoldMinutes = this.marginRiskManager.maxHoldMinutes || 60;
           const maxHoldMs = maxHoldMinutes * 60 * 1000;
           const momentumAgeMs = Math.min(150000, Math.floor(maxHoldMs * 0.5));
 
