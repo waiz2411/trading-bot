@@ -17,6 +17,8 @@ export class AutonomousAgentLoop {
     this.currentUser = 'demo@gmail.com';
     this.currentMode = 'SIMULATED'; // 'SIMULATED' | 'LIVE'
 
+    this.engines = {};
+
     // Account 1: Margin Scalper (500x leverage, up to 20 active scalp slots, 1.5% capital risk, 1:1.6 R:R)
     this.marginRiskManager = new RiskManager({
       riskPerTradePct: 1.5,
@@ -28,18 +30,14 @@ export class AutonomousAgentLoop {
       targetRiskRewardRatio: 1.6,
       maxHoldMinutes: 60
     });
-    this.marginTradingEngine = new PaperTradingEngine(100, 'MARGIN');
 
-    // Account 2: Pure Spot Crypto (100% Shariah Halal, 100% All-in, 60m Cap, +2.8% TP, -1.6% SL, 95% Confluence)
-    // LIVE EXCHANGE CALIBRATION: Binance market orders cost ~0.35% in fees+spread on entry alone.
-    // A -0.7% SL leaves only 0.35% of breathing room = guaranteed stop-out on noise.
-    // -1.6% SL gives 1.25% of real room after friction, +2.8% TP delivers +2.45% net (1:1.53 R:R after fees).
+    // Account 2: Pure Spot Crypto
     this.spotRiskManager = {
       maxSlots: 1, // 1 Portion (100%) (All-in)
       allocationPct: 100, // 100% of balance per trade
       maxTradesPerPair: 1,
-      stopLossPct: 1.6, // -1.6% Stop Loss (Live Exchange Calibrated — gives 1.25% real room after fees+spread)
-      takeProfitPct: 2.8, // +2.8% Take Profit Gross (Net +$2.45 / $100 after 0.075% BNB fee)
+      stopLossPct: 1.6, // -1.6% Stop Loss
+      takeProfitPct: 2.8, // +2.8% Take Profit Gross
       maxHoldMinutes: 60, // 60 Mins 1-Hour Holding Cap
       minConfidenceThreshold: 95, // 95% High-Confluence Threshold
       allowHighVolatility: true, // ⚡ High-Volatility Halal Hunter
@@ -48,7 +46,6 @@ export class AutonomousAgentLoop {
       feeRate: 0.00075,
       isHalalStrict: true // 100% Shariah Compliant
     };
-    this.spotTradingEngine = new PaperTradingEngine(10, 'SPOT');
 
     this.isAutoTradingEnabled = false; // Bot is PAUSED by default
     this.isScanning = false;
@@ -70,6 +67,25 @@ export class AutonomousAgentLoop {
 
     this.loadPersistedSpotTrades();
     this.log('⚡ Autonomous Agent initialized: Dual-Account Engine (Margin Scalper 500x + Pure Spot 100% Crypto). Bot is OFF by default.');
+  }
+
+  getEngine(account, email) {
+    const userKey = email || 'default';
+    if (!this.engines[userKey]) {
+      this.engines[userKey] = {
+        MARGIN: new PaperTradingEngine(100, 'MARGIN', userKey),
+        SPOT: new PaperTradingEngine(10, 'SPOT', userKey)
+      };
+    }
+    return this.engines[userKey][account];
+  }
+
+  get marginTradingEngine() {
+    return this.getEngine('MARGIN', this.currentUser);
+  }
+
+  get spotTradingEngine() {
+    return this.getEngine('SPOT', this.currentUser);
   }
 
   loadPersistedSpotTrades() {

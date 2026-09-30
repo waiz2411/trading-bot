@@ -14,8 +14,9 @@ import { getAssetPrecision } from '../config/assets.js';
  */
 
 export class PaperTradingEngine {
-  constructor(initialBalance = 10000, accountType = 'MARGIN') {
+  constructor(initialBalance = 10000, accountType = 'MARGIN', userEmail = 'default') {
     this.accountType = accountType; // 'MARGIN' | 'SPOT'
+    this.userEmail = String(userEmail).replace(/[^a-zA-Z0-9]/g, '_');
     this.initialBalance = initialBalance;
     this.balance = initialBalance;
     this.activePositions = [];
@@ -34,7 +35,9 @@ export class PaperTradingEngine {
 
   loadPersistedState() {
     try {
-      const fileName = `persisted_engine_${this.accountType.toLowerCase()}.json`;
+      const fileName = `persisted_engine_${this.accountType.toLowerCase()}_${this.userEmail}.json`;
+      const dirPath = path.resolve('backend/src/data');
+      if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
       const filePath = path.resolve('backend/src/data', fileName);
       if (fs.existsSync(filePath)) {
         const raw = fs.readFileSync(filePath, 'utf8');
@@ -59,7 +62,7 @@ export class PaperTradingEngine {
     try {
       const dirPath = path.resolve('backend/src/data');
       if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
-      const fileName = `persisted_engine_${this.accountType.toLowerCase()}.json`;
+      const fileName = `persisted_engine_${this.accountType.toLowerCase()}_${this.userEmail}.json`;
       const filePath = path.join(dirPath, fileName);
       const state = {
         accountType: this.accountType,
