@@ -30,7 +30,7 @@ export default function TradeHistory({ closedTrades = [] }) {
         return (
           <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[10px] font-mono font-semibold flex items-center gap-1">
             <Timer className="w-3 h-3 text-cyan-400" />
-            5m Scalp Expiry
+            Time Limit Expiry
           </span>
         );
       case 'TRAILING_STOP_TRIGGER':

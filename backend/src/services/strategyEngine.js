@@ -38,26 +38,26 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
   // 1. MANDATORY MOVING AVERAGE FAN ALIGNMENT (Strict Anti-Chop / True Trend Engine)
   // Absolute Rule: STRICT STRUCTURAL TREND ALIGNMENT ONLY.
   // ==========================================
-  // Full Bullish Fan: Current Price > EMA 9 > EMA 21 > EMA 50
+  // Full Bullish Pullback: Trend is UP (EMA21 > EMA50) but price pulled back (Price <= EMA9) and held support (Price >= EMA50)
   const isBullishFan = ema9 && ema21 && ema50 && 
-                       (currentPrice >= ema9) && 
-                       (ema9 >= ema21) && 
-                       (ema21 >= ema50);
-
-  // Full Bearish Fan: Current Price < EMA 9 < EMA 21 < EMA 50
-  const isBearishFan = ema9 && ema21 && ema50 && 
+                       (ema21 >= ema50) && 
                        (currentPrice <= ema9) && 
-                       (ema9 <= ema21) && 
-                       (ema21 <= ema50);
+                       (currentPrice >= ema50);
+
+  // Full Bearish Pullback: Trend is DOWN (EMA21 < EMA50) but price pulled back (Price >= EMA9) and held resistance (Price <= EMA50)
+  const isBearishFan = ema9 && ema21 && ema50 && 
+                       (ema21 <= ema50) && 
+                       (currentPrice >= ema9) && 
+                       (currentPrice <= ema50);
 
   if (isBullishFan) {
     longScore += 32;
-    longReasons.push('Moving Average Fan: Price > EMA 9 > EMA 21 > EMA 50 bullish expansion');
+    longReasons.push('Trend Pullback: Price pulled back to EMA 21/50 support in an uptrend');
   }
 
   if (isBearishFan) {
     shortScore += 32;
-    shortReasons.push('Moving Average Fan: Price < EMA 9 < EMA 21 < EMA 50 bearish expansion');
+    shortReasons.push('Trend Pullback: Price pulled back to EMA 21/50 resistance in a downtrend');
   }
 
   // If there is NO active trend fan, abort early (Anti-Chop protection)
@@ -124,19 +124,19 @@ export function evaluateStrategyConfluence(asset, technicals, options = {}) {
     const isGreen = lastCandle.close >= lastCandle.open;
 
     if (longScore > 0) {
-      if (lowerWick / range >= 0.18 || isGreen || lastCandle.close >= prevCandle.close) {
+      if (isGreen && lastCandle.close > prevCandle.close) {
         longScore += 18;
-        longReasons.push('Bullish Pressure: Lower wick absorption / green momentum confirmed');
+        longReasons.push('Bullish Pressure: Green reversal candle confirmed');
       } else {
-        longScore -= 15;
+        longScore -= 30; // Strong penalty for entering on red candles or lower closes
       }
     }
     if (shortScore > 0) {
-      if (upperWick / range >= 0.18 || !isGreen || lastCandle.close <= prevCandle.close) {
+      if (!isGreen && lastCandle.close < prevCandle.close) {
         shortScore += 18;
-        shortReasons.push('Bearish Pressure: Upper wick rejection / red momentum confirmed');
+        shortReasons.push('Bearish Pressure: Red reversal candle confirmed');
       } else {
-        shortScore -= 15;
+        shortScore -= 30; // Strong penalty for entering on green candles or higher closes
       }
     }
   }
@@ -440,9 +440,9 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
   // Without this, we're buying into chop or a downtrend = guaranteed loss.
   // ==========================================
   const hasFullFan = ema9 && ema21 && ema50 &&
-                     (currentPrice >= ema9) &&
-                     (ema9 >= ema21) &&
-                     (ema21 >= ema50);
+                     (ema21 >= ema50) &&
+                     (currentPrice <= ema9) &&
+                     (currentPrice >= ema50);
 
   if (!hasFullFan) {
     return {
@@ -456,8 +456,8 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
       maxHoldMinutes,
       tradingStyle: 'SPOT_BUY',
       tradeDirection: 'LONG_ONLY',
-      reason: 'Anti-Chop Gate: EMA Fan not aligned (need Price >= EMA9 >= EMA21 >= EMA50).',
-      factors: ['Waiting for clean bullish trend alignment']
+      reason: 'Anti-Chop Gate: Waiting for a clean pullback to EMA 21/50 support.',
+      factors: ['Waiting for clean bullish pullback']
     };
   }
 
@@ -490,7 +490,7 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
 
   // 1. EMA Fan already confirmed — award core trend points
   score += 25;
-  factors.push('Clean Bullish EMA Fan: Price >= EMA9 >= EMA21 >= EMA50');
+  factors.push('Trend Pullback: Price at EMA support in an uptrend');
 
   // Macro trend bonus (Golden Cross: EMA50 > EMA200)
   if (ema200 && ema50 > ema200 && currentPrice >= ema200) {
