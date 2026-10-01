@@ -419,20 +419,11 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
   const currentPrice = asset.price || technicals.currentPrice;
   const { ema9, ema21, ema50, ema200, rsi, macd, bollingerBands: bb } = technicals;
 
-  // Fee-Compensated Spot Target Geometry (Live Exchange Calibrated):
-  // Binance Fee: 0.075% buy + 0.075% sell = 0.15% round-trip with BNB discount.
-  // Bid-Ask spread on volatile alts: ~0.15-0.25%.
-  // Total instant friction: ~0.30-0.45%.
-  // SL must be wide enough that friction + noise does NOT trigger stop.
-  const baseStopLossPct = Math.max(0.8, Number(spotRiskSettings.stopLossPct) || 1.6);
-  const baseTakeProfitPct = Math.max(1.5, Number(spotRiskSettings.takeProfitPct) || 2.8);
-  const minThreshold = Number(spotRiskSettings.minConfidenceThreshold) || 95;
-  const maxHoldMinutes = Number(spotRiskSettings.maxHoldMinutes) || 60;
-
-  // Volatility-adapted geometry
-  const volFactor = isVolatileCoin ? Math.min(1.4, Math.max(1.1, (asset.minVolatility || 1.2))) : 1.0;
-  const stopLossPct = Number((baseStopLossPct * (isVolatileCoin ? 1.05 : 1.0)).toFixed(2));
-  const takeProfitPct = Number((baseTakeProfitPct * volFactor).toFixed(2));
+  // Allow true micro-scalping by dropping the artificial minimums.
+  const stopLossPct = Math.max(0.3, Number(spotRiskSettings.stopLossPct) || 1.2);
+  const takeProfitPct = Math.max(0.4, Number(spotRiskSettings.takeProfitPct) || 0.8);
+  const minThreshold = Number(spotRiskSettings.minConfidenceThreshold) || 90;
+  const maxHoldMinutes = Number(spotRiskSettings.maxHoldMinutes) || 15;
 
   // ==========================================
   // MANDATORY GATE 1: EMA FAN ALIGNMENT
