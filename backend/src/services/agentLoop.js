@@ -18,34 +18,7 @@ export class AutonomousAgentLoop {
     this.currentMode = 'SIMULATED'; // 'SIMULATED' | 'LIVE'
 
     this.engines = {};
-
-    // Account 1: Margin Scalper (500x leverage, up to 20 active scalp slots, 1.5% capital risk, 1:1.6 R:R)
-    this.marginRiskManager = new RiskManager({
-      riskPerTradePct: 1.5,
-      maxConcurrentTrades: 20, // Full 20-slot multi-scalp capacity
-      minConfidenceThreshold: 70, // Lowered to 70 to allow more highly-probable snipes
-      tradeDirection: 'BOTH',
-      tradingStyle: 'SCALPING',
-      defaultLeverage: 500,
-      targetRiskRewardRatio: 1.6,
-      maxHoldMinutes: 120 // 2 Hours for Margin
-    });
-
-    // Account 2: Pure Spot Crypto
-    this.spotRiskManager = {
-      maxSlots: 4, // 4 Portions (25%)
-      allocationPct: 25,
-      maxTradesPerPair: 1,
-      stopLossPct: 2.5, // -2.5% Stop Loss (More breathing room for crypto)
-      takeProfitPct: 5.0, // +5.0% Take Profit (1:2 R:R)
-      maxHoldMinutes: 240, // 4-Hour Holding Cap for swing pullbacks
-      minConfidenceThreshold: 90, // Lowered to 90 to allow more trades now that Falling Knife gate is active
-      allowHighVolatility: true, // ⚡ High-Volatility Halal Hunter
-      volatilityMode: 'HIGH_VOLATILITY_HALAL',
-      useBnbFeeDiscount: true, // ⭐ BNB Fee Discount (25% Off -> 0.075%)
-      feeRate: 0.00075,
-      isHalalStrict: true // 100% Shariah Compliant
-    };
+    this.configs = {};
 
     this.isAutoTradingEnabled = false; // Bot is PAUSED by default
     this.isScanning = false;
@@ -67,6 +40,47 @@ export class AutonomousAgentLoop {
 
     this.loadPersistedSpotTrades();
     this.log('⚡ Autonomous Agent initialized: Dual-Account Engine (Margin Scalper 500x + Pure Spot 100% Crypto). Bot is OFF by default.');
+  }
+
+  getConfig(email) {
+    const userKey = email || 'default';
+    if (!this.configs[userKey]) {
+      this.configs[userKey] = {
+        marginRiskManager: new RiskManager({
+          riskPerTradePct: 1.5,
+          maxConcurrentTrades: 20,
+          minConfidenceThreshold: 70,
+          tradeDirection: 'BOTH',
+          tradingStyle: 'SCALPING',
+          defaultLeverage: 500,
+          targetRiskRewardRatio: 1.6,
+          maxHoldMinutes: 120
+        }),
+        spotRiskManager: {
+          maxSlots: 4,
+          allocationPct: 25,
+          maxTradesPerPair: 1,
+          stopLossPct: 2.5,
+          takeProfitPct: 5.0,
+          maxHoldMinutes: 240,
+          minConfidenceThreshold: 90,
+          allowHighVolatility: true,
+          volatilityMode: 'HIGH_VOLATILITY_HALAL',
+          useBnbFeeDiscount: true,
+          feeRate: 0.00075,
+          isHalalStrict: true
+        }
+      };
+    }
+    return this.configs[userKey];
+  }
+
+  get marginRiskManager() {
+    return this.getConfig(this.currentUser).marginRiskManager;
+  }
+
+  get spotRiskManager() {
+    return this.getConfig(this.currentUser).spotRiskManager;
   }
 
   getEngine(account, email) {
@@ -269,46 +283,56 @@ export class AutonomousAgentLoop {
     return state;
   }
 
-  updateSpotSettings(newSettings = {}) {
+  updateMarginSettings(newSettings = {}, userEmail = null) {
+    const config = this.getConfig(userEmail || this.currentUser);
+    config.marginRiskManager.updateSettings(newSettings);
+    this.log(`Margin settings updated: ${JSON.stringify(newSettings)}`, 'INFO');
+    return config.marginRiskManager.getSettings();
+  }
+
+  updateSpotSettings(newSettings = {}, userEmail = null) {
+    const config = this.getConfig(userEmail || this.currentUser);
+    const spotRiskManager = config.spotRiskManager;
+
     if (newSettings.stopLossPct !== undefined) {
-      this.spotRiskManager.stopLossPct = Math.max(0.3, Math.min(10, Number(newSettings.stopLossPct)));
+      spotRiskManager.stopLossPct = Math.max(0.3, Math.min(10, Number(newSettings.stopLossPct)));
     }
     if (newSettings.takeProfitPct !== undefined) {
-      this.spotRiskManager.takeProfitPct = Math.max(0.5, Math.min(25, Number(newSettings.takeProfitPct)));
+      spotRiskManager.takeProfitPct = Math.max(0.5, Math.min(25, Number(newSettings.takeProfitPct)));
     }
     if (newSettings.maxHoldMinutes !== undefined) {
-      this.spotRiskManager.maxHoldMinutes = Math.max(1, Math.min(60, parseInt(newSettings.maxHoldMinutes, 10)));
+      spotRiskManager.maxHoldMinutes = Math.max(1, Math.min(1440, parseInt(newSettings.maxHoldMinutes, 10)));
     }
     if (newSettings.minConfidenceThreshold !== undefined) {
-      this.spotRiskManager.minConfidenceThreshold = Math.max(70, Math.min(95, Number(newSettings.minConfidenceThreshold)));
+      spotRiskManager.minConfidenceThreshold = Math.max(70, Math.min(95, Number(newSettings.minConfidenceThreshold)));
     }
     if (newSettings.maxSlots !== undefined) {
       const slots = Math.max(1, Math.min(8, parseInt(newSettings.maxSlots, 10)));
-      this.spotRiskManager.maxSlots = slots;
-      this.spotRiskManager.allocationPct = Number((100 / slots).toFixed(1));
+      spotRiskManager.maxSlots = slots;
+      spotRiskManager.allocationPct = Number((100 / slots).toFixed(1));
     }
     if (newSettings.maxTradesPerPair !== undefined) {
-      this.spotRiskManager.maxTradesPerPair = Math.max(1, Math.min(4, parseInt(newSettings.maxTradesPerPair, 10)));
+      spotRiskManager.maxTradesPerPair = Math.max(1, Math.min(4, parseInt(newSettings.maxTradesPerPair, 10)));
     }
     if (newSettings.allowHighVolatility !== undefined) {
-      this.spotRiskManager.allowHighVolatility = Boolean(newSettings.allowHighVolatility);
+      spotRiskManager.allowHighVolatility = Boolean(newSettings.allowHighVolatility);
     }
     if (newSettings.volatilityMode !== undefined) {
-      this.spotRiskManager.volatilityMode = newSettings.volatilityMode;
+      spotRiskManager.volatilityMode = newSettings.volatilityMode;
       if (newSettings.volatilityMode === 'ESTABLISHED_HALAL') {
-        this.spotRiskManager.allowHighVolatility = false;
+        spotRiskManager.allowHighVolatility = false;
       } else if (newSettings.volatilityMode === 'HIGH_VOLATILITY_HALAL') {
-        this.spotRiskManager.allowHighVolatility = true;
+        spotRiskManager.allowHighVolatility = true;
       }
     }
     if (newSettings.useBnbFeeDiscount !== undefined) {
-      this.spotRiskManager.useBnbFeeDiscount = Boolean(newSettings.useBnbFeeDiscount);
-      this.spotRiskManager.feeRate = this.spotRiskManager.useBnbFeeDiscount ? 0.00075 : 0.0010;
+      spotRiskManager.useBnbFeeDiscount = Boolean(newSettings.useBnbFeeDiscount);
+      spotRiskManager.feeRate = spotRiskManager.useBnbFeeDiscount ? 0.00075 : 0.0010;
     }
-    const volLabel = this.spotRiskManager.allowHighVolatility ? '⚡ High-Volatility Halal Hunter' : '🛡️ Standard Halal Majors';
-    const feeLabel = this.spotRiskManager.useBnbFeeDiscount ? '0.075% BNB Discount' : '0.10% Standard';
-    this.log(`⚙️ Spot Strategy updated: [${volLabel} | ${feeLabel}] ${this.spotRiskManager.maxSlots} Portions (${this.spotRiskManager.allocationPct}% each, max ${this.spotRiskManager.maxTradesPerPair}/coin, max ${this.spotRiskManager.maxHoldMinutes || 5}m hold), SL: -${this.spotRiskManager.stopLossPct}%, TP: +${this.spotRiskManager.takeProfitPct}% (🕌 100% Shariah Compliant)`, 'INFO');
-    return this.spotRiskManager;
+    const volLabel = spotRiskManager.allowHighVolatility ? '⚡ High-Volatility Halal Hunter' : '🛡️ Standard Halal Majors';
+    const feeLabel = spotRiskManager.useBnbFeeDiscount ? '0.075% BNB Discount' : '0.10% Standard';
+    this.log(`⚙️ Spot Strategy updated: [${volLabel} | ${feeLabel}] ${spotRiskManager.maxSlots} Portions (${spotRiskManager.allocationPct}% each, max ${spotRiskManager.maxTradesPerPair}/coin, max ${spotRiskManager.maxHoldMinutes || 5}m hold), SL: -${spotRiskManager.stopLossPct}%, TP: +${spotRiskManager.takeProfitPct}% (🕌 100% Shariah Compliant)`, 'INFO');
+    return spotRiskManager;
   }
 
   setTradeDirection(direction) {

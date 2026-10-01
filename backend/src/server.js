@@ -489,10 +489,9 @@ app.post('/api/agent/settings', (req, res) => {
     const targetAccount = (account || agentLoop.activeAccount).toUpperCase();
 
     if (targetAccount === 'SPOT') {
-      agentLoop.updateSpotSettings({ stopLossPct, takeProfitPct, ...otherSettings });
+      agentLoop.updateSpotSettings({ stopLossPct, takeProfitPct, ...otherSettings }, userEmail);
     } else {
-      agentLoop.marginRiskManager.updateSettings(otherSettings);
-      agentLoop.log(`Margin settings updated: ${JSON.stringify(otherSettings)}`, 'INFO');
+      agentLoop.updateMarginSettings(otherSettings, userEmail);
     }
 
     // Always pause bot on configuration change so user can review before launching

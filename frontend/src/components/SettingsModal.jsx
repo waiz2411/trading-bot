@@ -48,13 +48,13 @@ export default function SettingsModal({
   ];
 
   const holdTimePresets = [
-    { label: '3 Mins', value: 3, tag: 'Hyper Scalp' },
-    { label: '5 Mins ⭐', value: 5, tag: 'Optimal Cap' },
-    { label: '8 Mins', value: 8, tag: 'Balanced' },
-    { label: '10 Mins', value: 10, tag: 'Extended' },
+    { label: '5 Mins', value: 5, tag: 'Hyper Scalp' },
     { label: '15 Mins', value: 15, tag: 'Mid Scalp' },
-    { label: '30 Mins', value: 30, tag: 'Swing Scalp' },
-    { label: '60 Mins 🚀', value: 60, tag: '1-Hour Cap' }
+    { label: '60 Mins', value: 60, tag: '1-Hour Cap' },
+    { label: '120 Mins', value: 120, tag: '2-Hour Cap' },
+    { label: '240 Mins', value: 240, tag: '4-Hour Cap' },
+    { label: '720 Mins', value: 720, tag: 'Half-Day' },
+    { label: '1440 Mins', value: 1440, tag: '1-Day Cap' }
   ];
 
   const spotPortionPresets = [
