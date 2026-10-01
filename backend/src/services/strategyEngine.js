@@ -483,6 +483,31 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
   }
 
   // ==========================================
+  // MANDATORY GATE 3: NO FALLING KNIVES (Must have Green Reversal Candle)
+  // ==========================================
+  if (asset.candles && asset.candles.length >= 2) {
+    const lastCandle = asset.candles[asset.candles.length - 1];
+    const prevCandle = asset.candles[asset.candles.length - 2];
+    const isGreen = lastCandle.close >= lastCandle.open;
+    if (!isGreen || lastCandle.close <= prevCandle.close) {
+      return {
+        action: 'NEUTRAL',
+        side: null,
+        confidence: 40,
+        entryPrice: currentPrice,
+        stopLoss: null,
+        takeProfit: null,
+        riskRewardRatio: null,
+        maxHoldMinutes,
+        tradingStyle: 'SPOT_BUY',
+        tradeDirection: 'LONG_ONLY',
+        reason: 'Falling Knife Gate: Waiting for a confirmed Green reversal candle.',
+        factors: ['Candlestick is red or closing lower than previous candle']
+      };
+    }
+  }
+
+  // ==========================================
   // SCORING ENGINE — Conservative baseline (20) requires genuine multi-factor confirmation
   // ==========================================
   let score = 20;

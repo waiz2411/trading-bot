@@ -23,23 +23,23 @@ export class AutonomousAgentLoop {
     this.marginRiskManager = new RiskManager({
       riskPerTradePct: 1.5,
       maxConcurrentTrades: 20, // Full 20-slot multi-scalp capacity
-      minConfidenceThreshold: 75, // High-frequency sniper scalps (75%+)
+      minConfidenceThreshold: 70, // Lowered to 70 to allow more highly-probable snipes
       tradeDirection: 'BOTH',
       tradingStyle: 'SCALPING',
       defaultLeverage: 500,
       targetRiskRewardRatio: 1.6,
-      maxHoldMinutes: 60
+      maxHoldMinutes: 120 // 2 Hours for Margin
     });
 
     // Account 2: Pure Spot Crypto
     this.spotRiskManager = {
-      maxSlots: 1, // 1 Portion (100%) (All-in)
-      allocationPct: 100, // 100% of balance per trade
+      maxSlots: 4, // 4 Portions (25%)
+      allocationPct: 25,
       maxTradesPerPair: 1,
-      stopLossPct: 1.6, // -1.6% Stop Loss
-      takeProfitPct: 2.8, // +2.8% Take Profit Gross
-      maxHoldMinutes: 60, // 60 Mins 1-Hour Holding Cap
-      minConfidenceThreshold: 95, // 95% High-Confluence Threshold
+      stopLossPct: 2.5, // -2.5% Stop Loss (More breathing room for crypto)
+      takeProfitPct: 5.0, // +5.0% Take Profit (1:2 R:R)
+      maxHoldMinutes: 240, // 4-Hour Holding Cap for swing pullbacks
+      minConfidenceThreshold: 90, // Lowered to 90 to allow more trades now that Falling Knife gate is active
       allowHighVolatility: true, // ⚡ High-Volatility Halal Hunter
       volatilityMode: 'HIGH_VOLATILITY_HALAL',
       useBnbFeeDiscount: true, // ⭐ BNB Fee Discount (25% Off -> 0.075%)
