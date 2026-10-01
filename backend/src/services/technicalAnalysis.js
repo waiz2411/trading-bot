@@ -163,6 +163,10 @@ export function calculateTechnicalMetrics(candles) {
   const ema50 = ema50Series[ema50Series.length - 1];
   const ema200 = ema200Series[ema200Series.length - 1];
 
+  const volSma20Series = calculateSMA(volumes, 20);
+  const volSma20 = volSma20Series[volSma20Series.length - 1];
+  const currentVolume = volumes[volumes.length - 1];
+
   const rsi = calculateRSI(closes, 14);
   const macd = calculateMACD(closes, 12, 26, 9);
   const atr = calculateATR(highs, lows, closes, 14) || (currentPrice * 0.015);
@@ -176,6 +180,8 @@ export function calculateTechnicalMetrics(candles) {
 
   return {
     currentPrice,
+    currentVolume: Number(currentVolume) || 0,
+    volSma20: volSma20 !== null && volSma20 !== undefined ? Number(volSma20) : 0,
     ema9: ema9 !== null && ema9 !== undefined ? Number(ema9) : currentPrice,
     ema21: ema21 !== null && ema21 !== undefined ? Number(ema21) : currentPrice,
     ema50: ema50 !== null && ema50 !== undefined ? Number(ema50) : null,

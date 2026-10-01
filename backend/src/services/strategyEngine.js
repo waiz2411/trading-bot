@@ -417,199 +417,64 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
   }
 
   const currentPrice = asset.price || technicals.currentPrice;
-  const { ema9, ema21, ema50, ema200, rsi, macd, bollingerBands: bb } = technicals;
+  const currentVolume = technicals.currentVolume || 0;
+  const volSma20 = technicals.volSma20 || 0;
+  const { ema50, bb } = technicals;
 
-  // Allow true micro-scalping by dropping the artificial minimums.
-  const stopLossPct = Math.max(0.3, Number(spotRiskSettings.stopLossPct) || 1.2);
-  const takeProfitPct = Math.max(0.4, Number(spotRiskSettings.takeProfitPct) || 0.8);
-  const minThreshold = Number(spotRiskSettings.minConfidenceThreshold) || 90;
+  const stopLossPct = Math.max(0.3, Number(spotRiskSettings.stopLossPct) || 1.0);
+  const takeProfitPct = Math.max(0.4, Number(spotRiskSettings.takeProfitPct) || 1.5);
+  const minThreshold = Number(spotRiskSettings.minConfidenceThreshold) || 85;
   const maxHoldMinutes = Number(spotRiskSettings.maxHoldMinutes) || 15;
 
   // ==========================================
-  // MANDATORY GATE 1: EMA FAN ALIGNMENT
-  // Price >= EMA9 >= EMA21 >= EMA50 = clean uptrend
-  // Without this, we're buying into chop or a downtrend = guaranteed loss.
+  // MOMENTUM BREAKOUT SCALPER LOGIC
   // ==========================================
-  const hasFullFan = ema9 && ema21 && ema50 &&
-                     (ema21 >= ema50) &&
-                     (currentPrice <= ema9) &&
-                     (currentPrice >= ema50);
+  let score = 0;
+  const factors = [];
 
-  if (!hasFullFan) {
+  // Gate 1: Trend Alignment (Price > EMA 50)
+  if (!ema50 || currentPrice <= ema50) {
     return {
       action: 'NEUTRAL',
       side: null,
-      confidence: 25,
-      entryPrice: currentPrice,
-      stopLoss: null,
-      takeProfit: null,
-      riskRewardRatio: null,
-      maxHoldMinutes,
-      tradingStyle: 'SPOT_BUY',
-      tradeDirection: 'LONG_ONLY',
-      reason: 'Anti-Chop Gate: Waiting for a clean pullback to EMA 21/50 support.',
-      factors: ['Waiting for clean bullish pullback']
+      confidence: 10,
+      reason: 'Momentum Filter: Price is below EMA 50 (Downtrend)',
+      factors: ['Waiting for macro bullish trend']
     };
   }
+  score += 30;
+  factors.push('Trend Valid: Price > EMA 50');
 
-  // ==========================================
-  // MANDATORY GATE 2: RSI OVERBOUGHT REJECTION
-  // RSI > 70 = coin overextended, likely to pull back = don't buy
-  // ==========================================
-  if (rsi !== null && rsi !== undefined && rsi > 70) {
+  // Gate 2: Volume Surge (Current Volume >= 1.8x 20-period SMA)
+  if (volSma20 > 0 && currentVolume < (1.8 * volSma20)) {
     return {
       action: 'NEUTRAL',
       side: null,
       confidence: 30,
-      entryPrice: currentPrice,
-      stopLoss: null,
-      takeProfit: null,
-      riskRewardRatio: null,
-      maxHoldMinutes,
-      tradingStyle: 'SPOT_BUY',
-      tradeDirection: 'LONG_ONLY',
-      reason: `RSI Overbought (${rsi.toFixed(1)}): Coin overextended, waiting for pullback.`,
-      factors: [`RSI at ${rsi.toFixed(1)} too high for safe entry`]
+      reason: 'Volume Filter: Waiting for institutional volume expansion',
+      factors: ['Insufficient volume surge']
     };
   }
+  score += 35;
+  factors.push(`Volume Surge: ${currentVolume.toFixed(2)} vs SMA ${volSma20.toFixed(2)}`);
 
-  // ==========================================
-  // MANDATORY GATE 3: NO FALLING KNIVES (Must have Green Reversal Candle)
-  // ==========================================
-  if (asset.candles && asset.candles.length >= 2) {
-    const lastCandle = asset.candles[asset.candles.length - 1];
-    const prevCandle = asset.candles[asset.candles.length - 2];
-    const isGreen = lastCandle.close >= lastCandle.open;
-    if (!isGreen || lastCandle.close <= prevCandle.close) {
-      return {
-        action: 'NEUTRAL',
-        side: null,
-        confidence: 40,
-        entryPrice: currentPrice,
-        stopLoss: null,
-        takeProfit: null,
-        riskRewardRatio: null,
-        maxHoldMinutes,
-        tradingStyle: 'SPOT_BUY',
-        tradeDirection: 'LONG_ONLY',
-        reason: 'Falling Knife Gate: Waiting for a confirmed Green reversal candle.',
-        factors: ['Candlestick is red or closing lower than previous candle']
-      };
-    }
+  // Gate 3: Bollinger Breakout (Price > Upper BB)
+  if (!bb || currentPrice <= bb.upper) {
+    return {
+      action: 'NEUTRAL',
+      side: null,
+      confidence: 45,
+      reason: 'Breakout Filter: Price has not breached upper Bollinger Band',
+      factors: ['Waiting for momentum breakout validation']
+    };
   }
+  score += 35;
+  factors.push('Momentum Confirmed: Price broke Upper Bollinger Band');
 
-  // ==========================================
-  // SCORING ENGINE — Conservative baseline (20) requires genuine multi-factor confirmation
-  // ==========================================
-  let score = 20;
-  const factors = [];
-
-  // 1. EMA Fan already confirmed — award core trend points
-  score += 25;
-  factors.push('Trend Pullback: Price at EMA support in an uptrend');
-
-  // Macro trend bonus (Golden Cross: EMA50 > EMA200)
-  if (ema200 && ema50 > ema200 && currentPrice >= ema200) {
-    score += 12;
-    factors.push('Golden Macro: EMA50 > EMA200 structural bull trend');
-  } else if (ema200 && currentPrice < ema200) {
-    score -= 15; // Counter-trend penalty
-  }
-
-  // 2. VALUE ENTRY ZONE (Pullback to EMA support — don't buy at the top!)
-  if (ema21) {
-    const distToEma21Pct = (currentPrice - ema21) / currentPrice;
-    if (distToEma21Pct >= 0 && distToEma21Pct <= 0.012) {
-      score += 15;
-      factors.push('Value Entry: Price near EMA21 support (pullback bounce zone)');
-    } else if (distToEma21Pct > 0.025) {
-      score -= 8; // Overextended above EMA21
-    }
-  }
-
-  // 3. RSI VALUE FILTER
-  if (rsi !== null && rsi !== undefined) {
-    if (rsi >= 40 && rsi <= 60) {
-      score += 16;
-      factors.push(`Optimal RSI (${rsi.toFixed(1)}): Maximum upside runway`);
-    } else if (rsi >= 30 && rsi < 40) {
-      score += 14;
-      factors.push(`Oversold Bounce RSI (${rsi.toFixed(1)}): Deep dip recovery`);
-    } else if (rsi > 60 && rsi <= 70) {
-      score += 6;
-      factors.push(`Moderate RSI (${rsi.toFixed(1)}): Approaching overbought`);
-    }
-  }
-
-  // 4. MACD MOMENTUM
-  if (macd) {
-    if (macd.histogram > 0 && macd.MACD > macd.signal) {
-      score += 12;
-      factors.push('Strong MACD: Histogram positive with bullish crossover');
-    } else if (macd.histogram > 0) {
-      score += 8;
-      factors.push('Positive MACD Histogram: Micro momentum expanding');
-    } else if (macd.histogram > -0.0003 && macd.histogram <= 0) {
-      score += 4;
-    }
-  }
-
-  // 5. BOLLINGER BAND
-  if (bb) {
-    if (currentPrice <= bb.middle) {
-      score += 8;
-      factors.push('Lower Bollinger Zone: Buying in value half');
-    }
-    if (currentPrice >= bb.upper) {
-      score -= 12; // Upper band = overbought danger
-    }
-  }
-
-  // 6. CANDLESTICK CONFIRMATION — require genuine buying pressure
-  if (asset.candles && asset.candles.length >= 3) {
-    const lastCandle = asset.candles[asset.candles.length - 1];
-    const prevCandle = asset.candles[asset.candles.length - 2];
-    const isGreen = lastCandle.close >= lastCandle.open;
-    const bodySize = Math.abs(lastCandle.close - lastCandle.open);
-    const bodyPct = bodySize / lastCandle.open;
-    const lowerWick = Math.min(lastCandle.open, lastCandle.close) - lastCandle.low;
-
-    if (isGreen && bodyPct >= 0.0015) {
-      score += 10;
-      factors.push('Strong Bullish Candle: Green with significant body');
-      if (lowerWick >= bodySize * 0.5) {
-        score += 5;
-        factors.push('Bullish Wick Rejection: Buyers defending support');
-      }
-    } else if (isGreen) {
-      score += 4;
-    } else {
-      score -= 5; // Red candle = bearish pressure
-    }
-
-    // Consecutive green candles bonus
-    if (isGreen && prevCandle.close >= prevCandle.open) {
-      score += 5;
-      factors.push('Consecutive Green Candles: Sustained buying');
-    }
-  }
-
-  // 7. VOLATILITY BONUS
+  // If all gates passed, score is 100
   if (isVolatileCoin) {
-    score += 8;
-    factors.push(`High-Volatility Coin (${asset.symbol})`);
-  }
-
-  // 8. 24h Change Confirmation — don't buy into a dump or chase a parabolic pump
-  if (asset.change24h !== undefined) {
-    if (asset.change24h > 0.5 && asset.change24h < 8.0) {
-      score += 6;
-      factors.push(`Positive 24h Trend (+${asset.change24h.toFixed(1)}%)`);
-    } else if (asset.change24h < -2.0) {
-      score -= 10; // Coin dumping today
-    } else if (asset.change24h > 10.0) {
-      score -= 8; // Parabolic pump — don't chase
-    }
+    score += 5;
+    factors.push(`High-Volatility Bonus: ${asset.symbol}`);
   }
 
   // ==========================================
