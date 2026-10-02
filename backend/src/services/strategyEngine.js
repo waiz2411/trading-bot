@@ -427,49 +427,52 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
   const maxHoldMinutes = Number(spotRiskSettings.maxHoldMinutes) || 15;
 
   // ==========================================
-  // MOMENTUM BREAKOUT SCALPER LOGIC
+  // VALUE POCKET PULLBACK SCALPER LOGIC
   // ==========================================
   let score = 0;
   const factors = [];
 
-  // Gate 1: Trend Alignment (Price > EMA 50)
-  if (!ema50 || currentPrice <= ema50) {
+  // Gate 1: Macro Trend (EMA 21 must be above EMA 50)
+  if (!ema21 || !ema50 || ema21 <= ema50) {
     return {
       action: 'NEUTRAL',
       side: null,
       confidence: 10,
-      reason: 'Momentum Filter: Price is below EMA 50 (Downtrend)',
-      factors: ['Waiting for macro bullish trend']
+      reason: 'Trend Filter: EMA 21 is below EMA 50 (Downtrend/Chop)',
+      factors: ['Waiting for clean bullish EMA alignment']
     };
   }
   score += 30;
-  factors.push('Trend Valid: Price > EMA 50');
+  factors.push('Trend Valid: EMA 21 > EMA 50');
 
-  // Gate 2: Volume Surge (Current Volume >= 1.8x 20-period SMA)
-  if (volSma20 > 0 && currentVolume < (1.8 * volSma20)) {
+  // Gate 2: The Dip / Pullback Zone (Price near EMA 21 Support)
+  // Distance from EMA 21 must be within 0.8% of price, holding above EMA 50
+  const distToEma21Pct = Math.abs(currentPrice - ema21) / currentPrice;
+  if (currentPrice < ema50 || distToEma21Pct > 0.008) {
     return {
       action: 'NEUTRAL',
       side: null,
-      confidence: 30,
-      reason: 'Volume Filter: Waiting for institutional volume expansion',
-      factors: ['Insufficient volume surge']
+      confidence: 25,
+      reason: 'Pullback Filter: Price not in EMA 21/50 value pocket',
+      factors: ['Waiting for price pullback to support']
     };
   }
   score += 35;
-  factors.push(`Volume Surge: ${currentVolume.toFixed(2)} vs SMA ${volSma20.toFixed(2)}`);
+  factors.push('Value Pocket: Price holding dynamic EMA 21 support');
 
-  // Gate 3: Bollinger Breakout (Price > Upper BB)
-  if (!bb || currentPrice <= bb.upper) {
+  // Gate 3: RSI Bounce Runway (RSI between 38 and 54)
+  // Rejects overbought FOMO (>60) and catching falling knives (<35)
+  if (!rsi || rsi < 38 || rsi > 54) {
     return {
       action: 'NEUTRAL',
       side: null,
-      confidence: 45,
-      reason: 'Breakout Filter: Price has not breached upper Bollinger Band',
-      factors: ['Waiting for momentum breakout validation']
+      confidence: 35,
+      reason: `RSI Filter: RSI (${rsi ? rsi.toFixed(1) : 'N/A'}) outside bounce zone (38-54)`,
+      factors: ['Waiting for RSI to reset from overbought']
     };
   }
   score += 35;
-  factors.push('Momentum Confirmed: Price broke Upper Bollinger Band');
+  factors.push(`RSI Optimal: ${rsi.toFixed(1)} ready for leg up`);
 
   // If all gates passed, score is 100
   if (isVolatileCoin) {

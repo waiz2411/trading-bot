@@ -62,7 +62,7 @@ export class AutonomousAgentLoop {
           maxTradesPerPair: 1,
           stopLossPct: 1.0,
           takeProfitPct: 1.5,
-          maxHoldMinutes: 15,
+          maxHoldMinutes: 45,
           minConfidenceThreshold: 90,
           allowHighVolatility: true,
           volatilityMode: 'HIGH_VOLATILITY_HALAL',

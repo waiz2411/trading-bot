@@ -491,17 +491,24 @@ export class PaperTradingEngine {
       const maxHoldMs = maxHoldMinutes * 60 * 1000;
       const maxHoldCycles = maxHoldMinutes * 40; // 40 cycles per minute (1.5s scan interval)
 
-      // A. Maximum Holding Cap (Strict 60-Minute Hard Time Limit Exit)
+      // A. Maximum Holding Cap (Hard Time Limit Exit)
       // When the trade reaches the maximum holding time, execute an auto-close to free up capital
       if (ageMs >= maxHoldMs || cyclesElapsed >= maxHoldCycles) {
-        const isProfitable = pos.unrealizedPnL >= 0;
-        const exitNote = isProfitable
-          ? `${maxHoldMinutes}m Expiry: Banked profit at time cap (+${pos.pnlPercent}%)`
-          : `${maxHoldMinutes}m Expiry: Auto-closed holding at ${maxHoldMinutes}m duration cap (${pos.pnlPercent}%)`;
-        const closed = this.closePosition(pos.id, livePrice, 'TIME_LIMIT_EXIT', exitNote);
-        if (closed) {
-          closedTriggers.push(closed);
+        // PROFIT SAFEGUARD: Do not time-kill the trade if it is currently climbing well in profit (>= +0.40%)
+        // Let the dynamic trailing stop or Take-Profit handle the exit instead.
+        if (pos.pnlPercent >= 0.40) {
+          pos.maxHoldMinutes = pos.maxHoldMinutes + 15; // Extend limit softly to bypass repeated checks
           continue;
+        } else {
+          const isProfitable = pos.unrealizedPnL >= 0;
+          const exitNote = isProfitable
+            ? `${maxHoldMinutes}m Expiry: Banked profit at time cap (+${pos.pnlPercent}%)`
+            : `${maxHoldMinutes}m Expiry: Auto-closed holding at ${maxHoldMinutes}m duration cap (${pos.pnlPercent}%)`;
+          const closed = this.closePosition(pos.id, livePrice, 'TIME_LIMIT_EXIT', exitNote);
+          if (closed) {
+            closedTriggers.push(closed);
+            continue;
+          }
         }
       }
 

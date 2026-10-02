@@ -49,11 +49,12 @@ export default function SettingsModal({
 
   const holdTimePresets = [
     { label: '5 Mins', value: 5, tag: 'Hyper Scalp' },
-    { label: '15 Mins', value: 15, tag: 'Mid Scalp' },
+    { label: '15 Mins', value: 15, tag: 'Micro Scalp' },
+    { label: '30 Mins', value: 30, tag: 'Mid Scalp' },
+    { label: '45 Mins', value: 45, tag: 'Optimal Cap' },
     { label: '60 Mins', value: 60, tag: '1-Hour Cap' },
     { label: '120 Mins', value: 120, tag: '2-Hour Cap' },
     { label: '240 Mins', value: 240, tag: '4-Hour Cap' },
-    { label: '720 Mins', value: 720, tag: 'Half-Day' },
     { label: '1440 Mins', value: 1440, tag: '1-Day Cap' }
   ];
 
