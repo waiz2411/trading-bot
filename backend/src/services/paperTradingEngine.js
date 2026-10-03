@@ -287,6 +287,7 @@ export class PaperTradingEngine {
       notional,
       confidence,
       reason,
+      exitRule: orderData.exitRule || 'STANDARD',
       riskRewardRatio: riskRewardRatio || 1.3,
       maxHoldMinutes: orderData.maxHoldMinutes || 60,
       openTime: new Date().toISOString(),
@@ -504,8 +505,13 @@ export class PaperTradingEngine {
       const maxHoldCycles = maxHoldMinutes * 40; // 40 cycles per minute (1.5s scan interval)
 
       // A. Maximum Holding Cap (Hard Time Limit Exit)
-      // When the trade reaches the maximum holding time, execute an auto-close to free up capital
-      if (ageMs >= maxHoldMs || cyclesElapsed >= maxHoldCycles) {
+      // Trades with exitRule === 'TP_SL_OR_STRUCTURAL_BREAK' exit purely on TP (+1.5%), SL (-0.9%), or structural break below 20 EMA,
+      // with a wide 4-hour safety timer to eliminate blind timer dumping.
+      const isStructuralExit = pos.exitRule === 'TP_SL_OR_STRUCTURAL_BREAK';
+      const effectiveMaxHoldMs = isStructuralExit ? Math.max(maxHoldMs, 4 * 60 * 60 * 1000) : maxHoldMs;
+      const effectiveMaxHoldCycles = isStructuralExit ? Math.max(maxHoldCycles, 4 * 60 * 40) : maxHoldCycles;
+
+      if (!isStructuralExit && (ageMs >= maxHoldMs || cyclesElapsed >= maxHoldCycles)) {
         // PROFIT SAFEGUARD: Do not time-kill the trade if it is currently climbing well in profit (>= +0.40%)
         // Let the dynamic trailing stop or Take-Profit handle the exit instead.
         if (pos.pnlPercent >= 0.40) {
@@ -522,12 +528,17 @@ export class PaperTradingEngine {
             continue;
           }
         }
+      } else if (isStructuralExit && (ageMs >= effectiveMaxHoldMs || cyclesElapsed >= effectiveMaxHoldCycles)) {
+        const closed = this.closePosition(pos.id, livePrice, 'SAFETY_TIMEOUT_EXIT', `Safety Cap: Position reached 4h maximum safety limit (${pos.pnlPercent}%)`);
+        if (closed) {
+          closedTriggers.push(closed);
+          continue;
+        }
       }
 
-      // B. Noticeable Momentum Lock (After 60% of hold time)
-      // Only banks early if net profit is substantial (>= +0.50% net / +$0.50 on $100) and starts pulling back
+      // B. Noticeable Momentum Lock (After 60% of hold time) - for standard trades only
       const minNetProfitThreshold = (pos.notional || 100) * 0.0050; // At least +$0.50 net on $100
-      if ((ageMs >= maxHoldMs * 0.60 || cyclesElapsed >= maxHoldCycles * 0.60) && pos.unrealizedPnL >= minNetProfitThreshold) {
+      if (!isStructuralExit && (ageMs >= maxHoldMs * 0.60 || cyclesElapsed >= maxHoldCycles * 0.60) && pos.unrealizedPnL >= minNetProfitThreshold) {
         if (pos.side === 'LONG' && livePrice < pos.highestPrice * 0.997) {
           const closed = this.closePosition(pos.id, livePrice, 'MOMENTUM_EXHAUSTION_EXIT', `Fast Scalp Lock: Secured +$${pos.unrealizedPnL} net profit (+${pos.pnlPercent}%) before ${maxHoldMinutes}m cap`);
           if (closed) {

@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { marketDataService } from './marketData.js';
 import { calculateTechnicalMetrics } from './technicalAnalysis.js';
-import { evaluateStrategyConfluence, evaluateSpotConfluence } from './strategyEngine.js';
+import { evaluateStrategyConfluence, evaluateSpotConfluence, evaluateBtcHealth, scanRelativeStrengthLeaders } from './strategyEngine.js';
 import { RiskManager } from './riskManager.js';
 import { PaperTradingEngine } from './paperTradingEngine.js';
 import { binanceConnector } from './binanceConnector.js';
@@ -65,9 +65,9 @@ export class AutonomousAgentLoop {
           maxSlots: 4,
           allocationPct: 25,
           maxTradesPerPair: 1,
-          stopLossPct: 1.0,
+          stopLossPct: 0.9,
           takeProfitPct: 1.5,
-          maxHoldMinutes: 45,
+          maxHoldMinutes: 240,
           minConfidenceThreshold: 90,
           allowHighVolatility: true,
           volatilityMode: 'HIGH_VOLATILITY_HALAL',
@@ -388,6 +388,12 @@ export class AutonomousAgentLoop {
         this.syncLiveSpotPositions(binanceConnector.cachedBalances, pricesMap);
       }
 
+      // Institutional Three Pillars: BTC Health Gate & Relative Strength Leaders
+      const btcAsset = markets.find(m => m.symbol === 'BTC-USD' || m.symbol === 'BTCUSDT' || m.symbol === 'BTC/USDT');
+      const btcHealth = evaluateBtcHealth(btcAsset?.candles);
+      const topLeaders = scanRelativeStrengthLeaders(markets, btcAsset?.candles, 3);
+      const spotContext = { btcHealth, topLeaders };
+
       // 3. Pre-calculate technicals map for position auto-exit evaluation
       const technicalsMap = {};
       const scanResults = [];
@@ -444,7 +450,7 @@ export class AutonomousAgentLoop {
             // Respect user choice: strictly enforce volatility mode
             const passesVolatilityFilter = allowVolatile ? isVolatile : !isVolatile;
             if (passesVolatilityFilter) {
-              spotSignal = evaluateSpotConfluence(asset, technicals, this.spotRiskManager);
+              spotSignal = evaluateSpotConfluence(asset, technicals, this.spotRiskManager, spotContext);
               if (spotSignal.action === 'STRONG_BUY' && !isSpotCooldown) {
                 validSpotBuys.push({ asset, signal: spotSignal });
               }
@@ -657,7 +663,7 @@ export class AutonomousAgentLoop {
             const technicals = technicalsMap[asset.symbol];
             if (!technicals) continue;
 
-            const spotSignal = evaluateSpotConfluence(asset, technicals, uSpotRisk);
+            const spotSignal = evaluateSpotConfluence(asset, technicals, uSpotRisk, spotContext);
             if (spotSignal && spotSignal.action === 'STRONG_BUY') {
               uValidSpotBuys.push({ asset, signal: spotSignal });
             }
@@ -733,8 +739,9 @@ export class AutonomousAgentLoop {
                 confidence: candidate.signal.confidence,
                 reason: `Spot Scalp Slot ${uSpotEngine.activePositions.length + 1}/${uSpotSlots}${scaleLabel} (${candidate.signal.reason})`,
                 riskRewardRatio: Number((uSpotRisk.takeProfitPct / uSpotRisk.stopLossPct).toFixed(1)),
-                maxHoldMinutes: uSpotRisk.maxHoldMinutes || 45,
+                maxHoldMinutes: candidate.signal.maxHoldMinutes || uSpotRisk.maxHoldMinutes || 240,
                 tradingStyle: 'SPOT_BUY',
+                exitRule: candidate.signal.exitRule || 'TP_SL_OR_STRUCTURAL_BREAK',
                 feeRate: uSpotRisk.feeRate || (uSpotRisk.useBnbFeeDiscount ? 0.00075 : 0.0010),
                 leverage: 1,
                 margin: notional,
@@ -742,7 +749,7 @@ export class AutonomousAgentLoop {
               });
 
               this.log(
-                `🪙 [SPOT - ${uKey}] SCALP OPEN${scaleLabel}: Bought ${candidate.asset.symbol} with $${notional} (Portion ${uSpotEngine.activePositions.length}/${uSpotSlots}) @ $${formatAssetPrice(entryPrice, precision)} (Confidence: ${candidate.signal.confidence}%, Fee: -$${spotPos?.entryFee || 0}). Target: +${uSpotRisk.takeProfitPct}% ($${formatAssetPrice(takeProfit, precision)}) | Stop: -${uSpotRisk.stopLossPct}% ($${formatAssetPrice(stopLoss, precision)}) | Cap: ${uSpotRisk.maxHoldMinutes || 45}m`,
+                `🪙 [SPOT - ${uKey}] SCALP OPEN${scaleLabel}: Bought ${candidate.asset.symbol} with $${notional} (Portion ${uSpotEngine.activePositions.length}/${uSpotSlots}) @ $${formatAssetPrice(entryPrice, precision)} (Confidence: ${candidate.signal.confidence}%, Fee: -$${spotPos?.entryFee || 0}). Target: +${candidate.signal.takeProfitPct || uSpotRisk.takeProfitPct}% ($${formatAssetPrice(takeProfit, precision)}) | Stop: -${candidate.signal.stopLossPct || uSpotRisk.stopLossPct}% ($${formatAssetPrice(stopLoss, precision)}) | Rule: ${candidate.signal.exitRule || 'TP_SL_OR_STRUCTURAL_BREAK'}`,
                 'SUCCESS'
               );
               uConfig.lastSpotTradeOpenedAt = Date.now();
