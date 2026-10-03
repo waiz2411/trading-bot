@@ -421,8 +421,8 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
   const volSma20 = technicals.volSma20 || 0;
   const { ema9, ema21, ema50, ema200, rsi, macd, bb } = technicals;
 
-  const stopLossPct = Math.max(0.3, Number(spotRiskSettings.stopLossPct) || 1.0);
-  const takeProfitPct = Math.max(0.4, Number(spotRiskSettings.takeProfitPct) || 1.5);
+  const stopLossPct = Math.max(0.1, Number(spotRiskSettings.stopLossPct) || 1.0);
+  const takeProfitPct = Math.max(0.1, Number(spotRiskSettings.takeProfitPct) || 1.5);
   const minThreshold = Number(spotRiskSettings.minConfidenceThreshold) || 85;
   const maxHoldMinutes = Number(spotRiskSettings.maxHoldMinutes) || 15;
 

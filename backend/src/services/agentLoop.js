@@ -295,10 +295,10 @@ export class AutonomousAgentLoop {
     const spotRiskManager = config.spotRiskManager;
 
     if (newSettings.stopLossPct !== undefined) {
-      spotRiskManager.stopLossPct = Math.max(0.3, Math.min(10, Number(newSettings.stopLossPct)));
+      spotRiskManager.stopLossPct = Math.max(0.1, Math.min(10, Number(newSettings.stopLossPct)));
     }
     if (newSettings.takeProfitPct !== undefined) {
-      spotRiskManager.takeProfitPct = Math.max(0.5, Math.min(25, Number(newSettings.takeProfitPct)));
+      spotRiskManager.takeProfitPct = Math.max(0.1, Math.min(25, Number(newSettings.takeProfitPct)));
     }
     if (newSettings.maxHoldMinutes !== undefined) {
       spotRiskManager.maxHoldMinutes = Math.max(1, Math.min(1440, parseInt(newSettings.maxHoldMinutes, 10)));
