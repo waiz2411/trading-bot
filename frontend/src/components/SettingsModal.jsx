@@ -91,17 +91,17 @@ export default function SettingsModal({
   ];
 
   const spotSlPresets = [
-    { label: '-0.7% ⭐', value: 0.7, tag: 'High-Vol Scalp (Render Proven)' },
+    { label: '-0.2%', value: 0.2, tag: 'Micro Stop' },
+    { label: '-0.5%', value: 0.5, tag: 'Tight Scalp' },
     { label: '-1.0%', value: 1.0, tag: 'Standard' },
-    { label: '-1.4%', value: 1.4, tag: 'Dynamic' },
-    { label: '-1.8%', value: 1.8, tag: 'Wide Swing' }
+    { label: '-1.5%', value: 1.5, tag: 'Wide Swing' }
   ];
 
   const spotTpPresets = [
-    { label: '+1.4% ⭐', value: 1.4, tag: 'Net +$1.25 (Render Proven)' },
-    { label: '+2.0%', value: 2.0, tag: 'Net +$1.85' },
-    { label: '+2.5%', value: 2.5, tag: 'Net +$2.35' },
-    { label: '+3.5%', value: 3.5, tag: 'Net +$3.35 🚀 Alt Runner' }
+    { label: '+0.2%', value: 0.2, tag: 'Micro Scalp' },
+    { label: '+0.5%', value: 0.5, tag: 'Quick Pip' },
+    { label: '+1.0%', value: 1.0, tag: 'Standard' },
+    { label: '+1.5%', value: 1.5, tag: 'Momentum Target' }
   ];
 
   const handleSave = (e) => {
@@ -289,7 +289,7 @@ export default function SettingsModal({
                 </div>
                 <input
                   type="range"
-                  min="0.5"
+                  min="0.1"
                   max="5.0"
                   step="0.25"
                   value={riskPerTradePct}
@@ -761,7 +761,7 @@ export default function SettingsModal({
 
                 <input
                   type="range"
-                  min="0.2"
+                  min="0.1"
                   max="5.0"
                   step="0.1"
                   value={spotStopLossPct}
@@ -805,7 +805,7 @@ export default function SettingsModal({
 
                 <input
                   type="range"
-                  min="0.5"
+                  min="0.1"
                   max="15.0"
                   step="0.1"
                   value={spotTakeProfitPct}

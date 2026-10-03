@@ -1,8 +1,10 @@
-import React from 'react';
-import { History, ArrowUpRight, ArrowDownRight, CheckCircle2, XCircle, AlertCircle, ShieldCheck, Zap, Lock, Sparkles, Timer } from 'lucide-react';
+import React, { useState } from 'react';
+import { History, ArrowUpRight, ArrowDownRight, CheckCircle2, XCircle, AlertCircle, ShieldCheck, Zap, Lock, Sparkles, Timer, ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-react';
 import { formatPrice } from '../utils/formatters.js';
 
 export default function TradeHistory({ closedTrades = [] }) {
+  const [sortConfig, setSortConfig] = useState({ key: 'closeTime', direction: 'desc' });
+
   if (!closedTrades || closedTrades.length === 0) {
     return (
       <div className="bg-terminal-850/70 border border-terminal-border rounded-xl p-8 text-center shadow-lg">
@@ -85,6 +87,61 @@ export default function TradeHistory({ closedTrades = [] }) {
     }
   };
 
+  const handleSort = (key) => {
+    let direction = 'desc';
+    if (sortConfig.key === key && sortConfig.direction === 'desc') {
+      direction = 'asc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedTrades = [...closedTrades].sort((a, b) => {
+    let valA, valB;
+    switch(sortConfig.key) {
+      case 'market':
+        valA = a.symbol || ''; valB = b.symbol || ''; break;
+      case 'entryPrice':
+        valA = a.entryPrice != null ? a.entryPrice : a.price; valB = b.entryPrice != null ? b.entryPrice : b.price; break;
+      case 'exitPrice':
+        valA = a.exitPrice != null ? a.exitPrice : a.price; valB = b.exitPrice != null ? b.exitPrice : b.price; break;
+      case 'outcome':
+      case 'return':
+        valA = a.finalPnL !== undefined ? Number(a.finalPnL) : (a.profit !== undefined ? Number(a.profit) : 0);
+        valB = b.finalPnL !== undefined ? Number(b.finalPnL) : (b.profit !== undefined ? Number(b.profit) : 0);
+        break;
+      case 'trigger':
+        valA = a.exitReason || ''; valB = b.exitReason || ''; break;
+      case 'openTime':
+        valA = new Date(a.openTime || a.open_time || (a.openTimeMs ? new Date(a.openTimeMs).toISOString() : 0)).getTime() || 0;
+        valB = new Date(b.openTime || b.open_time || (b.openTimeMs ? new Date(b.openTimeMs).toISOString() : 0)).getTime() || 0;
+        break;
+      case 'closeTime':
+      default:
+        valA = new Date(a.closeTime || a.exitTime || a.exit_time || (a.time ? a.time * 1000 : 0)).getTime() || 0;
+        valB = new Date(b.closeTime || b.exitTime || b.exit_time || (b.time ? b.time * 1000 : 0)).getTime() || 0;
+        break;
+    }
+    if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+    if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const renderSortableHeader = (label, key, align = 'left') => (
+    <th 
+      className={`py-2.5 px-4 cursor-pointer hover:bg-terminal-800/50 transition-colors text-${align} group`}
+      onClick={() => handleSort(key)}
+    >
+      <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
+        {label}
+        {sortConfig.key === key ? (
+          sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+        ) : (
+          <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-40 transition-opacity" />
+        )}
+      </div>
+    </th>
+  );
+
   return (
     <div className="bg-terminal-850/70 border border-terminal-border rounded-xl overflow-hidden shadow-lg">
       <div className="p-4 border-b border-terminal-border flex items-center justify-between bg-terminal-900/50">
@@ -103,18 +160,18 @@ export default function TradeHistory({ closedTrades = [] }) {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-terminal-border bg-terminal-900/70 text-[11px] font-mono text-slate-400 uppercase tracking-wider">
-              <th className="py-2.5 px-4">Market / Side</th>
-              <th className="py-2.5 px-4 text-right">Entry Price</th>
-              <th className="py-2.5 px-4 text-right">Exit Price</th>
-              <th className="py-2.5 px-4 text-center">Outcome</th>
-              <th className="py-2.5 px-4 text-center">Auto-Close Trigger</th>
-              <th className="py-2.5 px-4 text-right">Realized Return</th>
-              <th className="py-2.5 px-4 text-center">Open Time</th>
-              <th className="py-2.5 px-4 text-right">Close Time & Duration</th>
+              {renderSortableHeader('Market / Side', 'market', 'left')}
+              {renderSortableHeader('Entry Price', 'entryPrice', 'right')}
+              {renderSortableHeader('Exit Price', 'exitPrice', 'right')}
+              {renderSortableHeader('Outcome', 'outcome', 'center')}
+              {renderSortableHeader('Auto-Close Trigger', 'trigger', 'center')}
+              {renderSortableHeader('Realized Return', 'return', 'right')}
+              {renderSortableHeader('Open Time', 'openTime', 'center')}
+              {renderSortableHeader('Close Time & Duration', 'closeTime', 'right')}
             </tr>
           </thead>
           <tbody className="divide-y divide-terminal-border/60 text-xs font-mono">
-            {closedTrades.map((trade, idx) => {
+            {sortedTrades.map((trade, idx) => {
               const finalPnL = trade.finalPnL !== undefined ? Number(trade.finalPnL) : (trade.profit !== undefined ? Number(trade.profit) : 0);
               const isWin = finalPnL > 0.05;
               const isLoss = finalPnL < -0.0001;
