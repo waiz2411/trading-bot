@@ -557,14 +557,19 @@ app.post('/api/agent/leverage', (req, res) => {
 });
 
 // API: Custom Balance Management (Set exact balance for MARGIN or SPOT)
-app.post('/api/portfolio/balance', (req, res) => {
+app.post('/api/portfolio/balance', async (req, res) => {
   try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = await authService.validateToken(token);
+    const userEmail = user ? user.email : agentLoop.currentUser;
+
     const { balance, closeOpenPositions, account } = req.body;
     const num = parseFloat(balance);
     if (isNaN(num) || num <= 0) {
       return res.status(400).json({ error: 'Please provide a valid positive balance' });
     }
-    const state = agentLoop.setBalance(num, !!closeOpenPositions, account);
+    const state = agentLoop.setBalance(num, !!closeOpenPositions, account, userEmail);
     res.json({ success: true, portfolio: state, dashboard: agentLoop.getDashboardData() });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -572,14 +577,19 @@ app.post('/api/portfolio/balance', (req, res) => {
 });
 
 // API: Adjust Balance (Add or Subtract for MARGIN or SPOT)
-app.post('/api/portfolio/adjust', (req, res) => {
+app.post('/api/portfolio/adjust', async (req, res) => {
   try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = await authService.validateToken(token);
+    const userEmail = user ? user.email : agentLoop.currentUser;
+
     const { delta, account } = req.body;
     const num = parseFloat(delta);
     if (isNaN(num)) {
       return res.status(400).json({ error: 'Invalid delta amount' });
     }
-    const state = agentLoop.adjustBalance(num, account);
+    const state = agentLoop.adjustBalance(num, account, userEmail);
     res.json({ success: true, portfolio: state, dashboard: agentLoop.getDashboardData() });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -589,12 +599,16 @@ app.post('/api/portfolio/adjust', (req, res) => {
 // API: Close an active trade manually (supports MT5, Binance Spot, and Demo)
 app.post('/api/trades/close/:id', async (req, res) => {
   try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = await authService.validateToken(token);
+    const userEmail = user ? user.email : agentLoop.currentUser;
     const { id } = req.params;
 
     // 1. Direct Binance Spot Position Close (supports BINANCE-PROM-12345, BINANCE-PROM, PROM-USD, pos-xxx)
-    if (id.startsWith('BINANCE-') || id.endsWith('-USD') || agentLoop.spotTradingEngine.activePositions.some(p => p.id === id || p.symbol === id)) {
+    if (id.startsWith('BINANCE-') || id.endsWith('-USD') || agentLoop.getEngine('SPOT', userEmail).activePositions.some(p => p.id === id || p.symbol === id)) {
       // Find matching position first
-      const matchingPos = agentLoop.spotTradingEngine.activePositions.find(p => 
+      const matchingPos = agentLoop.getEngine('SPOT', userEmail).activePositions.find(p => 
         p.id === id || p.symbol === id || id.includes(p.symbol) || (p.name && id.includes(p.name))
       );
 
@@ -635,7 +649,7 @@ app.post('/api/trades/close/:id', async (req, res) => {
       // Clean up simulated spot engine active positions and record into liveSpotClosedTrades
       let tradeFinalPnL = 0;
       if (matchingPos) {
-        const closed = agentLoop.spotTradingEngine.closePosition(matchingPos.id, null, 'MANUAL_USER_EXIT', 'Manual user exit via dashboard');
+        const closed = agentLoop.getEngine('SPOT', userEmail).closePosition(matchingPos.id, null, 'MANUAL_USER_EXIT', 'Manual user exit via dashboard');
         if (closed) {
           tradeFinalPnL = closed.finalPnL || 0;
           if (agentLoop.currentMode === 'LIVE') {
@@ -703,9 +717,9 @@ app.post('/api/trades/close/:id', async (req, res) => {
     }
 
     // 3. Demo / Paper Engine Position Close
-    let closed = agentLoop.tradingEngine.closePosition(id, null, 'MANUAL_USER_EXIT', 'Manual user exit via dashboard');
+    let closed = agentLoop.getEngine(agentLoop.activeAccount, userEmail).closePosition(id, null, 'MANUAL_USER_EXIT', 'Manual user exit via dashboard');
     if (!closed) {
-      const otherEngine = agentLoop.activeAccount === 'SPOT' ? agentLoop.marginTradingEngine : agentLoop.spotTradingEngine;
+      const otherEngine = agentLoop.activeAccount === 'SPOT' ? agentLoop.getEngine('MARGIN', userEmail) : agentLoop.getEngine('SPOT', userEmail);
       closed = otherEngine.closePosition(id, null, 'MANUAL_USER_EXIT', 'Manual user exit via dashboard');
     }
     if (!closed) {
@@ -755,7 +769,11 @@ app.post('/api/trades/close/:id', async (req, res) => {
 // API: Close ALL active trades at once (supports Demo, MT5, and Binance Spot)
 app.post('/api/trades/close-all', async (req, res) => {
   try {
-    const targetEngine = agentLoop.tradingEngine;
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = await authService.validateToken(token);
+    const userEmail = user ? user.email : agentLoop.currentUser;
+    const targetEngine = agentLoop.getEngine(agentLoop.activeAccount, userEmail);
     const active = [...targetEngine.activePositions];
     const closedList = [];
     for (const pos of active) {
@@ -766,7 +784,7 @@ app.post('/api/trades/close-all', async (req, res) => {
     if (agentLoop.currentMode === 'LIVE') {
       if (mt5Connector.connected) {
         await mt5Connector.closeAllPositions().catch(() => {});
-        agentLoop.marginTradingEngine.activePositions = [];
+        agentLoop.getEngine('MARGIN', userEmail).activePositions = [];
       }
       if (binanceConnector.connected) {
         const balances = await binanceConnector.getBalances();
@@ -799,6 +817,10 @@ app.post('/api/trades/close-all', async (req, res) => {
 // API: Execute trade on demand
 app.post('/api/trades/execute', async (req, res) => {
   try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = await authService.validateToken(token);
+    const userEmail = user ? user.email : agentLoop.currentUser;
     const { symbol, side } = req.body;
     const asset = marketDataService.getMarket(symbol);
     if (!asset) return res.status(404).json({ error: 'Asset not found' });
@@ -827,7 +849,7 @@ app.post('/api/trades/execute', async (req, res) => {
       }
 
       const isLive = agentLoop.currentMode === 'LIVE';
-      let spotCash = agentLoop.spotTradingEngine.balance;
+      let spotCash = agentLoop.getEngine('SPOT', userEmail).balance;
       const maxSlots = agentLoop.spotRiskManager.maxSlots || 1;
 
       if (isLive && binanceConnector.connected) {
@@ -836,11 +858,11 @@ app.post('/api/trades/execute', async (req, res) => {
         spotCash = usdtObj ? Number(usdtObj.free) : 0;
 
         // Count real active positions from engine (ignoring sub-$1.00 dust like 0.009 VIC or 0.3 XLM)
-        if (agentLoop.spotTradingEngine.activePositions.length >= maxSlots) {
+        if (agentLoop.getEngine('SPOT', userEmail).activePositions.length >= maxSlots) {
           return res.status(400).json({ error: `Spot Account allows ${maxSlots} active coin position(s) at ${(100 / maxSlots).toFixed(0)}% allocation. Close current position first.` });
         }
       } else {
-        if (agentLoop.spotTradingEngine.activePositions.length >= maxSlots) {
+        if (agentLoop.getEngine('SPOT', userEmail).activePositions.length >= maxSlots) {
           return res.status(400).json({ error: `Spot Account allows ${maxSlots} active coin position(s) at ${(100 / maxSlots).toFixed(0)}% allocation. Close current position first.` });
         }
       }
@@ -873,7 +895,7 @@ app.post('/api/trades/execute', async (req, res) => {
         }
       }
 
-      const trade = agentLoop.spotTradingEngine.openPosition({
+      const trade = agentLoop.getEngine('SPOT', userEmail).openPosition({
         symbol: asset.symbol,
         name: asset.name,
         category: 'Crypto',
@@ -931,7 +953,7 @@ app.post('/api/trades/execute', async (req, res) => {
         const notionalVal = Number((fillPrice * (asset.category === 'Forex' ? 1000 : 1)).toFixed(2));
         const marginVal = Number((notionalVal / (mt5Connector.accountInfo?.leverage || 500)).toFixed(2));
 
-        const trade = agentLoop.marginTradingEngine.openPosition({
+        const trade = agentLoop.getEngine('MARGIN', userEmail).openPosition({
           symbol: asset.symbol,
           name: asset.name,
           category: asset.category,
@@ -960,14 +982,14 @@ app.post('/api/trades/execute', async (req, res) => {
       }
     }
 
-    const portfolio = agentLoop.marginTradingEngine.getPortfolioState();
+    const portfolio = agentLoop.getEngine('MARGIN', userEmail).getPortfolioState();
     const riskEval = agentLoop.marginRiskManager.evaluateTradeRisk(portfolio, { ...signal, confidence: 99 }, asset);
 
     if (!riskEval.allowed) {
       return res.status(400).json({ error: riskEval.reason });
     }
 
-    const trade = agentLoop.marginTradingEngine.openPosition({
+    const trade = agentLoop.getEngine('MARGIN', userEmail).openPosition({
       symbol: asset.symbol,
       name: asset.name,
       category: asset.category,
@@ -996,11 +1018,15 @@ app.post('/api/trades/execute', async (req, res) => {
 });
 
 // API: Reset paper portfolio to initial state
-app.post('/api/portfolio/reset', (req, res) => {
+app.post('/api/portfolio/reset', async (req, res) => {
   try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = await authService.validateToken(token);
+    const userEmail = user ? user.email : agentLoop.currentUser;
     const { initialBalance, account } = req.body;
     const targetAccount = (account || agentLoop.activeAccount).toUpperCase();
-    const engine = targetAccount === 'SPOT' ? agentLoop.spotTradingEngine : agentLoop.marginTradingEngine;
+    const engine = agentLoop.getEngine(targetAccount, userEmail);
     const initBal = initialBalance !== undefined ? parseFloat(initialBalance) : 10;
     const resetState = engine.reset(initBal);
     agentLoop.log(`🔄 [${targetAccount}] Portfolio reset to $${initBal.toLocaleString('en-US')} virtual balance.`, 'WARN');
@@ -1054,4 +1080,6 @@ if (SOCKET_PATH) {
     console.log(`=======================================================`);
   });
 }
+
+
 

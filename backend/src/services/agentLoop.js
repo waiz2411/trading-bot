@@ -261,23 +261,23 @@ export class AutonomousAgentLoop {
     return this.isAutoTradingEnabled;
   }
 
-  setBalance(newBalance, closeOpenPositions = false, account = null) {
+  setBalance(newBalance, closeOpenPositions = false, account = null, userEmail = null) {
     if (this.currentMode === 'LIVE') {
       throw new Error('Manual balance editing is disabled in Live Broker Mode. Balances are fetched directly from your broker.');
     }
     const targetAcc = account ? account.toUpperCase() : this.activeAccount;
-    const engine = targetAcc === 'SPOT' ? this.spotTradingEngine : this.marginTradingEngine;
+    const engine = this.getEngine(targetAcc, userEmail || this.currentUser);
     const state = engine.setBalance(newBalance, closeOpenPositions);
     this.log(`💰 [${targetAcc}] Balance updated to $${Number(newBalance).toLocaleString('en-US')}`, 'SUCCESS');
     return state;
   }
 
-  adjustBalance(delta, account = null) {
+  adjustBalance(delta, account = null, userEmail = null) {
     if (this.currentMode === 'LIVE') {
       throw new Error('Manual balance adjustments are disabled in Live Broker Mode.');
     }
     const targetAcc = account ? account.toUpperCase() : this.activeAccount;
-    const engine = targetAcc === 'SPOT' ? this.spotTradingEngine : this.marginTradingEngine;
+    const engine = this.getEngine(targetAcc, userEmail || this.currentUser);
     const state = engine.adjustBalance(delta);
     this.log(`💰 [${targetAcc}] Balance adjusted by ${delta >= 0 ? '+' : ''}$${delta}. Current Balance: $${state.balance.toLocaleString('en-US')}`, 'SUCCESS');
     return state;
