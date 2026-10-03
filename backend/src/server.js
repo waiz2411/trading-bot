@@ -437,15 +437,11 @@ app.get('/api/dashboard', async (req, res) => {
     const token = authHeader.replace(/^Bearer\s+/i, '');
     const user = await authService.validateToken(token);
     
-    const userEmail = user ? user.email : agentLoop.currentUser;
+    const userEmail = user ? user.email : 'default';
     const userMode = user ? user.mode : agentLoop.currentMode;
     const userAccount = user ? user.accountType : agentLoop.activeAccount;
 
-    if (user && user.email !== agentLoop.currentUser) {
-      await agentLoop.setUserMode(user.email, userMode);
-    }
-
-    const data = agentLoop.getDashboardData(userMode, userAccount);
+    const data = agentLoop.getDashboardData(userMode, userAccount, userEmail);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -453,12 +449,12 @@ app.get('/api/dashboard', async (req, res) => {
 });
 
 // API: Toggle autonomous trading mode
-app.post('/api/agent/toggle', (req, res) => {
+app.post('/api/agent/toggle', async (req, res) => {
   try {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace(/^Bearer\s+/i, '');
-    const user = authService.validateToken(token);
-    const userEmail = user ? user.email : agentLoop.currentUser;
+    const user = await authService.validateToken(token);
+    const userEmail = user ? user.email : 'default';
     const newState = agentLoop.toggleAutoTrading(null, userEmail);
     res.json({ success: true, isAutoTradingEnabled: newState });
   } catch (err) {
@@ -467,23 +463,31 @@ app.post('/api/agent/toggle', (req, res) => {
 });
 
 // API: Switch active account view ('MARGIN' | 'SPOT')
-app.post('/api/account/switch', (req, res) => {
+app.post('/api/account/switch', async (req, res) => {
   try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = await authService.validateToken(token);
+    const userEmail = user ? user.email : 'default';
+
     const { account } = req.body;
-    const active = agentLoop.switchAccount(account);
-    res.json({ success: true, activeAccount: active, ...agentLoop.getDashboardData() });
+    if (user && user.email) {
+      await authService.setUserActiveAccount(user.email, account);
+    }
+    const dashboard = agentLoop.getDashboardData(null, account, userEmail);
+    res.json({ success: true, activeAccount: account, ...dashboard });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // API: Update risk management settings (supports MARGIN and SPOT)
-app.post('/api/agent/settings', (req, res) => {
+app.post('/api/agent/settings', async (req, res) => {
   try {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace(/^Bearer\s+/i, '');
-    const user = authService.validateToken(token);
-    const userEmail = user ? user.email : agentLoop.currentUser;
+    const user = await authService.validateToken(token);
+    const userEmail = user ? user.email : 'default';
 
     const { account, stopLossPct, takeProfitPct, ...otherSettings } = req.body;
     const targetAccount = (account || agentLoop.activeAccount).toUpperCase();
@@ -500,11 +504,13 @@ app.post('/api/agent/settings', (req, res) => {
       agentLoop.log('⏸️ Bot paused automatically after settings change. Click Start to resume trading.', 'WARN');
     }
 
+    const userConfig = agentLoop.getConfig(userEmail);
+    const dashboard = agentLoop.getDashboardData(null, null, userEmail);
     res.json({
       success: true,
-      spotSettings: agentLoop.spotRiskManager,
-      marginSettings: agentLoop.marginRiskManager.getSettings(),
-      settings: agentLoop.getDashboardData().riskSettings,
+      spotSettings: userConfig.spotRiskManager,
+      marginSettings: userConfig.marginRiskManager.getSettings(),
+      settings: dashboard.riskSettings,
       isAutoTradingEnabled: agentLoop.isAutoTradingEnabled
     });
   } catch (err) {
@@ -513,44 +519,66 @@ app.post('/api/agent/settings', (req, res) => {
 });
 
 // API: Set Trade Direction (SHORT_ONLY, BOTH, LONG_ONLY)
-app.post('/api/agent/direction', (req, res) => {
+app.post('/api/agent/direction', async (req, res) => {
   try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = await authService.validateToken(token);
+    const userEmail = user ? user.email : 'default';
+
     const { direction } = req.body;
     if (!['SHORT_ONLY', 'BOTH', 'LONG_ONLY'].includes(direction)) {
       return res.status(400).json({ error: 'Invalid direction value' });
     }
-    const settings = agentLoop.setTradeDirection(direction);
-    res.json({ success: true, settings });
+    const config = agentLoop.getConfig(userEmail);
+    config.marginRiskManager.tradeDirection = direction;
+    agentLoop.log(`🧭 Trade Direction Mode updated: ${direction} for ${userEmail}`, 'INFO');
+    res.json({ success: true, settings: config.marginRiskManager.getSettings() });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // API: Set Trading Style (SCALPING vs SWING)
-app.post('/api/agent/style', (req, res) => {
+app.post('/api/agent/style', async (req, res) => {
   try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = await authService.validateToken(token);
+    const userEmail = user ? user.email : 'default';
+
     const { style } = req.body;
     if (!['SCALPING', 'SWING'].includes(style)) {
       return res.status(400).json({ error: 'Invalid style value' });
     }
-    const settings = agentLoop.setTradingStyle(style);
-    res.json({ success: true, settings });
+    const config = agentLoop.getConfig(userEmail);
+    config.marginRiskManager.tradingStyle = style;
+    const engine = agentLoop.getEngine('MARGIN', userEmail);
+    engine.scalpModeEnabled = style === 'SCALPING';
+    agentLoop.log(`⏱️ Trading Horizon updated: ${style} for ${userEmail}`, 'INFO');
+    res.json({ success: true, settings: config.marginRiskManager.getSettings() });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // API: Set Leverage (1x to 500x)
-app.post('/api/agent/leverage', (req, res) => {
+app.post('/api/agent/leverage', async (req, res) => {
   try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = await authService.validateToken(token);
+    const userEmail = user ? user.email : 'default';
+
     const { leverage } = req.body;
     const levNum = parseInt(leverage, 10);
     if (isNaN(levNum) || levNum < 1 || levNum > 500) {
       return res.status(400).json({ error: 'Leverage must be between 1x and 500x' });
     }
-    agentLoop.marginRiskManager.updateSettings({ defaultLeverage: levNum });
-    agentLoop.log(`⚙️ Account leverage updated to ${levNum}x`, 'INFO');
-    res.json({ success: true, settings: agentLoop.marginRiskManager.getSettings() });
+    const config = agentLoop.getConfig(userEmail);
+    config.marginRiskManager.updateSettings({ defaultLeverage: levNum });
+    agentLoop.log(`⚙️ Account leverage updated to ${levNum}x for ${userEmail}`, 'INFO');
+    res.json({ success: true, settings: config.marginRiskManager.getSettings() });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -562,7 +590,7 @@ app.post('/api/portfolio/balance', async (req, res) => {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace(/^Bearer\s+/i, '');
     const user = await authService.validateToken(token);
-    const userEmail = user ? user.email : agentLoop.currentUser;
+    const userEmail = user ? user.email : 'default';
 
     const { balance, closeOpenPositions, account } = req.body;
     const num = parseFloat(balance);
@@ -570,7 +598,7 @@ app.post('/api/portfolio/balance', async (req, res) => {
       return res.status(400).json({ error: 'Please provide a valid positive balance' });
     }
     const state = agentLoop.setBalance(num, !!closeOpenPositions, account, userEmail);
-    res.json({ success: true, portfolio: state, dashboard: agentLoop.getDashboardData() });
+    res.json({ success: true, portfolio: state, dashboard: agentLoop.getDashboardData(null, null, userEmail) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -582,7 +610,7 @@ app.post('/api/portfolio/adjust', async (req, res) => {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace(/^Bearer\s+/i, '');
     const user = await authService.validateToken(token);
-    const userEmail = user ? user.email : agentLoop.currentUser;
+    const userEmail = user ? user.email : 'default';
 
     const { delta, account } = req.body;
     const num = parseFloat(delta);
@@ -590,7 +618,7 @@ app.post('/api/portfolio/adjust', async (req, res) => {
       return res.status(400).json({ error: 'Invalid delta amount' });
     }
     const state = agentLoop.adjustBalance(num, account, userEmail);
-    res.json({ success: true, portfolio: state, dashboard: agentLoop.getDashboardData() });
+    res.json({ success: true, portfolio: state, dashboard: agentLoop.getDashboardData(null, null, userEmail) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1023,14 +1051,14 @@ app.post('/api/portfolio/reset', async (req, res) => {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace(/^Bearer\s+/i, '');
     const user = await authService.validateToken(token);
-    const userEmail = user ? user.email : agentLoop.currentUser;
+    const userEmail = user ? user.email : 'default';
     const { initialBalance, account } = req.body;
     const targetAccount = (account || agentLoop.activeAccount).toUpperCase();
     const engine = agentLoop.getEngine(targetAccount, userEmail);
     const initBal = initialBalance !== undefined ? parseFloat(initialBalance) : 10;
     const resetState = engine.reset(initBal);
     agentLoop.log(`🔄 [${targetAccount}] Portfolio reset to $${initBal.toLocaleString('en-US')} virtual balance.`, 'WARN');
-    res.json({ success: true, portfolio: resetState, dashboard: agentLoop.getDashboardData() });
+    res.json({ success: true, portfolio: resetState, dashboard: agentLoop.getDashboardData(null, null, userEmail) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

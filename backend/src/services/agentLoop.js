@@ -795,26 +795,29 @@ export class AutonomousAgentLoop {
       // ==========================================
       // 5. MANAGE EXITS FOR BOTH ENGINES
       // ==========================================
-      // A. Margin Engine Trigger Checks (ONLY in SIMULATED Demo Mode)
-      if (this.currentMode === 'SIMULATED') {
-        const marginClosed = this.marginTradingEngine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
-        for (const closed of marginClosed) {
-          // Cooldown: 60 cycles (5m) on stop loss, 12 cycles (1m) on profit/breakeven
-          const cooldownTime = closed.exitReason === 'STOP_LOSS_TRIGGER' ? 60 : 12;
-          this.assetCooldowns.set(closed.symbol, cooldownTime);
-          const feeStr = closed.fee ? ` (Fee: -$${closed.fee})` : '';
-          if (closed.exitReason === 'TAKE_PROFIT_TRIGGER') {
-            this.log(`🎯 [MARGIN DEMO] TP HIT: ${closed.symbol} ${closed.side}! Realized Net: +$${closed.finalPnL}${feeStr}`, 'SUCCESS');
-          } else if (closed.exitReason === 'TIME_LIMIT_EXIT') {
-            this.log(`⏱️ [MARGIN DEMO] 5M SCALP EXPIRY: ${closed.symbol} auto-closed at 5m cap. Realized Net: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}${feeStr}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'INFO');
-          } else if (closed.exitReason === 'MOMENTUM_EXHAUSTION_EXIT') {
-            this.log(`🔒 [MARGIN DEMO] FAST SCALP LOCK: ${closed.symbol} gain banked before 5m cap. Realized Net: +$${closed.finalPnL}${feeStr}`, 'SUCCESS');
-          } else if (closed.exitReason === 'TRAILING_STOP_TRIGGER') {
-            this.log(`🛡️ [MARGIN DEMO] TRAIL STOP: ${closed.symbol} ${closed.side}! Profit: +$${closed.finalPnL}${feeStr}`, 'SUCCESS');
-          } else if (closed.exitReason === 'BREAKEVEN_STOP_TRIGGER') {
-            this.log(`🔒 [MARGIN DEMO] BREAK-EVEN: ${closed.symbol} ${closed.side}. Loss protected (Net: $${closed.finalPnL}${feeStr})`, 'INFO');
-          } else if (closed.exitReason === 'STOP_LOSS_TRIGGER') {
-            this.log(`🛡️ [MARGIN DEMO] STOP HIT: ${closed.symbol} ${closed.side}. Loss capped: -$${Math.abs(closed.finalPnL)}${feeStr}`, 'WARN');
+      // A. Margin Engine Trigger Checks (For ALL users' demo engines)
+      for (const uKey of Object.keys(this.engines)) {
+        const uMarginEngine = this.engines[uKey]?.MARGIN;
+        if (uMarginEngine) {
+          const marginClosed = uMarginEngine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
+          for (const closed of marginClosed) {
+            // Cooldown: 60 cycles (5m) on stop loss, 12 cycles (1m) on profit/breakeven
+            const cooldownTime = closed.exitReason === 'STOP_LOSS_TRIGGER' ? 60 : 12;
+            this.assetCooldowns.set(closed.symbol, cooldownTime);
+            const feeStr = closed.fee ? ` (Fee: -$${closed.fee})` : '';
+            if (closed.exitReason === 'TAKE_PROFIT_TRIGGER') {
+              this.log(`🎯 [MARGIN DEMO] TP HIT: ${closed.symbol} ${closed.side}! Realized Net: +$${closed.finalPnL}${feeStr}`, 'SUCCESS');
+            } else if (closed.exitReason === 'TIME_LIMIT_EXIT') {
+              this.log(`⏱️ [MARGIN DEMO] 5M SCALP EXPIRY: ${closed.symbol} auto-closed at 5m cap. Realized Net: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}${feeStr}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'INFO');
+            } else if (closed.exitReason === 'MOMENTUM_EXHAUSTION_EXIT') {
+              this.log(`🔒 [MARGIN DEMO] FAST SCALP LOCK: ${closed.symbol} gain banked before 5m cap. Realized Net: +$${closed.finalPnL}${feeStr}`, 'SUCCESS');
+            } else if (closed.exitReason === 'TRAILING_STOP_TRIGGER') {
+              this.log(`🛡️ [MARGIN DEMO] TRAIL STOP: ${closed.symbol} ${closed.side}! Profit: +$${closed.finalPnL}${feeStr}`, 'SUCCESS');
+            } else if (closed.exitReason === 'BREAKEVEN_STOP_TRIGGER') {
+              this.log(`🔒 [MARGIN DEMO] BREAK-EVEN: ${closed.symbol} ${closed.side}. Loss protected (Net: $${closed.finalPnL}${feeStr})`, 'INFO');
+            } else if (closed.exitReason === 'STOP_LOSS_TRIGGER') {
+              this.log(`🛡️ [MARGIN DEMO] STOP HIT: ${closed.symbol} ${closed.side}. Loss capped: -$${Math.abs(closed.finalPnL)}${feeStr}`, 'WARN');
+            }
           }
         }
       }
@@ -967,56 +970,61 @@ export class AutonomousAgentLoop {
         }
       }
 
-      // B. Spot Engine Trigger Checks
-      const spotClosed = this.spotTradingEngine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
-      for (const closed of spotClosed) {
-        if (this.currentMode === 'LIVE') {
-          if (!this.liveSpotClosedTrades) this.liveSpotClosedTrades = [];
-          const exists = this.liveSpotClosedTrades.some(t => t.id === closed.id);
-          if (!exists) {
-            this.liveSpotClosedTrades.unshift({
-              ...closed,
-              isLiveBrokerOrder: true,
-              exitTime: new Date().toISOString()
-            });
-            this.liveSpotRealizedPnL = Number(((this.liveSpotRealizedPnL || 0) + (closed.finalPnL || 0)).toFixed(2));
-          }
-        }
+      // B. Spot Engine Trigger Checks (For ALL users' demo engines)
+      for (const uKey of Object.keys(this.engines)) {
+        const uSpotEngine = this.engines[uKey]?.SPOT;
+        if (uSpotEngine) {
+          const spotClosed = uSpotEngine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
+          for (const closed of spotClosed) {
+            if (this.currentMode === 'LIVE') {
+              if (!this.liveSpotClosedTrades) this.liveSpotClosedTrades = [];
+              const exists = this.liveSpotClosedTrades.some(t => t.id === closed.id);
+              if (!exists) {
+                this.liveSpotClosedTrades.unshift({
+                  ...closed,
+                  isLiveBrokerOrder: true,
+                  exitTime: new Date().toISOString()
+                });
+                this.liveSpotRealizedPnL = Number(((this.liveSpotRealizedPnL || 0) + (closed.finalPnL || 0)).toFixed(2));
+              }
+            }
 
-        // Anti-Churn Revenge Trade Protection: 15-Minute strict lockout on Losses; 5-Minute on profit
-        const isLoss = (closed.finalPnL || 0) < -0.0001 || closed.exitReason === 'STOP_LOSS_TRIGGER';
-        const lockMs = isLoss ? 15 * 60 * 1000 : 5 * 60 * 1000;
-        const lockExpiry = Date.now() + lockMs;
-        const cleanName = (closed.name || closed.symbol.replace(/[-_/]/g, '').replace(/USD$/, '')).toUpperCase();
+            // Anti-Churn Revenge Trade Protection: 15-Minute strict lockout on Losses; 5-Minute on profit
+            const isLoss = (closed.finalPnL || 0) < -0.0001 || closed.exitReason === 'STOP_LOSS_TRIGGER';
+            const lockMs = isLoss ? 15 * 60 * 1000 : 5 * 60 * 1000;
+            const lockExpiry = Date.now() + lockMs;
+            const cleanName = (closed.name || closed.symbol.replace(/[-_/]/g, '').replace(/USD$/, '')).toUpperCase();
 
-        if (!this.spotCooldownUntil) this.spotCooldownUntil = new Map();
-        this.spotCooldownUntil.set(closed.symbol, lockExpiry);
-        this.spotCooldownUntil.set(cleanName, lockExpiry);
-        this.spotCooldownUntil.set(`${cleanName}-USD`, lockExpiry);
-        this.spotCooldownUntil.set(`${cleanName}USDT`, lockExpiry);
+            if (!this.spotCooldownUntil) this.spotCooldownUntil = new Map();
+            this.spotCooldownUntil.set(closed.symbol, lockExpiry);
+            this.spotCooldownUntil.set(cleanName, lockExpiry);
+            this.spotCooldownUntil.set(`${cleanName}-USD`, lockExpiry);
+            this.spotCooldownUntil.set(`${cleanName}USDT`, lockExpiry);
 
-        const spotCd = isLoss ? 600 : 200;
-        this.spotCooldowns.set(closed.symbol, spotCd);
-        this.spotCooldowns.set(`${cleanName}-USD`, spotCd);
-        this.spotCooldowns.set(`${cleanName}USDT`, spotCd);
-        this.spotCooldowns.set(cleanName, spotCd);
+            const spotCd = isLoss ? 600 : 200;
+            this.spotCooldowns.set(closed.symbol, spotCd);
+            this.spotCooldowns.set(`${cleanName}-USD`, spotCd);
+            this.spotCooldowns.set(`${cleanName}USDT`, spotCd);
+            this.spotCooldowns.set(cleanName, spotCd);
 
-        const feeStr = closed.fee ? ` (Fee: -$${closed.fee})` : '';
-        const holdCapStr = `${this.spotRiskManager.maxHoldMinutes || 60}M`;
+            const userConfig = this.getConfig(uKey);
+            const userSpotRisk = userConfig.spotRiskManager;
+            const feeStr = closed.fee ? ` (Fee: -$${closed.fee})` : '';
+            const holdCapStr = `${userSpotRisk.maxHoldMinutes || 60}M`;
 
-        if (closed.exitReason === 'TAKE_PROFIT_TRIGGER') {
-          this.log(`🪙 [SPOT] TARGET HIT (+${this.spotRiskManager.takeProfitPct}%): ${closed.symbol}! Sold holding for Realized Net: +$${closed.finalPnL} (+${closed.finalPnLPercent}%)${feeStr}!`, 'SUCCESS');
-        } else if (closed.exitReason === 'TRAILING_STOP_TRIGGER') {
-          this.log(`🛡️ [SPOT] TRAILING PROFIT SECURED: ${closed.symbol}! Banked gain on trailing stop: +$${closed.finalPnL} (+${closed.finalPnLPercent}%)${feeStr}!`, 'SUCCESS');
-        } else if (closed.exitReason === 'BREAKEVEN_STOP_TRIGGER') {
-          this.log(`🔒 [SPOT] BREAK-EVEN SHIELD HIT: ${closed.symbol} closed with zero fee loss (Net: $${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}${feeStr})!`, 'INFO');
-        } else if (closed.exitReason === 'TIME_LIMIT_EXIT') {
-          this.log(`⏱️ [SPOT] ${holdCapStr} HOLD EXPIRY: ${closed.symbol} auto-closed at ${holdCapStr} cap. Realized Net: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL} (${closed.finalPnLPercent}%)${feeStr}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'INFO');
-        } else if (closed.exitReason === 'STOP_LOSS_TRIGGER') {
-          this.log(`🪙 [SPOT] STOP TRIGGERED (-${this.spotRiskManager.stopLossPct}%): ${closed.symbol} sold at stop. Loss capped: -$${Math.abs(closed.finalPnL)} (${closed.finalPnLPercent}%)${feeStr}. Coin locked on 15m cooldown.`, 'WARN');
-        } else {
-          this.log(`🪙 [SPOT] EXIT: ${closed.symbol} closed (${closed.exitReason}). Realized Net: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}${feeStr}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'WARN');
-        }
+            if (closed.exitReason === 'TAKE_PROFIT_TRIGGER') {
+              this.log(`🪙 [SPOT] TARGET HIT (+${userSpotRisk.takeProfitPct}%): ${closed.symbol}! Sold holding for Realized Net: +$${closed.finalPnL} (+${closed.finalPnLPercent}%)${feeStr}!`, 'SUCCESS');
+            } else if (closed.exitReason === 'TRAILING_STOP_TRIGGER') {
+              this.log(`🛡️ [SPOT] TRAILING PROFIT SECURED: ${closed.symbol}! Banked gain on trailing stop: +$${closed.finalPnL} (+${closed.finalPnLPercent}%)${feeStr}!`, 'SUCCESS');
+            } else if (closed.exitReason === 'BREAKEVEN_STOP_TRIGGER') {
+              this.log(`🔒 [SPOT] BREAK-EVEN SHIELD HIT: ${closed.symbol} closed with zero fee loss (Net: $${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}${feeStr})!`, 'INFO');
+            } else if (closed.exitReason === 'TIME_LIMIT_EXIT') {
+              this.log(`⏱️ [SPOT] ${holdCapStr} HOLD EXPIRY: ${closed.symbol} auto-closed at ${holdCapStr} cap. Realized Net: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL} (${closed.finalPnLPercent}%)${feeStr}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'INFO');
+            } else if (closed.exitReason === 'STOP_LOSS_TRIGGER') {
+              this.log(`🪙 [SPOT] STOP TRIGGERED (-${userSpotRisk.stopLossPct}%): ${closed.symbol} sold at stop. Loss capped: -$${Math.abs(closed.finalPnL)} (${closed.finalPnLPercent}%)${feeStr}. Coin locked on 15m cooldown.`, 'WARN');
+            } else {
+              this.log(`🪙 [SPOT] EXIT: ${closed.symbol} closed (${closed.exitReason}). Realized Net: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}${feeStr}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'WARN');
+            }
 
         // Live Binance Exit Sell
         if (this.currentMode === 'LIVE' && binanceConnector.connected) {
@@ -1047,8 +1055,10 @@ export class AutonomousAgentLoop {
           });
           this.liveSpotRealizedPnL = Number(((this.liveSpotRealizedPnL || 0) + (closed.finalPnL || 0)).toFixed(2));
           this.savePersistedSpotTrades();
+          }
         }
       }
+    }
 
     } catch (error) {
       console.error('Error during agent cycle:', error);
@@ -1206,7 +1216,14 @@ export class AutonomousAgentLoop {
     return this.liveSpotPositions || [];
   }
 
-  getDashboardData(forcedMode = null, forcedAccount = null) {
+  getDashboardData(forcedMode = null, forcedAccount = null, userEmail = null) {
+    const targetUser = userEmail || this.currentUser || 'default';
+    const userConfig = this.getConfig(targetUser);
+    const userMarginRisk = userConfig.marginRiskManager;
+    const userSpotRisk = userConfig.spotRiskManager;
+    const userMarginEngine = this.getEngine('MARGIN', targetUser);
+    const userSpotEngine = this.getEngine('SPOT', targetUser);
+
     const currentMode = forcedMode || this.currentMode;
     const activeAccount = (forcedAccount || this.activeAccount || 'MARGIN').toUpperCase();
     const isLive = currentMode === 'LIVE';
@@ -1326,7 +1343,7 @@ export class AutonomousAgentLoop {
       }
     } else {
       marginPortfolio = {
-        ...this.marginTradingEngine.getPortfolioState(),
+        ...userMarginEngine.getPortfolioState(),
         isLive: false,
         isConnected: true,
         isDemo: true,
@@ -1456,7 +1473,7 @@ export class AutonomousAgentLoop {
       }
     } else {
       spotPortfolio = {
-        ...this.spotTradingEngine.getPortfolioState(),
+        ...userSpotEngine.getPortfolioState(),
         isLive: false,
         isConnected: true,
         isDemo: true,
@@ -1478,22 +1495,22 @@ export class AutonomousAgentLoop {
     }
 
     const marginRisk = {
-      ...this.marginRiskManager.getSettings(),
+      ...userMarginRisk.getSettings(),
       maxConcurrentTrades: dynamicMarginSlots
     };
     const spotRisk = {
-      ...this.spotRiskManager,
-      maxConcurrentTrades: this.spotRiskManager.maxSlots || 4,
+      ...userSpotRisk,
+      maxConcurrentTrades: userSpotRisk.maxSlots || 4,
       tradingStyle: 'SPOT_BUY',
       defaultLeverage: 1,
       tradeDirection: 'LONG_ONLY',
-      targetRiskRewardRatio: Number((this.spotRiskManager.takeProfitPct / this.spotRiskManager.stopLossPct).toFixed(1))
+      targetRiskRewardRatio: Number((userSpotRisk.takeProfitPct / userSpotRisk.stopLossPct).toFixed(1))
     };
 
     return {
       activeAccount,
       mode: currentMode,
-      currentUser: this.currentUser,
+      currentUser: targetUser,
       brokers: {
         binance: binanceStatus,
         mt5: mt5Status
