@@ -534,7 +534,8 @@ export function evaluatePositionExit(position, technicals, currentPrice) {
   }
 
   // 2. Structural Break Exit for Spot Crypto: Price cleanly breaks below 5m 20 EMA support
-  if (side === 'LONG' && position.category === 'Crypto') {
+  // Bypassed for HOT_RETEST_TRAILING_LOCK since we intentionally bought the pullback retest.
+  if (side === 'LONG' && position.category === 'Crypto' && position.exitRule !== 'HOT_RETEST_TRAILING_LOCK') {
     if (ema20 && currentPrice < ema20 * 0.998) {
       const ageMs = position.openTime ? (Date.now() - new Date(position.openTime).getTime()) : 0;
       if (ageMs >= 120000 || (position.cycleCount || 0) >= 30) {

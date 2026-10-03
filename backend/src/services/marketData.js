@@ -26,7 +26,7 @@ function generateBalancedCandles(basePrice, volatility = 0.003, count = 70) {
     const change = wave + noise + meanPull;
 
     const open = price;
-    const close = Math.max(0.0001, open + change);
+    const close = Math.max(basePrice * 0.1, open + change);
     const high = Math.max(open, close) + Math.random() * volatility * basePrice * 0.3;
     const low = Math.min(open, close) - Math.random() * volatility * basePrice * 0.3;
     const volume = Math.round(5000 + Math.random() * 25000);
@@ -224,7 +224,7 @@ export class MarketDataService {
 
         const appSymbol = `${baseAsset}-USD`;
         const livePrice = parseFloat(t.lastPrice);
-        if (isNaN(livePrice) || livePrice <= 0) continue;
+        if (isNaN(livePrice) || livePrice < 0.0005) continue; // Exclude sub-penny dust coins (e.g. BTTC 0.00000038) with extreme tick friction
 
         const high = parseFloat(t.highPrice);
         const low = parseFloat(t.lowPrice);

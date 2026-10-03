@@ -517,9 +517,9 @@ export class PaperTradingEngine {
       // A. Maximum Holding Cap (Hard Time Limit Exit)
       // Trades with exitRule === 'TP_SL_OR_STRUCTURAL_BREAK' exit purely on TP (+1.5%), SL (-0.9%), or structural break below 20 EMA,
       // with a wide 4-hour safety timer to eliminate blind timer dumping.
-      const isStructuralExit = pos.exitRule === 'TP_SL_OR_STRUCTURAL_BREAK';
-      const effectiveMaxHoldMs = isStructuralExit ? Math.max(maxHoldMs, 4 * 60 * 60 * 1000) : maxHoldMs;
-      const effectiveMaxHoldCycles = isStructuralExit ? Math.max(maxHoldCycles, 4 * 60 * 40) : maxHoldCycles;
+      const isStructuralExit = pos.exitRule === 'TP_SL_OR_STRUCTURAL_BREAK' || pos.exitRule === 'HOT_RETEST_TRAILING_LOCK';
+      const effectiveMaxHoldMs = isStructuralExit ? Math.max(maxHoldMs, 2 * 60 * 60 * 1000) : maxHoldMs;
+      const effectiveMaxHoldCycles = isStructuralExit ? Math.max(maxHoldCycles, 2 * 60 * 40) : maxHoldCycles;
 
       if (!isStructuralExit && (ageMs >= maxHoldMs || cyclesElapsed >= maxHoldCycles)) {
         // PROFIT SAFEGUARD: Do not time-kill the trade if it is currently climbing well in profit (>= +0.40%)
