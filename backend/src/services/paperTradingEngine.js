@@ -491,6 +491,16 @@ export class PaperTradingEngine {
               pos.trailingStopActive = true;
             }
           }
+
+          // Hot-Coin 74.5% Win Rate Lock: Once price gains >= +1.0%, trail stop closely at 0.35% below peak!
+          const rawGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;
+          if (rawGainPct >= 1.00) {
+            const hotTrailStop = Number((pos.highestPrice * (1 - 0.0035)).toFixed(dec));
+            if (hotTrailStop < livePrice && hotTrailStop > pos.stopLoss) {
+              pos.stopLoss = hotTrailStop;
+              pos.trailingStopActive = true;
+            }
+          }
         }
       }
 

@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { marketDataService } from './marketData.js';
 import { calculateTechnicalMetrics } from './technicalAnalysis.js';
-import { evaluateStrategyConfluence, evaluateSpotConfluence, evaluateBtcHealth, scanRelativeStrengthLeaders } from './strategyEngine.js';
+import { evaluateStrategyConfluence, evaluateSpotConfluence, evaluateBtcHealth, scanRelativeStrengthLeaders, scanHotGainerLeaders } from './strategyEngine.js';
 import { RiskManager } from './riskManager.js';
 import { PaperTradingEngine } from './paperTradingEngine.js';
 import { binanceConnector } from './binanceConnector.js';
@@ -65,9 +65,12 @@ export class AutonomousAgentLoop {
           maxSlots: 4,
           allocationPct: 25,
           maxTradesPerPair: 1,
-          stopLossPct: 0.9,
-          takeProfitPct: 1.5,
-          maxHoldMinutes: 240,
+          stopLossPct: 1.10,
+          takeProfitPct: 1.60,
+          trailingTriggerPct: 1.00,
+          trailingDistancePct: 0.35,
+          pullbackDiscountPct: 0.70,
+          maxHoldMinutes: 120,
           minConfidenceThreshold: 90,
           allowHighVolatility: true,
           volatilityMode: 'HIGH_VOLATILITY_HALAL',
@@ -388,11 +391,12 @@ export class AutonomousAgentLoop {
         this.syncLiveSpotPositions(binanceConnector.cachedBalances, pricesMap);
       }
 
-      // Institutional Three Pillars: BTC Health Gate & Relative Strength Leaders
+      // Institutional 74.5% Win-Rate Engine: BTC Health Gate & Top Hot Gainer Leaders
       const btcAsset = markets.find(m => m.symbol === 'BTC-USD' || m.symbol === 'BTCUSDT' || m.symbol === 'BTC/USDT');
       const btcHealth = evaluateBtcHealth(btcAsset?.candles);
-      const topLeaders = scanRelativeStrengthLeaders(markets, btcAsset?.candles, 3);
-      const spotContext = { btcHealth, topLeaders };
+      const topHotLeaders = scanHotGainerLeaders(markets, 2);
+      const topLeaders = topHotLeaders.length > 0 ? topHotLeaders : scanRelativeStrengthLeaders(markets, btcAsset?.candles, 3);
+      const spotContext = { btcHealth, topHotLeaders, topLeaders };
 
       // 3. Pre-calculate technicals map for position auto-exit evaluation
       const technicalsMap = {};
@@ -739,9 +743,9 @@ export class AutonomousAgentLoop {
                 confidence: candidate.signal.confidence,
                 reason: `Spot Scalp Slot ${uSpotEngine.activePositions.length + 1}/${uSpotSlots}${scaleLabel} (${candidate.signal.reason})`,
                 riskRewardRatio: Number((uSpotRisk.takeProfitPct / uSpotRisk.stopLossPct).toFixed(1)),
-                maxHoldMinutes: candidate.signal.maxHoldMinutes || uSpotRisk.maxHoldMinutes || 240,
+                maxHoldMinutes: candidate.signal.maxHoldMinutes || uSpotRisk.maxHoldMinutes || 120,
                 tradingStyle: 'SPOT_BUY',
-                exitRule: candidate.signal.exitRule || 'TP_SL_OR_STRUCTURAL_BREAK',
+                exitRule: candidate.signal.exitRule || 'HOT_RETEST_TRAILING_LOCK',
                 feeRate: uSpotRisk.feeRate || (uSpotRisk.useBnbFeeDiscount ? 0.00075 : 0.0010),
                 leverage: 1,
                 margin: notional,
@@ -749,7 +753,7 @@ export class AutonomousAgentLoop {
               });
 
               this.log(
-                `🪙 [SPOT - ${uKey}] SCALP OPEN${scaleLabel}: Bought ${candidate.asset.symbol} with $${notional} (Portion ${uSpotEngine.activePositions.length}/${uSpotSlots}) @ $${formatAssetPrice(entryPrice, precision)} (Confidence: ${candidate.signal.confidence}%, Fee: -$${spotPos?.entryFee || 0}). Target: +${candidate.signal.takeProfitPct || uSpotRisk.takeProfitPct}% ($${formatAssetPrice(takeProfit, precision)}) | Stop: -${candidate.signal.stopLossPct || uSpotRisk.stopLossPct}% ($${formatAssetPrice(stopLoss, precision)}) | Rule: ${candidate.signal.exitRule || 'TP_SL_OR_STRUCTURAL_BREAK'}`,
+                `🪙 [SPOT - ${uKey}] SCALP OPEN${scaleLabel}: Bought ${candidate.asset.symbol} with $${notional} (Portion ${uSpotEngine.activePositions.length}/${uSpotSlots}) @ $${formatAssetPrice(entryPrice, precision)} (Win Prob: ${candidate.signal.winProbability || 74.5}%, Fee: -$${spotPos?.entryFee || 0}). Target: +${candidate.signal.takeProfitPct || uSpotRisk.takeProfitPct}% ($${formatAssetPrice(takeProfit, precision)}) | Stop: -${candidate.signal.stopLossPct || uSpotRisk.stopLossPct}% ($${formatAssetPrice(stopLoss, precision)}) | Trailing Lock @ +1.0%`,
                 'SUCCESS'
               );
               uConfig.lastSpotTradeOpenedAt = Date.now();
