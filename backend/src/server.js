@@ -441,6 +441,11 @@ app.get('/api/dashboard', async (req, res) => {
     const userMode = user ? user.mode : agentLoop.currentMode;
     const userAccount = user ? user.accountType : agentLoop.activeAccount;
 
+    const uConfig = agentLoop.getConfig(userEmail);
+    if (user && user.isAutoTradingEnabled !== undefined && uConfig.isAutoTradingEnabled === undefined) {
+      uConfig.isAutoTradingEnabled = user.isAutoTradingEnabled;
+    }
+
     const data = agentLoop.getDashboardData(userMode, userAccount, userEmail);
     res.json(data);
   } catch (err) {

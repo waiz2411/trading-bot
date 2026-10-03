@@ -46,6 +46,11 @@ export class AutonomousAgentLoop {
     const userKey = email || 'default';
     if (!this.configs[userKey]) {
       this.configs[userKey] = {
+        isAutoTradingEnabled: undefined,
+        lastSpotTradeOpenedAt: 0,
+        lastMarginTradeOpenedAt: 0,
+        spotCooldownUntil: new Map(),
+        assetCooldowns: new Map(),
         marginRiskManager: new RiskManager({
           riskPerTradePct: 1.5,
           maxConcurrentTrades: 20,
@@ -236,12 +241,12 @@ export class AutonomousAgentLoop {
   }
 
   toggleAutoTrading(targetState = null, userEmail = null) {
-    const email = userEmail || this.currentUser;
-    const user = authService.getUser(email);
-    const mode = user ? user.mode : this.currentMode;
-    const target = targetState !== null ? Boolean(targetState) : !this.isAutoTradingEnabled;
+    const email = userEmail || this.currentUser || 'default';
+    const config = this.getConfig(email);
+    const current = config.isAutoTradingEnabled ?? this.isAutoTradingEnabled;
+    const target = targetState !== null ? Boolean(targetState) : !current;
 
-    if (target && mode === 'LIVE') {
+    if (target && this.currentMode === 'LIVE') {
       if (this.activeAccount === 'SPOT' && !binanceConnector.getStatus().connected) {
         throw new Error('Cannot start auto-trading: Binance Spot API is not connected. Connect Binance in Broker settings first.');
       }
@@ -250,15 +255,16 @@ export class AutonomousAgentLoop {
       }
     }
 
+    config.isAutoTradingEnabled = target;
     this.isAutoTradingEnabled = target;
-    if (email) {
-      authService.setUserAutoTrading(email, target);
+    if (email && email !== 'default') {
+      authService.setUserAutoTrading(email, target).catch(() => {});
     }
     this.log(
-      `Autonomous execution switched to: ${this.isAutoTradingEnabled ? 'ENABLED (Auto-open & auto-close active 24/7)' : 'DISABLED (Manual only)'}`,
-      this.isAutoTradingEnabled ? 'SUCCESS' : 'WARN'
+      `Autonomous execution switched to: ${target ? 'ENABLED (Auto-open & auto-close active 24/7)' : 'DISABLED (Manual only)'} for ${email}`,
+      target ? 'SUCCESS' : 'WARN'
     );
-    return this.isAutoTradingEnabled;
+    return target;
   }
 
   setBalance(newBalance, closeOpenPositions = false, account = null, userEmail = null) {
@@ -484,46 +490,52 @@ export class AutonomousAgentLoop {
       this.latestScanResults = scanResults;
 
       // ==========================================
-      // 4A. MARGIN SCALPER AUTO-OPEN (Multi-Slot Opportunity Fulfillment)
+      // 4. MULTI-TENANT AUTO-OPEN (MARGIN & SPOT)
       // ==========================================
-      if (this.isAutoTradingEnabled && validMarginSignals.length > 0) {
-        // Rank all candidate setups across global markets by confidence score!
-        validMarginSignals.sort((a, b) => b.signal.confidence - a.signal.confidence);
+      const allActiveUsers = new Set(Object.keys(this.engines));
+      for (const k of Object.keys(this.configs)) allActiveUsers.add(k);
+      if (this.currentUser) allActiveUsers.add(this.currentUser);
 
-        for (const { asset, signal } of validMarginSignals) {
-          const portfolioState = this.marginTradingEngine.getPortfolioState();
+      for (const uKey of allActiveUsers) {
+        const uConfig = this.getConfig(uKey);
+        const uAutoTrading = uConfig.isAutoTradingEnabled ?? this.isAutoTradingEnabled;
+        if (!uAutoTrading) continue;
 
-          // Dynamic Cent vs Standard Account Adaptation
+        const uSpotEngine = this.getEngine('SPOT', uKey);
+        const uMarginEngine = this.getEngine('MARGIN', uKey);
+        const uSpotRisk = uConfig.spotRiskManager;
+        const uMarginRisk = uConfig.marginRiskManager;
+
+        // 4A. MARGIN SCALPER AUTO-OPEN FOR uKey
+        if (validMarginSignals.length > 0) {
+          const portfolioState = uMarginEngine.getPortfolioState();
           const accountType = (mt5Connector.accountInfo?.accountType || (String(mt5Connector.accountInfo?.currency || '').includes('USC') ? 'CENT' : 'STANDARD')).toUpperCase();
           const liveBal = Number(mt5Connector.accountInfo?.balance || portfolioState.balance || 100);
           let maxAllowedSlots = 20;
           let lotVolume = 0.01;
 
           if (accountType === 'CENT') {
-            maxAllowedSlots = 20; // 20 simultaneous slots on Cent accounts with zero margin stress
+            maxAllowedSlots = 20;
             lotVolume = Math.max(0.20, Math.min(2.00, Number(((liveBal / 1000) * 0.30).toFixed(2))));
           } else {
-            // Standard USD Account: Dynamic lot sizing & margin protection
             if (liveBal < 35) {
-              maxAllowedSlots = 2; // Exactly 2 slots for $10-$30 balance ($4.56 margin used, $5.44 free buffer)
+              maxAllowedSlots = 2;
               lotVolume = 0.01;
             } else if (liveBal < 75) {
               maxAllowedSlots = 6;
               lotVolume = 0.02;
             } else {
-              maxAllowedSlots = 20; // Full 20 slots for $100+ accounts
-              lotVolume = Math.max(0.02, Math.min(0.10, Math.round((liveBal / 100) * 0.03 * 100) / 100)); // Calibrated 0.03 lot for $100 balance!
+              maxAllowedSlots = 20;
+              lotVolume = Math.max(0.02, Math.min(0.10, Math.round((liveBal / 100) * 0.03 * 100) / 100));
             }
           }
 
-          // Dynamically synchronize risk manager slot capacity
-          this.marginRiskManager.maxConcurrentTrades = maxAllowedSlots;
+          uMarginRisk.maxConcurrentTrades = maxAllowedSlots;
 
-          if (this.currentMode === 'LIVE') {
-            // Keep engine positions strictly synchronized with real broker tickets
+          if (this.currentMode === 'LIVE' && uKey === this.currentUser) {
             const liveTickets = new Set((mt5Connector.openPositions || []).map(p => Number(p.ticket)));
-            this.marginTradingEngine.activePositions = (this.marginTradingEngine.activePositions || []).filter(p => liveTickets.has(Number(p.ticket)));
-            portfolioState.activePositions = this.marginTradingEngine.activePositions;
+            uMarginEngine.activePositions = (uMarginEngine.activePositions || []).filter(p => liveTickets.has(Number(p.ticket)));
+            portfolioState.activePositions = uMarginEngine.activePositions;
 
             if (mt5Connector.connected && mt5Connector.accountInfo) {
               const liveEq = Number(mt5Connector.accountInfo.equity || liveBal);
@@ -535,259 +547,218 @@ export class AutonomousAgentLoop {
               portfolioState.usedMargin = liveMargin;
               portfolioState.freeMargin = liveFreeMargin;
 
-              // Dynamic minimum free margin check (0.20 USC for Cent, $2.10 for Standard 500x)
               const minReqFreeMargin = accountType === 'CENT' ? 0.20 : 2.10;
-              if (liveFreeMargin < minReqFreeMargin) {
-                break;
-              }
+              if (liveFreeMargin >= minReqFreeMargin) {
+                const brokerPositionsCount = Array.isArray(mt5Connector.openPositions)
+                  ? mt5Connector.openPositions.length
+                  : (liveMargin > 0 ? Math.floor(liveMargin / 2.0) : 0);
 
-              // BROKER REALITY CHECK: If broker has margin locked, calculate actual live slots in use
-              const brokerPositionsCount = Array.isArray(mt5Connector.openPositions)
-                ? mt5Connector.openPositions.length
-                : (liveMargin > 0 ? Math.floor(liveMargin / 2.0) : 0);
+                const realSlotsInUse = Math.max(portfolioState.activePositions.length, brokerPositionsCount);
+                if (realSlotsInUse < maxAllowedSlots) {
+                  for (const { asset, signal } of validMarginSignals) {
+                    if (uMarginEngine.activePositions.length >= maxAllowedSlots) break;
+                    const cleanAssetSym = asset.symbol.replace(/[-_./=Xm]/gi, '').toUpperCase();
+                    const sameSymbolCount = (portfolioState.activePositions || []).filter(p => {
+                      const cleanPosSym = (p.symbol || '').replace(/[-_./=Xm]/gi, '').toUpperCase();
+                      return cleanPosSym === cleanAssetSym || cleanPosSym.includes(cleanAssetSym) || cleanAssetSym.includes(cleanPosSym);
+                    }).length;
+                    if (sameSymbolCount >= 1) continue;
 
-              const realSlotsInUse = Math.max(portfolioState.activePositions.length, brokerPositionsCount);
-              if (realSlotsInUse >= maxAllowedSlots) {
-                break; // Max slots for this account type occupied on real broker!
-              }
-            }
-          }
-
-          if (portfolioState.activePositions.length >= maxAllowedSlots) {
-            break; // Max slots occupied
-          }
-
-          // Concentration check: strictly 1 trade per symbol (no averaging down or stacking)
-          const openPositions = portfolioState.activePositions;
-          const cleanAssetSym = asset.symbol.replace(/[-_./=Xm]/gi, '').toUpperCase();
-          const sameSymbolCount = openPositions.filter(p => {
-            const cleanPosSym = (p.symbol || '').replace(/[-_./=Xm]/gi, '').toUpperCase();
-            return cleanPosSym === cleanAssetSym || cleanPosSym.includes(cleanAssetSym) || cleanAssetSym.includes(cleanPosSym);
-          }).length;
-          if (sameSymbolCount >= 1) continue;
-
-          const riskEval = this.marginRiskManager.evaluateTradeRisk(portfolioState, signal, asset);
-          if (riskEval.allowed) {
-            if (this.currentMode === 'LIVE') {
-              if (mt5Connector.connected) {
-                try {
-                  const ticket = await mt5Connector.openPosition({
-                    symbol: asset.symbol,
-                    side: signal.side,
-                    volume: lotVolume,
-                    sl: signal.stopLoss,
-                    tp: signal.takeProfit,
-                    comment: `Scalp ${asset.symbol}`
-                  });
-
-                  if (ticket && ticket.ticket) {
-                    const fillPrice = ticket.price || signal.entryPrice;
-                    const notionalVal = Number((fillPrice * (asset.category === 'Forex' ? (lotVolume * 100000) : lotVolume)).toFixed(2));
-                    const marginVal = Number((notionalVal / (mt5Connector.accountInfo?.leverage || 500)).toFixed(2));
-
-                    const pos = this.marginTradingEngine.openPosition({
-                      symbol: asset.symbol,
-                      name: asset.name,
-                      category: asset.category,
-                      decimals: asset.decimals !== undefined ? asset.decimals : 4,
-                      side: signal.side,
-                      entryPrice: fillPrice,
-                      stopLoss: signal.stopLoss,
-                      takeProfit: signal.takeProfit,
-                      stopDistance: signal.stopDistance,
-                      targetDistance: signal.targetDistance,
-                      units: lotVolume,
-                      notional: notionalVal,
-                      confidence: signal.confidence,
-                      reason: signal.reason,
-                      riskRewardRatio: signal.riskRewardRatio,
-                      tradingStyle: marginRiskSettings.tradingStyle,
-                      leverage: mt5Connector.accountInfo?.leverage || 500,
-                      margin: marginVal,
-                      liquidationPrice: riskEval.liquidationPrice
-                    });
-                    pos.ticket = ticket.ticket;
-
-                    // Immediately register the live broker ticket into mt5Connector.openPositions
-                    // so subsequent candidate evaluations in this cycle know this slot is used!
-                    if (!mt5Connector.openPositions) mt5Connector.openPositions = [];
-                    mt5Connector.openPositions.push({
-                      ticket: ticket.ticket,
-                      symbol: asset.symbol,
-                      type: signal.side === 'LONG' ? 'BUY' : 'SELL',
-                      volume: lotVolume,
-                      priceOpen: fillPrice,
-                      priceCurrent: fillPrice,
-                      profit: 0.0,
-                      time: Math.floor(Date.now() / 1000),
-                      ageSeconds: 0
-                    });
-
-                    this.log(
-                      `📡 [MT5 LIVE] Scalp executed on Exness MT5! Ticket #${ticket.ticket} (${asset.symbol} ${signal.side} ${lotVolume} lot @ $${fillPrice})`,
-                      'SUCCESS'
-                    );
-                    this.lastTradeOpenedAt = Date.now();
-                  }
-                } catch (err) {
-                  if (err.message && (err.message.includes('10027') || err.message.includes('Algo Trading'))) {
-                    this.log(`🚨 [MT5 LIVE] Order blocked: "Algo Trading" is turned OFF in your MetaTrader 5 window. Please click the "Algo Trading" button in the MT5 top toolbar on AWS (or press Ctrl+E) so it turns green!`, 'ERROR');
-                  } else if (err.message && (err.message.includes('10018') || err.message.includes('Market closed'))) {
-                    this.log(`⏱️ [MT5 LIVE] Forex Market is closed for the weekend (Code 10018). Forex orders will automatically resume when markets open on Sunday 5:00 PM EST. 24/7 Crypto scalping is active!`, 'INFO');
-                  } else {
-                    this.log(`⚠️ [MT5 LIVE] Broker order notice (${asset.symbol}): ${err.message}`, 'WARN');
+                    const riskEval = uMarginRisk.evaluateTradeRisk(portfolioState, signal, asset);
+                    if (riskEval.allowed && mt5Connector.connected) {
+                      mt5Connector.openPosition({
+                        symbol: asset.symbol,
+                        side: signal.side,
+                        volume: lotVolume,
+                        sl: signal.stopLoss,
+                        tp: signal.takeProfit,
+                        comment: `Scalp ${asset.symbol}`
+                      }).catch(err => this.log(`⚠️ [MT5 LIVE] Order warning: ${err.message}`, 'WARN'));
+                    }
                   }
                 }
-              } else {
-                mt5Connector.tryGatewayConnection().catch(() => {});
-                this.log(`ℹ️ [LIVE MODE] Reconnecting to Exness MT5 gateway...`, 'INFO');
               }
-            } else {
-              // Simulated Paper Demo Mode
-              const pos = this.marginTradingEngine.openPosition({
-                symbol: asset.symbol,
-                name: asset.name,
-                category: asset.category,
-                decimals: asset.decimals !== undefined ? asset.decimals : 4,
-                side: signal.side,
-                entryPrice: signal.entryPrice,
-                stopLoss: signal.stopLoss,
-                takeProfit: signal.takeProfit,
-                stopDistance: signal.stopDistance,
-                targetDistance: signal.targetDistance,
-                units: riskEval.units,
-                notional: riskEval.notional,
-                confidence: signal.confidence,
-                reason: signal.reason,
-                riskRewardRatio: signal.riskRewardRatio,
-                tradingStyle: marginRiskSettings.tradingStyle,
-                maxHoldMinutes: marginRiskSettings.maxHoldMinutes || this.marginRiskManager.maxHoldMinutes || 60,
-                leverage: riskEval.leverage,
-                margin: riskEval.margin,
-                liquidationPrice: riskEval.liquidationPrice
-              });
+            }
+          } else {
+            // Simulated Paper Demo Mode for uKey
+            if (portfolioState.activePositions.length < maxAllowedSlots) {
+              for (const { asset, signal } of validMarginSignals) {
+                if (uMarginEngine.activePositions.length >= maxAllowedSlots) break;
+                const cleanAssetSym = asset.symbol.replace(/[-_./=Xm]/gi, '').toUpperCase();
+                const sameSymbolCount = (portfolioState.activePositions || []).filter(p => {
+                  const cleanPosSym = (p.symbol || '').replace(/[-_./=Xm]/gi, '').toUpperCase();
+                  return cleanPosSym === cleanAssetSym || cleanPosSym.includes(cleanAssetSym) || cleanAssetSym.includes(cleanPosSym);
+                }).length;
+                if (sameSymbolCount >= 1) continue;
 
-              this.log(
-                `⚡ [MARGIN DEMO] SCALP OPEN: ${signal.side} ${asset.symbol} @ $${signal.entryPrice} (${riskEval.leverage}x Lev, Margin: $${riskEval.margin}, Fee: -$${pos.entryFee || 0})`,
-                'SUCCESS'
-              );
-              this.lastTradeOpenedAt = Date.now();
+                const riskEval = uMarginRisk.evaluateTradeRisk(portfolioState, signal, asset);
+                if (riskEval.allowed) {
+                  const pos = uMarginEngine.openPosition({
+                    symbol: asset.symbol,
+                    name: asset.name,
+                    category: asset.category,
+                    decimals: asset.decimals !== undefined ? asset.decimals : 4,
+                    side: signal.side,
+                    entryPrice: signal.entryPrice,
+                    stopLoss: signal.stopLoss,
+                    takeProfit: signal.takeProfit,
+                    stopDistance: signal.stopDistance,
+                    targetDistance: signal.targetDistance,
+                    units: riskEval.units,
+                    notional: riskEval.notional,
+                    confidence: signal.confidence,
+                    reason: signal.reason,
+                    riskRewardRatio: signal.riskRewardRatio,
+                    tradingStyle: uMarginRisk.tradingStyle,
+                    maxHoldMinutes: uMarginRisk.maxHoldMinutes || 60,
+                    leverage: riskEval.leverage,
+                    margin: riskEval.margin,
+                    liquidationPrice: riskEval.liquidationPrice
+                  });
+
+                  this.log(
+                    `⚡ [MARGIN DEMO - ${uKey}] SCALP OPEN: ${signal.side} ${asset.symbol} @ $${signal.entryPrice} (${riskEval.leverage}x Lev, Margin: $${riskEval.margin}, Fee: -$${pos.entryFee || 0})`,
+                    'SUCCESS'
+                  );
+                  uConfig.lastMarginTradeOpenedAt = Date.now();
+                }
+              }
             }
           }
         }
-      }
 
-      // ==========================================
-      // 4B. PURE SPOT CRYPTO AUTO-OPEN (100% Shariah Halal Filtered)
-      // ==========================================
-      const spotSlots = this.spotRiskManager.maxSlots || 4;
-      const spotOpen = this.spotTradingEngine.activePositions;
-      const timeSinceLastSpot = Date.now() - (this.lastSpotTradeOpenedAt || 0);
+        // 4B. PURE SPOT CRYPTO AUTO-OPEN FOR uKey
+        const uSpotSlots = uSpotRisk.maxSlots || 4;
+        const uSpotOpen = uSpotEngine.activePositions || [];
+        const uTimeSinceLastSpot = Date.now() - (uConfig.lastSpotTradeOpenedAt || 0);
 
-      if (this.isAutoTradingEnabled && spotOpen.length < spotSlots && validSpotBuys.length > 0 && (timeSinceLastSpot >= 30000 || this.lastSpotTradeOpenedAt === 0)) {
-        // Intelligent Multi-Candidate Win Probability Ranking:
-        // When multiple coins achieve 95-100% confidence, we do NOT simply pick the first one.
-        // We deeply compare:
-        // 1. winProbability (EMA fan expansion slope, RSI 45-55 sweet spot, EMA21 pullback proximity, lower wick defense, liquidity)
-        // 2. rawScore (Uncapped multi-factor confluence score)
-        // 3. 24h Volatility & Volume Liquidity (Minimal spread slippage)
-        validSpotBuys.sort((a, b) => {
-          const winA = a.signal.winProbability ?? a.signal.confidence;
-          const winB = b.signal.winProbability ?? b.signal.confidence;
-          if (Math.abs(winB - winA) >= 0.5) return winB - winA;
+        if (uSpotOpen.length < uSpotSlots && (uTimeSinceLastSpot >= 15000 || !uConfig.lastSpotTradeOpenedAt)) {
+          // Find candidates matching uSpotRisk and uConfig
+          const uValidSpotBuys = [];
+          for (const asset of markets) {
+            if (asset.category !== 'Crypto') continue;
+            if (!isHalalCompliant(asset.symbol)) continue;
 
-          const rawA = a.signal.rawScore ?? a.signal.confidence;
-          const rawB = b.signal.rawScore ?? b.signal.confidence;
-          if (rawB !== rawA) return rawB - rawA;
+            const cleanName = (asset.name || asset.symbol.replace(/[-_/]/g, '').replace(/USD$/, '')).toUpperCase();
+            const uCooldownMap = uConfig.spotCooldownUntil;
+            const spotLockExpiry = Math.max(
+              uCooldownMap?.get(asset.symbol) || 0,
+              uCooldownMap?.get(cleanName) || 0,
+              uCooldownMap?.get(`${cleanName}-USD`) || 0,
+              uCooldownMap?.get(`${cleanName}USDT`) || 0
+            );
+            if (spotLockExpiry > Date.now()) continue;
 
-          const volA = (a.asset.quoteVolume || 0) * (a.asset.liveVolatility24h || 1);
-          const volB = (b.asset.quoteVolume || 0) * (b.asset.liveVolatility24h || 1);
-          return volB - volA;
-        });
+            const allowVolatile = uSpotRisk.allowHighVolatility ?? true;
+            const isVolatile = Boolean(asset.isHighVolatility || (asset.minVolatility && asset.minVolatility >= 1.4));
+            const passesVolatilityFilter = allowVolatile ? isVolatile : !isVolatile;
+            if (!passesVolatilityFilter) continue;
 
-        const usdtObj = (binanceConnector.cachedBalances || []).find(b => b.asset === 'USDT');
-        const liveUsdtFree = usdtObj ? Number(usdtObj.free) : 0;
-        const totalCash = (this.currentMode === 'LIVE' && binanceConnector.connected && liveUsdtFree > 0)
-          ? liveUsdtFree
-          : this.spotTradingEngine.balance;
-        const portionSize = Number((totalCash / spotSlots).toFixed(2));
-        const maxPerCoin = this.spotRiskManager.maxTradesPerPair || 2;
+            const technicals = technicalsMap[asset.symbol];
+            if (!technicals) continue;
 
-        for (const candidate of validSpotBuys) {
-          if (this.spotTradingEngine.activePositions.length >= spotSlots) break;
-
-          // Limit positions per coin (allows up to maxPerCoin with price spacing)
-          const coinPositions = this.spotTradingEngine.activePositions.filter(p => p.symbol === candidate.asset.symbol);
-          if (coinPositions.length >= maxPerCoin) continue;
-
-          // Enforce minimum price spacing (>= 0.3%) between spot entries on the same coin
-          if (coinPositions.length > 0) {
-            const lastEntry = coinPositions[coinPositions.length - 1].entryPrice;
-            const diffPct = Math.abs(candidate.signal.entryPrice - lastEntry) / lastEntry;
-            if (diffPct < 0.003) continue;
+            const spotSignal = evaluateSpotConfluence(asset, technicals, uSpotRisk);
+            if (spotSignal && spotSignal.action === 'STRONG_BUY') {
+              uValidSpotBuys.push({ asset, signal: spotSignal });
+            }
           }
 
-          // Calculate current available cash (with 0.01 buffer for Binance market order safety)
-          const currentUsed = this.spotTradingEngine.activePositions.reduce((acc, p) => acc + (p.notional || 0), 0);
-          const availableCash = Math.max(0, totalCash - currentUsed);
-          const notional = Number(Math.max(0.5, Math.min(portionSize, availableCash, totalCash > 1 ? totalCash - 0.01 : totalCash)).toFixed(2));
+          if (uValidSpotBuys.length > 0) {
+            uValidSpotBuys.sort((a, b) => {
+              const winA = a.signal.winProbability ?? a.signal.confidence;
+              const winB = b.signal.winProbability ?? b.signal.confidence;
+              if (Math.abs(winB - winA) >= 0.5) return winB - winA;
 
-          if (notional < 0.5) break; // Insufficient remaining cash for another portion
+              const rawA = a.signal.rawScore ?? a.signal.confidence;
+              const rawB = b.signal.rawScore ?? b.signal.confidence;
+              if (rawB !== rawA) return rawB - rawA;
 
-          const entryPrice = candidate.signal.entryPrice;
-          const precision = getAssetPrecision(entryPrice, candidate.asset.decimals || 4);
-          const rawUnits = notional / entryPrice;
-          const units = Number(rawUnits.toFixed(Math.max(4, precision)));
-
-          const stopDist = candidate.signal.stopDistance;
-          const targetDist = candidate.signal.targetDistance;
-          const stopLoss = candidate.signal.stopLoss;
-          const takeProfit = candidate.signal.takeProfit;
-
-          const isScaleIn = coinPositions.length > 0;
-          const scaleLabel = isScaleIn ? ` [SCALE-IN #${coinPositions.length + 1}]` : '';
-
-          const spotPos = this.spotTradingEngine.openPosition({
-            symbol: candidate.asset.symbol,
-            name: candidate.asset.name,
-            category: 'Crypto',
-            decimals: precision,
-            side: 'LONG',
-            entryPrice,
-            stopLoss,
-            takeProfit,
-            stopDistance: stopDist,
-            targetDistance: targetDist,
-            units,
-            notional,
-            confidence: candidate.signal.confidence,
-            reason: `Spot Scalp Slot ${this.spotTradingEngine.activePositions.length + 1}/${spotSlots}${scaleLabel} (${candidate.signal.reason})`,
-            riskRewardRatio: Number((this.spotRiskManager.takeProfitPct / this.spotRiskManager.stopLossPct).toFixed(1)),
-            maxHoldMinutes: this.spotRiskManager.maxHoldMinutes || 5,
-            tradingStyle: 'SPOT_BUY',
-            feeRate: this.spotRiskManager.feeRate || (this.spotRiskManager.useBnbFeeDiscount ? 0.00075 : 0.0010),
-            leverage: 1, // 1x Spot Cash
-            margin: notional, // cash allocated
-            liquidationPrice: 0 // No liquidation in spot
-          });
-
-          this.log(
-            `🪙 [SPOT] SCALP OPEN${scaleLabel}: Bought ${candidate.asset.symbol} with $${notional} (Portion ${this.spotTradingEngine.activePositions.length}/${spotSlots}) @ $${formatAssetPrice(entryPrice, precision)} (Confidence: ${candidate.signal.confidence}%, Fee: -$${spotPos?.entryFee || 0}). Target: +${this.spotRiskManager.takeProfitPct}% ($${formatAssetPrice(takeProfit, precision)}) | Stop: -${this.spotRiskManager.stopLossPct}% ($${formatAssetPrice(stopLoss, precision)}) | Cap: ${this.spotRiskManager.maxHoldMinutes || 5}m`,
-            'SUCCESS'
-          );
-          this.lastSpotTradeOpenedAt = Date.now();
-
-          // Live Binance API Dispatcher (when logged into Live Account)
-          if (this.currentMode === 'LIVE' && binanceConnector.connected) {
-            binanceConnector.placeSpotMarketOrder({
-              symbol: candidate.asset.symbol,
-              side: 'BUY',
-              quoteOrderQty: notional
-            }).then(liveOrder => {
-              this.log(`🪙 [BINANCE LIVE] Real Market Buy executed on Binance! Order ID: ${liveOrder.orderId}`, 'SUCCESS');
-            }).catch(err => {
-              this.log(`⚠️ [BINANCE LIVE] Order warning: ${err.message}`, 'WARN');
+              const volA = (a.asset.quoteVolume || 0) * (a.asset.liveVolatility24h || 1);
+              const volB = (b.asset.quoteVolume || 0) * (b.asset.liveVolatility24h || 1);
+              return volB - volA;
             });
+
+            const usdtObj = (binanceConnector.cachedBalances || []).find(b => b.asset === 'USDT');
+            const liveUsdtFree = usdtObj ? Number(usdtObj.free) : 0;
+            const totalCash = (this.currentMode === 'LIVE' && binanceConnector.connected && liveUsdtFree > 0 && uKey === this.currentUser)
+              ? liveUsdtFree
+              : uSpotEngine.balance;
+            const portionSize = Number((totalCash / uSpotSlots).toFixed(2));
+            const maxPerCoin = uSpotRisk.maxTradesPerPair || 2;
+
+            for (const candidate of uValidSpotBuys) {
+              if (uSpotEngine.activePositions.length >= uSpotSlots) break;
+
+              const coinPositions = uSpotEngine.activePositions.filter(p => p.symbol === candidate.asset.symbol);
+              if (coinPositions.length >= maxPerCoin) continue;
+
+              if (coinPositions.length > 0) {
+                const lastEntry = coinPositions[coinPositions.length - 1].entryPrice;
+                const diffPct = Math.abs(candidate.signal.entryPrice - lastEntry) / lastEntry;
+                if (diffPct < 0.003) continue;
+              }
+
+              const currentUsed = uSpotEngine.activePositions.reduce((acc, p) => acc + (p.notional || 0), 0);
+              const availableCash = Math.max(0, totalCash - currentUsed);
+              const notional = Number(Math.max(0.5, Math.min(portionSize, availableCash, totalCash > 1 ? totalCash - 0.01 : totalCash)).toFixed(2));
+
+              if (notional < 0.5) break;
+
+              const entryPrice = candidate.signal.entryPrice;
+              const precision = getAssetPrecision(entryPrice, candidate.asset.decimals || 4);
+              const rawUnits = notional / entryPrice;
+              const units = Number(rawUnits.toFixed(Math.max(4, precision)));
+
+              const stopDist = candidate.signal.stopDistance;
+              const targetDist = candidate.signal.targetDistance;
+              const stopLoss = candidate.signal.stopLoss;
+              const takeProfit = candidate.signal.takeProfit;
+
+              const isScaleIn = coinPositions.length > 0;
+              const scaleLabel = isScaleIn ? ` [SCALE-IN #${coinPositions.length + 1}]` : '';
+
+              const spotPos = uSpotEngine.openPosition({
+                symbol: candidate.asset.symbol,
+                name: candidate.asset.name,
+                category: 'Crypto',
+                decimals: precision,
+                side: 'LONG',
+                entryPrice,
+                stopLoss,
+                takeProfit,
+                stopDistance: stopDist,
+                targetDistance: targetDist,
+                units,
+                notional,
+                confidence: candidate.signal.confidence,
+                reason: `Spot Scalp Slot ${uSpotEngine.activePositions.length + 1}/${uSpotSlots}${scaleLabel} (${candidate.signal.reason})`,
+                riskRewardRatio: Number((uSpotRisk.takeProfitPct / uSpotRisk.stopLossPct).toFixed(1)),
+                maxHoldMinutes: uSpotRisk.maxHoldMinutes || 45,
+                tradingStyle: 'SPOT_BUY',
+                feeRate: uSpotRisk.feeRate || (uSpotRisk.useBnbFeeDiscount ? 0.00075 : 0.0010),
+                leverage: 1,
+                margin: notional,
+                liquidationPrice: 0
+              });
+
+              this.log(
+                `🪙 [SPOT - ${uKey}] SCALP OPEN${scaleLabel}: Bought ${candidate.asset.symbol} with $${notional} (Portion ${uSpotEngine.activePositions.length}/${uSpotSlots}) @ $${formatAssetPrice(entryPrice, precision)} (Confidence: ${candidate.signal.confidence}%, Fee: -$${spotPos?.entryFee || 0}). Target: +${uSpotRisk.takeProfitPct}% ($${formatAssetPrice(takeProfit, precision)}) | Stop: -${uSpotRisk.stopLossPct}% ($${formatAssetPrice(stopLoss, precision)}) | Cap: ${uSpotRisk.maxHoldMinutes || 45}m`,
+                'SUCCESS'
+              );
+              uConfig.lastSpotTradeOpenedAt = Date.now();
+
+              if (this.currentMode === 'LIVE' && binanceConnector.connected && uKey === this.currentUser) {
+                binanceConnector.placeSpotMarketOrder({
+                  symbol: candidate.asset.symbol,
+                  side: 'BUY',
+                  quoteOrderQty: notional
+                }).then(liveOrder => {
+                  this.log(`🪙 [BINANCE LIVE] Real Market Buy executed on Binance! Order ID: ${liveOrder.orderId}`, 'SUCCESS');
+                }).catch(err => {
+                  this.log(`⚠️ [BINANCE LIVE] Order warning: ${err.message}`, 'WARN');
+                });
+              }
+            }
           }
         }
       }
@@ -995,19 +966,21 @@ export class AutonomousAgentLoop {
             const lockExpiry = Date.now() + lockMs;
             const cleanName = (closed.name || closed.symbol.replace(/[-_/]/g, '').replace(/USD$/, '')).toUpperCase();
 
-            if (!this.spotCooldownUntil) this.spotCooldownUntil = new Map();
-            this.spotCooldownUntil.set(closed.symbol, lockExpiry);
-            this.spotCooldownUntil.set(cleanName, lockExpiry);
-            this.spotCooldownUntil.set(`${cleanName}-USD`, lockExpiry);
-            this.spotCooldownUntil.set(`${cleanName}USDT`, lockExpiry);
-
-            const spotCd = isLoss ? 600 : 200;
-            this.spotCooldowns.set(closed.symbol, spotCd);
-            this.spotCooldowns.set(`${cleanName}-USD`, spotCd);
-            this.spotCooldowns.set(`${cleanName}USDT`, spotCd);
-            this.spotCooldowns.set(cleanName, spotCd);
-
             const userConfig = this.getConfig(uKey);
+            if (!userConfig.spotCooldownUntil) userConfig.spotCooldownUntil = new Map();
+            userConfig.spotCooldownUntil.set(closed.symbol, lockExpiry);
+            userConfig.spotCooldownUntil.set(cleanName, lockExpiry);
+            userConfig.spotCooldownUntil.set(`${cleanName}-USD`, lockExpiry);
+            userConfig.spotCooldownUntil.set(`${cleanName}USDT`, lockExpiry);
+
+            if (this.currentMode === 'LIVE' && uKey === this.currentUser) {
+              if (!this.spotCooldownUntil) this.spotCooldownUntil = new Map();
+              this.spotCooldownUntil.set(closed.symbol, lockExpiry);
+              this.spotCooldownUntil.set(cleanName, lockExpiry);
+              this.spotCooldownUntil.set(`${cleanName}-USD`, lockExpiry);
+              this.spotCooldownUntil.set(`${cleanName}USDT`, lockExpiry);
+            }
+
             const userSpotRisk = userConfig.spotRiskManager;
             const feeStr = closed.fee ? ` (Fee: -$${closed.fee})` : '';
             const holdCapStr = `${userSpotRisk.maxHoldMinutes || 60}M`;
@@ -1525,7 +1498,7 @@ export class AutonomousAgentLoop {
       },
       portfolio: isSpot ? spotPortfolio : marginPortfolio,
       riskSettings: isSpot ? spotRisk : marginRisk,
-      isAutoTradingEnabled: this.isAutoTradingEnabled,
+      isAutoTradingEnabled: userConfig.isAutoTradingEnabled ?? this.isAutoTradingEnabled,
       isScanning: this.isScanning,
       marketScan: this.latestScanResults,
       logs: this.agentLogs,
