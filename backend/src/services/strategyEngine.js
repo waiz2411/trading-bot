@@ -474,6 +474,28 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {})
   score += 35;
   factors.push(`RSI Optimal: ${rsi.toFixed(1)} ready for leg up`);
 
+  // Gate 4: Candle Bounce & Support Defense (Anti-Falling-Knife)
+  // Ensures the pullback has found buyer rejection: candle is green OR has lower shadow/wick defense
+  if (asset.candles && asset.candles.length >= 2) {
+    const lastCandle = asset.candles[asset.candles.length - 1];
+    const isGreen = lastCandle.close >= lastCandle.open;
+    const candleRange = Math.max(0.00001, lastCandle.high - lastCandle.low);
+    const lowerWick = Math.min(lastCandle.open, lastCandle.close) - lastCandle.low;
+    const lowerWickRatio = lowerWick / candleRange;
+    const bodyRatio = Math.abs(lastCandle.close - lastCandle.open) / candleRange;
+
+    // Reject dumping knives: red body > 60% of candle with minimal lower wick (< 20%)
+    if (!isGreen && bodyRatio > 0.60 && lowerWickRatio < 0.20) {
+      return {
+        action: 'NEUTRAL',
+        side: null,
+        confidence: 30,
+        reason: 'Dip Defense Filter: Price still falling, waiting for buyer wick or green candle',
+        factors: ['Waiting for buyer rejection of lows before entry']
+      };
+    }
+  }
+
   // If all gates passed, score is 100
   if (isVolatileCoin) {
     score += 5;

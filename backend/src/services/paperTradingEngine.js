@@ -100,7 +100,7 @@ export class PaperTradingEngine {
       const fee = Number(trade.fee || (trade.entryFee || 0) + (trade.exitFee || 0));
       totalFees += fee;
 
-      if (netPnl > 0.05) {
+      if (netPnl > 0.0001) {
         winCount++;
         grossProfit += netPnl;
       } else if (netPnl < -0.0001) {
@@ -343,7 +343,7 @@ export class PaperTradingEngine {
     this.balance = Number((this.balance + pnlRounded).toFixed(2));
     this.totalFeesPaid = Number((this.totalFeesPaid + totalFee).toFixed(2));
 
-    const isWin = pnlRounded > 0.05;
+    const isWin = pnlRounded > 0.0001;
     const isLoss = pnlRounded < -0.0001;
     const isBreakEven = !isWin && !isLoss;
 
@@ -447,16 +447,22 @@ export class PaperTradingEngine {
         if (pos.side === 'SHORT') {
           const runDown = pos.entryPrice - pos.lowestPrice;
 
-          // Fee-Compensated Break-Even: Price moved 70% of target distance -> Lock in True Break-Even (Covering fees)!
+          // Fee-Compensated Break-Even: Price moved 70% of target distance
           if (!pos.breakEvenLocked && (runDown >= pos.targetDistance * 0.70 || runDown >= pos.entryPrice * 0.0080)) {
-            pos.stopLoss = Number((pos.entryPrice - Math.max(roundTripFeeBuffer, pos.stopDistance * 0.12)).toFixed(dec));
-            pos.breakEvenLocked = true;
+            const targetFeeBuffer = Math.min(pos.targetDistance * 0.40, Math.max(roundTripFeeBuffer, pos.stopDistance * 0.12));
+            const proposedStop = Number((pos.entryPrice - targetFeeBuffer).toFixed(dec));
+            // Stop MUST be strictly above current live price, above take-profit, and below current stopLoss
+            if (proposedStop > livePrice && (!pos.takeProfit || proposedStop > pos.takeProfit) && proposedStop < pos.stopLoss) {
+              pos.stopLoss = proposedStop;
+              pos.breakEvenLocked = true;
+            }
           }
 
           // Dynamic Scalp Trailing Stop: Price reached 75% of target distance -> Trail closely behind lowest price!
           if (runDown >= pos.targetDistance * 0.75) {
-            const newTrailStop = Number((pos.lowestPrice + pos.stopDistance * 0.22).toFixed(dec));
-            if (newTrailStop < pos.stopLoss) {
+            const trailBuffer = Math.min(pos.stopDistance * 0.22, pos.targetDistance * 0.25);
+            const newTrailStop = Number((pos.lowestPrice + trailBuffer).toFixed(dec));
+            if (newTrailStop > livePrice && newTrailStop < pos.stopLoss) {
               pos.stopLoss = newTrailStop;
               pos.trailingStopActive = true;
             }
@@ -464,16 +470,22 @@ export class PaperTradingEngine {
         } else if (pos.side === 'LONG') {
           const runUp = pos.highestPrice - pos.entryPrice;
 
-          // Fee-Compensated Break-Even: Price gained 70% of target distance or +0.80% -> Lock in True Break-Even (Covering fees)!
+          // Fee-Compensated Break-Even: Price gained 70% of target distance
           if (!pos.breakEvenLocked && (runUp >= pos.targetDistance * 0.70 || runUp >= pos.entryPrice * 0.0080)) {
-            pos.stopLoss = Number((pos.entryPrice + Math.max(roundTripFeeBuffer, pos.stopDistance * 0.12)).toFixed(dec));
-            pos.breakEvenLocked = true;
+            const targetFeeBuffer = Math.min(pos.targetDistance * 0.40, Math.max(roundTripFeeBuffer, pos.stopDistance * 0.12));
+            const proposedStop = Number((pos.entryPrice + targetFeeBuffer).toFixed(dec));
+            // Stop MUST be strictly below current live price, below take-profit, and above current stopLoss
+            if (proposedStop < livePrice && (!pos.takeProfit || proposedStop < pos.takeProfit) && proposedStop > pos.stopLoss) {
+              pos.stopLoss = proposedStop;
+              pos.breakEvenLocked = true;
+            }
           }
 
           // Dynamic Scalp Trailing Stop: Price reached 75% of target distance -> Trail closely behind highest price!
           if (runUp >= pos.targetDistance * 0.75) {
-            const newTrailStop = Number((pos.highestPrice - pos.stopDistance * 0.22).toFixed(dec));
-            if (newTrailStop > pos.stopLoss) {
+            const trailBuffer = Math.min(pos.stopDistance * 0.22, pos.targetDistance * 0.25);
+            const newTrailStop = Number((pos.highestPrice - trailBuffer).toFixed(dec));
+            if (newTrailStop < livePrice && newTrailStop > pos.stopLoss) {
               pos.stopLoss = newTrailStop;
               pos.trailingStopActive = true;
             }
