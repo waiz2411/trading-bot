@@ -25,22 +25,27 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
   const tradesList = portfolio.closedTrades || [];
   const totalTrades = tradesList.length;
 
-  // Real profit (> $0.05 / target hit) counts as WIN
+  // Accurate Win / Loss / Break-Even classification for all account sizes ($10 to $100,000+)
   const winCount = tradesList.filter(t => {
     const pnl = t.finalPnL !== undefined ? Number(t.finalPnL) : (t.profit !== undefined ? Number(t.profit) : 0);
-    return pnl > 0.05;
+    const pnlPct = t.finalPnLPercent !== undefined ? Number(t.finalPnLPercent) : 0;
+    const isExplicitWin = t.isWin || t.exitReason === 'TAKE_PROFIT_TRIGGER' || t.exitReason === 'TRAILING_PROFIT_LOCK';
+    return isExplicitWin || (pnl > 0.005 && t.exitReason !== 'BREAKEVEN_STOP_TRIGGER') || pnlPct >= 0.3;
   }).length;
 
-  // Strictly ANY negative PnL (even -$0.01) counts as LOSS
   const lossCount = tradesList.filter(t => {
     const pnl = t.finalPnL !== undefined ? Number(t.finalPnL) : (t.profit !== undefined ? Number(t.profit) : 0);
-    return pnl < -0.0001;
+    const isExplicitLoss = t.isLoss || t.exitReason === 'STOP_LOSS_TRIGGER' || t.exitReason === 'LIQUIDATION_TRIGGER';
+    return (isExplicitLoss || pnl < -0.005) && t.exitReason !== 'BREAKEVEN_STOP_TRIGGER';
   }).length;
 
-  // Tiny profit (0 to +$0.05 from break-even shield) counts as BREAK-EVEN
   const breakEvenCount = tradesList.filter(t => {
     const pnl = t.finalPnL !== undefined ? Number(t.finalPnL) : (t.profit !== undefined ? Number(t.profit) : 0);
-    return pnl >= -0.0001 && pnl <= 0.05;
+    const pnlPct = t.finalPnLPercent !== undefined ? Number(t.finalPnLPercent) : 0;
+    const isExplicitWin = t.isWin || t.exitReason === 'TAKE_PROFIT_TRIGGER' || t.exitReason === 'TRAILING_PROFIT_LOCK';
+    const isWin = isExplicitWin || (pnl > 0.005 && t.exitReason !== 'BREAKEVEN_STOP_TRIGGER') || pnlPct >= 0.3;
+    const isLoss = (t.isLoss || t.exitReason === 'STOP_LOSS_TRIGGER' || pnl < -0.005) && t.exitReason !== 'BREAKEVEN_STOP_TRIGGER';
+    return !isWin && !isLoss;
   }).length;
 
   const decisive = winCount + lossCount;

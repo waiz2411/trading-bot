@@ -186,24 +186,23 @@ export class MarketDataService {
   async fetchCryptoBinance() {
     let tickerList = null;
 
-    // Primary: Binance Public 24hr Ticker (All Pairs)
-    try {
-      const res = await fetch('https://data-api.binance.vision/api/v3/ticker/24hr', {
-        signal: AbortSignal.timeout(4000)
-      });
-      if (res.ok) {
-        tickerList = await res.json();
-      }
-    } catch (_) {}
+    // Primary: Binance Public Data Vision API (No geo-restriction, high speed)
+    const endpoints = [
+      'https://data-api.binance.vision/api/v3/ticker/24hr',
+      'https://api.binance.com/api/v3/ticker/24hr',
+      'https://api1.binance.com/api/v3/ticker/24hr',
+      'https://api3.binance.com/api/v3/ticker/24hr'
+    ];
 
-    // Fallback 1: Binance Main API
-    if (!tickerList) {
+    for (const ep of endpoints) {
+      if (tickerList) break;
       try {
-        const res = await fetch('https://api.binance.com/api/v3/ticker/24hr', {
-          signal: AbortSignal.timeout(4000)
+        const res = await fetch(ep, {
+          signal: AbortSignal.timeout(12000)
         });
         if (res.ok) {
           tickerList = await res.json();
+          if (Array.isArray(tickerList) && tickerList.length > 500) break;
         }
       } catch (_) {}
     }

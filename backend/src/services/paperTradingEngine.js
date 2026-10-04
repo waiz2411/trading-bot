@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { evaluatePositionExit } from './strategyEngine.js';
 import { getAssetPrecision } from '../config/assets.js';
+import { db } from './db.js';
 
 /**
  * Intelligent Paper Trading Engine (Pro Scalp & Leveraged Execution)
@@ -34,6 +35,7 @@ export class PaperTradingEngine {
   }
 
   loadPersistedState() {
+    // 1. Fast local file read
     try {
       const fileName = `persisted_engine_${this.accountType.toLowerCase()}_${this.userEmail}.json`;
       const dirPath = path.resolve('backend/src/data');
@@ -42,19 +44,66 @@ export class PaperTradingEngine {
       if (fs.existsSync(filePath)) {
         const raw = fs.readFileSync(filePath, 'utf8');
         const data = JSON.parse(raw);
-        if (data && typeof data === 'object') {
-          if (data.balance != null) this.balance = Number(data.balance);
-          if (data.initialBalance != null) this.initialBalance = Number(data.initialBalance);
-          if (Array.isArray(data.closedTrades)) this.closedTrades = data.closedTrades;
-          if (Array.isArray(data.activePositions)) this.activePositions = data.activePositions;
-          if (data.winCount != null) this.winCount = Number(data.winCount);
-          if (data.lossCount != null) this.lossCount = Number(data.lossCount);
-          if (data.breakEvenCount != null) this.breakEvenCount = Number(data.breakEvenCount);
-          if (data.totalGrossProfit != null) this.totalGrossProfit = Number(data.totalGrossProfit);
-          if (data.totalGrossLoss != null) this.totalGrossLoss = Number(data.totalGrossLoss);
-          if (data.totalFeesPaid != null) this.totalFeesPaid = Number(data.totalFeesPaid);
-        }
+        this.applyState(data);
       }
+    } catch (_) {}
+
+    // 2. Central MySQL Database Synchronization (Keeps Hostinger, Render, and custom domains 100% unified)
+    this.syncFromDatabase().catch(() => {});
+  }
+
+  applyState(data) {
+    if (!data || typeof data !== 'object') return;
+    if (data.balance != null) this.balance = Number(data.balance);
+    if (data.initialBalance != null) this.initialBalance = Number(data.initialBalance);
+    if (Array.isArray(data.closedTrades)) this.closedTrades = data.closedTrades;
+    if (Array.isArray(data.activePositions)) this.activePositions = data.activePositions;
+    if (data.winCount != null) this.winCount = Number(data.winCount);
+    if (data.lossCount != null) this.lossCount = Number(data.lossCount);
+    if (data.breakEvenCount != null) this.breakEvenCount = Number(data.breakEvenCount);
+    if (data.totalGrossProfit != null) this.totalGrossProfit = Number(data.totalGrossProfit);
+    if (data.totalGrossLoss != null) this.totalGrossLoss = Number(data.totalGrossLoss);
+    if (data.totalFeesPaid != null) this.totalFeesPaid = Number(data.totalFeesPaid);
+  }
+
+  async syncFromDatabase() {
+    try {
+      const [rows] = await db.query(
+        'SELECT state_json FROM user_portfolios WHERE user_email = ? AND account_type = ?',
+        [this.userEmail, this.accountType]
+      );
+      if (rows && rows.length > 0 && rows[0].state_json) {
+        const data = JSON.parse(rows[0].state_json);
+        this.applyState(data);
+      } else {
+        // If MySQL has no record yet, seed it with the current local state
+        await this.saveToDatabase();
+      }
+    } catch (_) {}
+  }
+
+  async saveToDatabase() {
+    try {
+      const state = {
+        accountType: this.accountType,
+        balance: this.balance,
+        initialBalance: this.initialBalance,
+        activePositions: this.activePositions,
+        closedTrades: this.closedTrades.slice(-300),
+        winCount: this.winCount,
+        lossCount: this.lossCount,
+        breakEvenCount: this.breakEvenCount,
+        totalGrossProfit: this.totalGrossProfit,
+        totalGrossLoss: this.totalGrossLoss,
+        totalFeesPaid: this.totalFeesPaid,
+        updatedAt: new Date().toISOString()
+      };
+      await db.query(
+        `INSERT INTO user_portfolios (user_email, account_type, state_json)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE state_json = VALUES(state_json), updated_at = CURRENT_TIMESTAMP`,
+        [this.userEmail, this.accountType, JSON.stringify(state)]
+      );
     } catch (_) {}
   }
 
@@ -79,6 +128,7 @@ export class PaperTradingEngine {
         updatedAt: new Date().toISOString()
       };
       fs.writeFileSync(filePath, JSON.stringify(state, null, 2), 'utf8');
+      this.saveToDatabase().catch(() => {});
     } catch (_) {}
   }
 

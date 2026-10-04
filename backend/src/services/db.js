@@ -116,6 +116,18 @@ class DatabaseService {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
 
+      // 5. Central User Portfolios Table (Synchronizes balance & trades across all servers: Hostinger, Render, etc.)
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS user_portfolios (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_email VARCHAR(191) NOT NULL,
+          account_type ENUM('MARGIN', 'SPOT') NOT NULL,
+          state_json LONGTEXT NOT NULL,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_user_portfolio (user_email, account_type)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
       // Seed Default Admin Account if not exists
       const [adminRows] = await conn.query('SELECT id FROM users WHERE email = ?', ['test@gmail.com']);
       if (adminRows.length === 0) {

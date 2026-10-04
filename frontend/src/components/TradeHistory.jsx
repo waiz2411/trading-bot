@@ -173,8 +173,10 @@ export default function TradeHistory({ closedTrades = [] }) {
           <tbody className="divide-y divide-terminal-border/60 text-xs font-mono">
             {sortedTrades.map((trade, idx) => {
               const finalPnL = trade.finalPnL !== undefined ? Number(trade.finalPnL) : (trade.profit !== undefined ? Number(trade.profit) : 0);
-              const isWin = finalPnL > 0.05;
-              const isLoss = finalPnL < -0.0001;
+              const pnlPct = trade.finalPnLPercent !== undefined ? Number(trade.finalPnLPercent) : 0;
+              const isExplicitWin = trade.isWin || trade.exitReason === 'TAKE_PROFIT_TRIGGER' || trade.exitReason === 'TRAILING_PROFIT_LOCK';
+              const isWin = isExplicitWin || (finalPnL > 0.005 && trade.exitReason !== 'BREAKEVEN_STOP_TRIGGER') || pnlPct >= 0.3;
+              const isLoss = (trade.isLoss || trade.exitReason === 'STOP_LOSS_TRIGGER' || finalPnL < -0.005) && trade.exitReason !== 'BREAKEVEN_STOP_TRIGGER';
               const isBE = !isWin && !isLoss;
               const isLong = trade.side === 'LONG' || trade.side === 'BUY';
               const sideLabel = trade.side === 'BUY' ? 'LONG' : (trade.side === 'SELL' ? 'SHORT' : trade.side);
