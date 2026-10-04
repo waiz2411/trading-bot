@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Header from './components/Header';
 import MetricCards from './components/MetricCards';
 import MarketRadar from './components/MarketRadar';
@@ -160,22 +160,35 @@ export default function App() {
     return headers;
   }, []);
 
+  const isFetchingRef = useRef(false);
+  const backoffUntilRef = useRef(0);
+
   const fetchDashboard = useCallback(async () => {
+    if (Date.now() < backoffUntilRef.current) return;
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
       const res = await fetch('/api/dashboard', { headers: getAuthHeaders() });
+      if (res.status === 429) {
+        // Backoff for 4 seconds if Render edge proxy rate limits
+        backoffUntilRef.current = Date.now() + 4000;
+        return;
+      }
       if (!res.ok) return;
       const json = await res.json();
       setData(json);
     } catch (err) {
       console.error('Failed to fetch dashboard data:', err);
+    } finally {
+      isFetchingRef.current = false;
     }
   }, [getAuthHeaders]);
 
-  // Poll state every 1.5 seconds when authenticated for live real-time telemetry & PnL
+  // Poll state every 2.5 seconds when authenticated for live real-time telemetry & PnL
   useEffect(() => {
     if (!token || !user) return;
     fetchDashboard();
-    const interval = setInterval(fetchDashboard, 1500);
+    const interval = setInterval(fetchDashboard, 2500);
     return () => clearInterval(interval);
   }, [fetchDashboard, token, user]);
 
