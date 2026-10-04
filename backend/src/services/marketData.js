@@ -227,6 +227,12 @@ export class MarketDataService {
         // Strict Shariah / Halal Verification
         if (!isHalalCompliant(baseAsset)) continue;
 
+        // Strictly verify active two-sided orderbook & recent trading activity (Excludes delisted/suspended coins like PIVX)
+        const bidPrice = parseFloat(t.bidPrice || 0);
+        const askPrice = parseFloat(t.askPrice || 0);
+        if (isNaN(bidPrice) || isNaN(askPrice) || bidPrice <= 0 || askPrice <= 0) continue;
+        if (t.closeTime && (Date.now() - t.closeTime > 10 * 60 * 1000)) continue;
+
         const appSymbol = `${baseAsset}-USD`;
         const livePrice = parseFloat(t.lastPrice);
         if (isNaN(livePrice) || livePrice < 0.0005) continue; // Exclude sub-penny dust coins (e.g. BTTC 0.00000038) with extreme tick friction
@@ -444,57 +450,6 @@ export class MarketDataService {
     }
   }
 
-  // Fallback ticks for simulated/offline assets only (Never touches active live feeds)
-  simulateMicroTicks() {
-    const now = Date.now();
-    for (const [symbol, item] of marketCache.entries()) {
-      // Strictly skip any asset that has an active live feed from Binance, Yahoo, or MT5
-      if (item.isLiveFeed && item.lastLiveTime && (now - item.lastLiveTime < 60000)) {
-        continue;
-      }
-
-      const vol = item.category === 'Crypto' ? 0.0003 : 0.00015;
-
-      if (!item.momentumTicks || item.momentumTicks <= 0) {
-        item.momentumTicks = Math.floor(25 + Math.random() * 25);
-        if (!item.macroDirection) item.macroDirection = Math.random() > 0.5 ? 1 : -1;
-        if (Math.random() < 0.18) item.macroDirection *= -1;
-        item.trendDirection = Math.random() > 0.28 ? item.macroDirection : -item.macroDirection;
-      }
-      item.momentumTicks--;
-
-      const swing = item.trendDirection * vol * item.price * (0.35 + Math.random() * 0.25);
-      const noise = (Math.random() - 0.5) * vol * item.price * 0.15;
-      const delta = swing + noise;
-      const newPrice = Number(Math.max(0.0001, item.price + delta).toFixed(item.decimals));
-
-      item.price = newPrice;
-      const candles = item.candles;
-      const lastCandle = candles[candles.length - 1];
-
-      if (!lastCandle.tickCount) lastCandle.tickCount = 0;
-      lastCandle.tickCount++;
-
-      if (lastCandle.tickCount > 12) {
-        const newCandle = {
-          time: new Date().toISOString(),
-          open: newPrice,
-          high: newPrice,
-          low: newPrice,
-          close: newPrice,
-          volume: Math.round(5000 + Math.random() * 15000),
-          tickCount: 1
-        };
-        candles.push(newCandle);
-        if (candles.length > 70) candles.shift();
-      } else {
-        lastCandle.close = newPrice;
-        lastCandle.high = Math.max(lastCandle.high, newPrice);
-        lastCandle.low = Math.min(lastCandle.low, newPrice);
-      }
-    }
-  }
-
   // Robust MT5 Symbol Resolution: Matches BTCUSD -> BTC-USD, EURUSDm -> EURUSD=X, etc.
   resolveCachedAsset(symKey) {
     if (!symKey) return null;
@@ -570,7 +525,6 @@ export class MarketDataService {
       this.fetchRealCandlesCrypto(),
       this.fetchForexYahoo()
     ]);
-    this.simulateMicroTicks();
     this.lastUpdated = new Date().toISOString();
   }
 

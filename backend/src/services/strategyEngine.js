@@ -185,7 +185,7 @@ export function scanRelativeStrengthLeaders(assets, btcCandles, limit = 3) {
     if (!isHalalCompliant(asset.symbol)) continue;
 
     const candles = asset.candles;
-    if (!candles || candles.length < 48) continue;
+    if (!candles || candles.length < 48 || !asset.isRealCandles) continue;
 
     const rsMetrics = calculateRelativeStrength(candles, btcCandles);
     if (rsMetrics && rsMetrics.compositeRS > 0) {
@@ -224,7 +224,7 @@ export function scanHotGainerLeaders(assets, limit = 2) {
     if (!isHalalCompliant(asset.symbol)) continue;
 
     const candles = asset.candles;
-    if (!candles || candles.length < 48) continue;
+    if (!candles || candles.length < 48 || !asset.isRealCandles) continue;
 
     const currentCandle = candles[candles.length - 1];
     const currentPrice = currentCandle.close;

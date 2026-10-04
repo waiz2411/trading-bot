@@ -952,7 +952,40 @@ export class AutonomousAgentLoop {
         }
       }
 
-      // B. Spot Engine Trigger Checks (For ALL users' demo engines)
+      // B. Authoritative Real-Time Binance Price Sync for Active Positions
+      // Guarantees that every active open trade is evaluated strictly against the true Binance ticker price
+      const openSpotAssets = new Set();
+      for (const uKey of Object.keys(this.engines)) {
+        const eng = this.engines[uKey]?.SPOT;
+        if (eng && Array.isArray(eng.activePositions)) {
+          for (const pos of eng.activePositions) {
+            if (pos.category === 'Crypto') openSpotAssets.add(pos.symbol);
+          }
+        }
+      }
+
+      if (openSpotAssets.size > 0) {
+        for (const sym of openSpotAssets) {
+          const rawAsset = sym.replace(/[-_/]/g, '').replace(/USD$/, '');
+          const binancePair = `${rawAsset}USDT`;
+          try {
+            const res = await fetch(`https://data-api.binance.vision/api/v3/ticker/price?symbol=${binancePair}`, {
+              signal: AbortSignal.timeout(2500)
+            });
+            if (res.ok) {
+              const data = await res.json();
+              const liveP = parseFloat(data.price);
+              if (!isNaN(liveP) && liveP > 0) {
+                pricesMap[sym] = liveP;
+                const m = marketDataService.getMarket(sym);
+                if (m) m.price = liveP;
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      // Spot Engine Trigger Checks (For ALL users' demo engines)
       for (const uKey of Object.keys(this.engines)) {
         const uSpotEngine = this.engines[uKey]?.SPOT;
         if (uSpotEngine) {
