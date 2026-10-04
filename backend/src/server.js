@@ -24,6 +24,57 @@ app.use(cors({
 app.use(express.json());
 
 // ====================================================
+// SECONDARY REPLICA MODE (Mirrors Master Hostinger 100%)
+// ====================================================
+const PRIMARY_BACKEND_URL = process.env.PRIMARY_BACKEND_URL;
+if (PRIMARY_BACKEND_URL) {
+  console.log(`📡 Mirror Replica Mode Active: Proxying /api traffic to Master: ${PRIMARY_BACKEND_URL}`);
+  
+  app.use('/api', async (req, res, next) => {
+    // Keep local proxy routes handled by this server
+    if (req.path.startsWith('/binance-proxy')) {
+      return next();
+    }
+
+    try {
+      const cleanPrimary = PRIMARY_BACKEND_URL.replace(/\/+$/, '');
+      const targetUrl = `${cleanPrimary}${req.originalUrl}`;
+      
+      const headers = {};
+      for (const [k, v] of Object.entries(req.headers)) {
+        const lower = k.toLowerCase();
+        if (lower !== 'host' && lower !== 'content-length' && lower !== 'connection') {
+          headers[k] = v;
+        }
+      }
+
+      const fetchOptions = {
+        method: req.method,
+        headers
+      };
+
+      if (req.method !== 'GET' && req.method !== 'HEAD' && req.body && Object.keys(req.body).length > 0) {
+        fetchOptions.body = JSON.stringify(req.body);
+        headers['content-type'] = 'application/json';
+      }
+
+      const masterRes = await fetch(targetUrl, fetchOptions);
+      const contentType = masterRes.headers.get('content-type') || 'application/json';
+      const data = await masterRes.text();
+
+      const setCookies = masterRes.headers.getSetCookie ? masterRes.headers.getSetCookie() : [masterRes.headers.get('set-cookie')].filter(Boolean);
+      for (const c of setCookies) {
+        res.append('Set-Cookie', c);
+      }
+
+      res.status(masterRes.status).header('content-type', contentType).send(data);
+    } catch (err) {
+      res.status(502).json({ error: `Master sync error: ${err.message}` });
+    }
+  });
+}
+
+// ====================================================
 // AUTHENTICATION & MULTI-TENANT SAAS ROUTES
 // ====================================================
 app.post('/api/auth/register', async (req, res) => {
@@ -1120,9 +1171,13 @@ try {
   console.error('⚠️ Database init error (will retry on query):', dbErr.message);
 }
 
-agentLoop.setUserMode('test@gmail.com', 'LIVE');
-agentLoop.isAutoTradingEnabled = false; // Always start in PAUSED mode until user explicitly clicks Start
-agentLoop.start();
+if (!process.env.PRIMARY_BACKEND_URL) {
+  agentLoop.setUserMode('test@gmail.com', 'LIVE');
+  agentLoop.isAutoTradingEnabled = false; // Always start in PAUSED mode until user explicitly clicks Start
+  agentLoop.start();
+} else {
+  console.log('⏸️ Autonomous trading loop paused on Replica server (Master Hostinger executes all live trades).');
+}
 
 const SOCKET_PATH = process.env.SOCKET_PATH;
 if (SOCKET_PATH) {
