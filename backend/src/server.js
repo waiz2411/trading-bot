@@ -207,6 +207,40 @@ app.get('/api/broker/binance/balances', async (req, res) => {
   }
 });
 
+// Transparent Binance Proxy Route (Permits US nodes like Hostinger to proxy through European nodes like Render)
+app.all('/api/binance-proxy/*', async (req, res) => {
+  try {
+    const subPath = req.originalUrl.replace(/^\/api\/binance-proxy/, '');
+    const targetUrl = `https://api.binance.com${subPath}`;
+    
+    const headers = {};
+    for (const [key, val] of Object.entries(req.headers)) {
+      const lower = key.toLowerCase();
+      if (lower !== 'host' && lower !== 'content-length' && lower !== 'connection') {
+        headers[key] = val;
+      }
+    }
+
+    const fetchOptions = {
+      method: req.method,
+      headers
+    };
+
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
+      fetchOptions.body = typeof req.body === 'object' ? JSON.stringify(req.body) : req.body;
+      headers['content-type'] = 'application/json';
+    }
+
+    const binanceRes = await fetch(targetUrl, fetchOptions);
+    const contentType = binanceRes.headers.get('content-type') || 'application/json';
+    const data = await binanceRes.text();
+    
+    res.status(binanceRes.status).header('content-type', contentType).send(data);
+  } catch (err) {
+    res.status(502).json({ error: `Binance proxy error: ${err.message}` });
+  }
+});
+
 // MetaTrader 5 Config & Test
 app.post('/api/broker/mt5/register-tunnel', (req, res) => {
   try {

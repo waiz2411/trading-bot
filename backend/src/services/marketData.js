@@ -184,6 +184,12 @@ export class MarketDataService {
 
   // Dynamically discovers and streams live stats for ALL Halal USDT Spot pairs on Binance
   async fetchCryptoBinance() {
+    const now = Date.now();
+    if (this.lastBinanceTickerFetch && (now - this.lastBinanceTickerFetch) < 15000) {
+      return; // Refresh every 15 seconds to avoid Binance HTTP 429 rate limit
+    }
+    this.lastBinanceTickerFetch = now;
+
     let tickerList = null;
 
     // Primary: Binance Public Data Vision API (No geo-restriction, high speed)

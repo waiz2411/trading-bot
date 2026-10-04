@@ -24,14 +24,16 @@ export class BinanceConnector {
   }
 
   get baseUrl() {
-    return this.isTestnet
-      ? 'https://testnet.binance.vision'
-      : 'https://api.binance.com';
+    if (this.isTestnet) return 'https://testnet.binance.vision';
+    const proxy = process.env.BINANCE_PROXY_URL || this.proxyUrl;
+    if (proxy) return proxy.replace(/\/+$/, '');
+    return 'https://api.binance.com';
   }
 
-  configure({ apiKey, apiSecret, isTestnet = true, connected, status, balances }) {
+  configure({ apiKey, apiSecret, isTestnet = true, proxyUrl, connected, status, balances }) {
     if (apiKey) this.apiKey = apiKey.trim();
     if (apiSecret) this.apiSecret = apiSecret.trim();
+    if (proxyUrl !== undefined) this.proxyUrl = proxyUrl ? proxyUrl.trim() : '';
     this.isTestnet = !!isTestnet;
     if (connected !== undefined) {
       this.connected = Boolean(connected);
