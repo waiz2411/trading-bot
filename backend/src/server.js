@@ -31,8 +31,8 @@ if (PRIMARY_BACKEND_URL) {
   console.log(`📡 Mirror Replica Mode Active: Proxying /api traffic to Master: ${PRIMARY_BACKEND_URL}`);
   
   app.use('/api', async (req, res, next) => {
-    // Keep local proxy routes handled by this server
-    if (req.path.startsWith('/binance-proxy')) {
+    // Keep local proxy and server diagnostic routes handled by this replica server
+    if (req.path.startsWith('/binance-proxy') || req.path === '/system/ip') {
       return next();
     }
 
@@ -207,13 +207,14 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
 // Binance Spot Config & Test
 app.post('/api/broker/binance/config', (req, res) => {
   try {
-    const { email, apiKey, apiSecret, isTestnet } = req.body;
-    const status = binanceConnector.configure({ apiKey, apiSecret, isTestnet });
+    const { email, apiKey, apiSecret, isTestnet, proxyUrl } = req.body;
+    const status = binanceConnector.configure({ apiKey, apiSecret, isTestnet, proxyUrl });
     if (email) {
       authService.updateBrokerConfig(email, 'binance', {
         apiKey,
         apiSecret,
         isTestnet: !!isTestnet,
+        proxyUrl: proxyUrl ? proxyUrl.trim() : '',
         connected: false,
         status: apiKey ? 'STANDBY' : 'DISCONNECTED'
       });
@@ -226,9 +227,9 @@ app.post('/api/broker/binance/config', (req, res) => {
 
 app.post('/api/broker/binance/test', async (req, res) => {
   try {
-    const { email, apiKey, apiSecret, isTestnet } = req.body;
-    if (apiKey || apiSecret) {
-      binanceConnector.configure({ apiKey, apiSecret, isTestnet });
+    const { email, apiKey, apiSecret, isTestnet, proxyUrl } = req.body;
+    if (apiKey || apiSecret || proxyUrl !== undefined) {
+      binanceConnector.configure({ apiKey, apiSecret, isTestnet, proxyUrl });
     }
     const result = await binanceConnector.testConnection();
     const targetEmail = email || agentLoop.currentUser;
@@ -237,6 +238,7 @@ app.post('/api/broker/binance/test', async (req, res) => {
         apiKey,
         apiSecret,
         isTestnet: !!isTestnet,
+        proxyUrl: proxyUrl ? proxyUrl.trim() : '',
         connected: true,
         status: 'CONNECTED',
         balances: result.balances || [],
@@ -504,14 +506,28 @@ app.get('/api/broker/mexc/balances', async (req, res) => {
   }
 });
 
-// Outbound Server IP (for Binance API IP Whitelist)
+// Outbound Server IP & Region Detection (for Binance API IP Whitelist & Jurisdiction Check)
 app.get('/api/system/ip', async (req, res) => {
   try {
-    const ipRes = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(3000) });
+    const ipRes = await fetch('http://ip-api.com/json/', { signal: AbortSignal.timeout(3000) });
     const data = await ipRes.json();
-    res.json({ success: true, ip: data.ip });
+    res.json({ 
+      success: true, 
+      ip: data.query, 
+      country: data.country || 'Unknown', 
+      countryCode: data.countryCode || '', 
+      region: data.regionName || '',
+      city: data.city || '',
+      isUS: data.countryCode === 'US'
+    });
   } catch (err) {
-    res.json({ success: false, error: err.message });
+    try {
+      const fallback = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(2000) });
+      const fData = await fallback.json();
+      res.json({ success: true, ip: fData.ip, country: '', countryCode: '', isUS: false });
+    } catch (e2) {
+      res.json({ success: false, error: err.message });
+    }
   }
 });
 

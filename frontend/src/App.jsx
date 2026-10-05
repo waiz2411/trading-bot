@@ -162,19 +162,26 @@ export default function App() {
 
   const isFetchingRef = useRef(false);
   const backoffUntilRef = useRef(0);
+  const consecutive429Ref = useRef(0);
 
   const fetchDashboard = useCallback(async () => {
+    // Skip polling if tab is in the background or backoff cooldown is active
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
     if (Date.now() < backoffUntilRef.current) return;
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
     try {
       const res = await fetch('/api/dashboard', { headers: getAuthHeaders() });
       if (res.status === 429) {
-        // Backoff for 4 seconds if Render edge proxy rate limits
-        backoffUntilRef.current = Date.now() + 4000;
+        consecutive429Ref.current += 1;
+        // Exponential backoff: 15s, then 30s, max 60s
+        const backoffMs = Math.min(60000, 15000 * Math.pow(2, consecutive429Ref.current - 1));
+        backoffUntilRef.current = Date.now() + backoffMs;
+        console.warn(`[NexusQuant] Rate limited (429). Pausing sync for ${backoffMs / 1000}s`);
         return;
       }
       if (!res.ok) return;
+      consecutive429Ref.current = 0;
       const json = await res.json();
       setData(json);
     } catch (err) {
@@ -184,12 +191,21 @@ export default function App() {
     }
   }, [getAuthHeaders]);
 
-  // Poll state every 2.5 seconds when authenticated for live real-time telemetry & PnL
+  // Poll state every 4.0 seconds when authenticated and active tab
   useEffect(() => {
     if (!token || !user) return;
     fetchDashboard();
-    const interval = setInterval(fetchDashboard, 2500);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchDashboard, 4000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchDashboard();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [fetchDashboard, token, user]);
 
   const handleToggleMode = async () => {
@@ -200,6 +216,18 @@ export default function App() {
         headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ mode: newMode })
       });
+      if (res.status === 429) {
+        // Optimistically switch mode locally so user is never trapped in LIVE mode
+        const updatedUser = { ...user, mode: newMode };
+        setUser(updatedUser);
+        localStorage.setItem('nexus_user', JSON.stringify(updatedUser));
+        showNotification(`Switched to ${newMode === 'LIVE' ? '🔴 Real Broker Mode' : '🟢 Demo Paper Mode'} (Local fallback while cooling down)`, 'WARN');
+        return;
+      }
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status}: ${errorText.slice(0, 80)}`);
+      }
       const resData = await res.json();
       if (resData.success && resData.user) {
         setUser(resData.user);
@@ -224,6 +252,11 @@ export default function App() {
         headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ account })
       });
+      if (res.status === 429) {
+        showNotification('Rate limit active. Please wait a moment before switching.', 'WARN');
+        return;
+      }
+      if (!res.ok) return;
       const json = await res.json();
       if (json.success) {
         setData(json);

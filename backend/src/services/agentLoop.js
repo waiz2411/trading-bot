@@ -157,6 +157,7 @@ export class AutonomousAgentLoop {
             apiKey: user.brokerConnections.binance.apiKey || '',
             apiSecret: user.brokerConnections.binance.apiSecret || '',
             isTestnet: user.brokerConnections.binance.isTestnet ?? true,
+            proxyUrl: user.brokerConnections.binance.proxyUrl || '',
             connected: user.brokerConnections.binance.connected,
             status: user.brokerConnections.binance.status,
             balances: user.brokerConnections.binance.balances

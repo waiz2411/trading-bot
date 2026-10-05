@@ -31,12 +31,14 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
   }, [user?.accountType, isUserMargin, isUserSpot, initialTab]);
 
   // Binance State
-  const [binanceKey, setBinanceKey] = useState('');
-  const [binanceSecret, setBinanceSecret] = useState('');
-  const [isTestnet, setIsTestnet] = useState(true);
+  const [binanceKey, setBinanceKey] = useState(user?.brokerConnections?.binance?.apiKey || '');
+  const [binanceSecret, setBinanceSecret] = useState(user?.brokerConnections?.binance?.apiSecret || '');
+  const [isTestnet, setIsTestnet] = useState(user?.brokerConnections?.binance?.isTestnet ?? true);
+  const [binanceProxyUrl, setBinanceProxyUrl] = useState(user?.brokerConnections?.binance?.proxyUrl || '');
   const [showBinanceSecret, setShowBinanceSecret] = useState(false);
   const [binanceTesting, setBinanceTesting] = useState(false);
   const [binanceResult, setBinanceResult] = useState(null);
+  const [serverGeo, setServerGeo] = useState(null);
 
   // MT5 State
   const [mt5Method, setMt5Method] = useState('METAAPI'); // 'METAAPI' | 'EA' | 'BRIDGE'
@@ -61,7 +63,12 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
   React.useEffect(() => {
     fetch('/api/system/ip')
       .then(r => r.json())
-      .then(d => { if (d.success && d.ip) setServerIp(d.ip); })
+      .then(d => { 
+        if (d.success && d.ip) {
+          setServerIp(d.ip);
+          setServerGeo(d);
+        }
+      })
       .catch(() => null);
 
     fetch('/api/broker/mt5/gateway-url')
@@ -70,8 +77,16 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
       .catch(() => null);
   }, []);
 
-  // Update MT5 fields when user changes
+  // Update fields when user changes
   React.useEffect(() => {
+    if (user?.brokerConnections?.binance) {
+      if (user.brokerConnections.binance.apiKey && !binanceKey) {
+        setBinanceKey(user.brokerConnections.binance.apiKey);
+      }
+      if (user.brokerConnections.binance.proxyUrl && !binanceProxyUrl) {
+        setBinanceProxyUrl(user.brokerConnections.binance.proxyUrl);
+      }
+    }
     if (user?.brokerConnections?.mt5) {
       if (user.brokerConnections.mt5.login && !mt5Login) {
         setMt5Login(user.brokerConnections.mt5.login.replace(/\*+/g, ''));
@@ -128,7 +143,8 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
           email: user?.email,
           apiKey: binanceKey,
           apiSecret: binanceSecret,
-          isTestnet
+          isTestnet,
+          proxyUrl: binanceProxyUrl?.trim() || undefined
         })
       });
 
@@ -139,7 +155,8 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
           email: user?.email,
           apiKey: binanceKey,
           apiSecret: binanceSecret,
-          isTestnet
+          isTestnet,
+          proxyUrl: binanceProxyUrl?.trim() || undefined
         })
       });
       const data = await res.json();
@@ -369,29 +386,67 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
                 </div>
               </div>
 
-              {/* Outbound IP Whitelist Helper */}
+              {/* Outbound IP Whitelist Helper & Server Location Detection */}
               {serverIp && (
-                <div className="p-3 bg-terminal-950 rounded-xl border border-terminal-border flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Server className="w-4 h-4 text-emerald-400" />
-                    <div>
-                      <span className="text-[10px] text-slate-400 block uppercase font-bold">Cloud Server Outbound IP (For Whitelisting):</span>
-                      <span className="text-xs text-emerald-300 font-mono font-bold">{serverIp}</span>
+                <div className="p-3 bg-terminal-950 rounded-xl border border-terminal-border space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Server className="w-4 h-4 text-emerald-400" />
+                      <div>
+                        <span className="text-[10px] text-slate-400 block uppercase font-bold">Cloud Server Outbound IP (For Whitelisting):</span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs text-emerald-300 font-mono font-bold">{serverIp}</span>
+                          {serverGeo?.country && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-terminal-900 border border-terminal-border text-slate-300 font-mono flex items-center gap-1">
+                              <span>{serverGeo.countryCode === 'US' ? '🇺🇸' : '🌍'}</span>
+                              <span>{serverGeo.country}</span>
+                              {serverGeo.city && <span className="text-slate-400">({serverGeo.city})</span>}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (navigator.clipboard) {
+                          navigator.clipboard.writeText(serverIp);
+                          setCopiedIp(true);
+                          setTimeout(() => setCopiedIp(false), 2000);
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded bg-terminal-900 border border-terminal-border text-[10px] text-slate-300 hover:text-white font-mono"
+                    >
+                      {copiedIp ? 'Copied!' : 'Copy IP'}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (navigator.clipboard) {
-                        navigator.clipboard.writeText(serverIp);
-                        setCopiedIp(true);
-                        setTimeout(() => setCopiedIp(false), 2000);
-                      }
-                    }}
-                    className="px-2.5 py-1 rounded bg-terminal-900 border border-terminal-border text-[10px] text-slate-300 hover:text-white font-mono"
-                  >
-                    {copiedIp ? 'Copied!' : 'Copy IP'}
-                  </button>
+                  {(serverGeo?.isUS || serverIp === '217.196.54.11') && !isTestnet && (
+                    <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-200/90 leading-relaxed">
+                      ⚠️ <strong>US Server Detected:</strong> Binance Global restricts direct API traffic from US datacenters (HTTP 451). To route your real Binance account cleanly, enter a free Cloudflare Worker proxy URL below.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Cloudflare Worker / Non-US Proxy URL */}
+              {!isTestnet && (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-slate-300 font-bold uppercase tracking-wider text-[10px]">
+                      Cloudflare Worker / Non-US Proxy URL (Optional)
+                    </label>
+                    <span className="text-[10px] text-emerald-400 font-mono">Bypasses US IP block</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={binanceProxyUrl}
+                    onChange={(e) => setBinanceProxyUrl(e.target.value)}
+                    placeholder="https://binance-proxy.yourname.workers.dev (leave empty if non-US server)..."
+                    className="w-full px-3.5 py-2.5 bg-terminal-950 border border-terminal-border rounded-xl text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Free Cloudflare Workers give 100,000 requests/day ($0 cost) with non-US edge egress (Frankfurt, Singapore).
+                  </p>
                 </div>
               )}
 
