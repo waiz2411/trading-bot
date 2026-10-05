@@ -116,9 +116,11 @@ export class AutonomousAgentLoop {
       if (fs.existsSync(filePath)) {
         const raw = fs.readFileSync(filePath, 'utf8');
         const list = JSON.parse(raw);
-        if (Array.isArray(list) && list.length > 0) {
-          this.liveSpotClosedTrades = list;
-          this.liveSpotRealizedPnL = Number(list.reduce((acc, t) => acc + (t.finalPnL || 0), 0).toFixed(2));
+        if (Array.isArray(list)) {
+          // Live spot closed trades should ONLY be genuine live orders with real Binance order execution
+          // Reject legacy paper simulation trades with 'TRD-' prefix
+          this.liveSpotClosedTrades = list.filter(t => t.isLiveBrokerOrder && !String(t.id).startsWith('TRD-'));
+          this.liveSpotRealizedPnL = Number(this.liveSpotClosedTrades.reduce((acc, t) => acc + (t.finalPnL || 0), 0).toFixed(2));
         }
       }
     } catch (_) {}
@@ -137,9 +139,15 @@ export class AutonomousAgentLoop {
     this.currentUser = userEmail;
     this.currentMode = mode;
 
-    // Purge phantom simulated trades without a real MT5 ticket when in LIVE broker mode
-    if (mode === 'LIVE' && this.marginTradingEngine) {
-      this.marginTradingEngine.activePositions = this.marginTradingEngine.activePositions.filter(p => !!p.ticket);
+    // Purge phantom simulated trades when in LIVE broker mode
+    if (mode === 'LIVE') {
+      if (this.marginTradingEngine) {
+        this.marginTradingEngine.activePositions = this.marginTradingEngine.activePositions.filter(p => !p.ticket);
+      }
+      if (this.spotTradingEngine) {
+        // Live Spot positions are tracked separately in this.liveSpotPositions from real Binance balances
+        this.spotTradingEngine.activePositions = [];
+      }
     }
 
     // Synchronize broker connectors and persistent user state
@@ -639,8 +647,9 @@ export class AutonomousAgentLoop {
         }
 
         // 4B. PURE SPOT CRYPTO AUTO-OPEN FOR uKey
+        const isUserLive = (this.currentMode === 'LIVE' && binanceConnector.connected && uKey === this.currentUser);
         const uSpotSlots = uSpotRisk.maxSlots || 4;
-        const uSpotOpen = uSpotEngine.activePositions || [];
+        const uSpotOpen = isUserLive ? (this.liveSpotPositions || []) : (uSpotEngine.activePositions || []);
         const uTimeSinceLastSpot = Date.now() - (uConfig.lastSpotTradeOpenedAt || 0);
 
         if (uSpotOpen.length < uSpotSlots && (uTimeSinceLastSpot >= 15000 || !uConfig.lastSpotTradeOpenedAt)) {
@@ -691,16 +700,17 @@ export class AutonomousAgentLoop {
 
             const usdtObj = (binanceConnector.cachedBalances || []).find(b => b.asset === 'USDT');
             const liveUsdtFree = usdtObj ? Number(usdtObj.free) : 0;
-            const totalCash = (this.currentMode === 'LIVE' && binanceConnector.connected && liveUsdtFree > 0 && uKey === this.currentUser)
-              ? liveUsdtFree
-              : uSpotEngine.balance;
+            const totalCash = isUserLive ? liveUsdtFree : uSpotEngine.balance;
             const portionSize = Number((totalCash / uSpotSlots).toFixed(2));
             const maxPerCoin = uSpotRisk.maxTradesPerPair || 2;
 
             for (const candidate of uValidSpotBuys) {
-              if (uSpotEngine.activePositions.length >= uSpotSlots) break;
+              const currentOpenCount = isUserLive ? (this.liveSpotPositions || []).length : uSpotEngine.activePositions.length;
+              if (currentOpenCount >= uSpotSlots) break;
 
-              const coinPositions = uSpotEngine.activePositions.filter(p => p.symbol === candidate.asset.symbol);
+              const coinPositions = isUserLive
+                ? (this.liveSpotPositions || []).filter(p => p.symbol === candidate.asset.symbol || (p.name && candidate.asset.symbol.includes(p.name)))
+                : uSpotEngine.activePositions.filter(p => p.symbol === candidate.asset.symbol);
               if (coinPositions.length >= maxPerCoin) continue;
 
               if (coinPositions.length > 0) {
@@ -709,7 +719,9 @@ export class AutonomousAgentLoop {
                 if (diffPct < 0.003) continue;
               }
 
-              const currentUsed = uSpotEngine.activePositions.reduce((acc, p) => acc + (p.notional || 0), 0);
+              const currentUsed = isUserLive
+                ? (this.liveSpotPositions || []).reduce((acc, p) => acc + (p.notional || 0), 0)
+                : uSpotEngine.activePositions.reduce((acc, p) => acc + (p.notional || 0), 0);
               const availableCash = Math.max(0, totalCash - currentUsed);
               const notional = Number(Math.max(0.5, Math.min(portionSize, availableCash, totalCash > 1 ? totalCash - 0.01 : totalCash)).toFixed(2));
 
@@ -728,47 +740,51 @@ export class AutonomousAgentLoop {
               const isScaleIn = coinPositions.length > 0;
               const scaleLabel = isScaleIn ? ` [SCALE-IN #${coinPositions.length + 1}]` : '';
 
-              const spotPos = uSpotEngine.openPosition({
-                symbol: candidate.asset.symbol,
-                name: candidate.asset.name,
-                category: 'Crypto',
-                decimals: precision,
-                side: 'LONG',
-                entryPrice,
-                stopLoss,
-                takeProfit,
-                stopDistance: stopDist,
-                targetDistance: targetDist,
-                units,
-                notional,
-                confidence: candidate.signal.confidence,
-                reason: `Spot Scalp Slot ${uSpotEngine.activePositions.length + 1}/${uSpotSlots}${scaleLabel} (${candidate.signal.reason})`,
-                riskRewardRatio: Number((uSpotRisk.takeProfitPct / uSpotRisk.stopLossPct).toFixed(1)),
-                maxHoldMinutes: candidate.signal.maxHoldMinutes || uSpotRisk.maxHoldMinutes || 120,
-                tradingStyle: 'SPOT_BUY',
-                exitRule: candidate.signal.exitRule || 'HOT_RETEST_TRAILING_LOCK',
-                feeRate: uSpotRisk.feeRate || (uSpotRisk.useBnbFeeDiscount ? 0.00075 : 0.0010),
-                leverage: 1,
-                margin: notional,
-                liquidationPrice: 0
-              });
-
-              this.log(
-                `🪙 [SPOT - ${uKey}] SCALP OPEN${scaleLabel}: Bought ${candidate.asset.symbol} with $${notional} (Portion ${uSpotEngine.activePositions.length}/${uSpotSlots}) @ $${formatAssetPrice(entryPrice, precision)} (Win Prob: ${candidate.signal.winProbability || 74.5}%, Fee: -$${spotPos?.entryFee || 0}). Target: +${candidate.signal.takeProfitPct || uSpotRisk.takeProfitPct}% ($${formatAssetPrice(takeProfit, precision)}) | Stop: -${candidate.signal.stopLossPct || uSpotRisk.stopLossPct}% ($${formatAssetPrice(stopLoss, precision)}) | Trailing Lock @ +1.0%`,
-                'SUCCESS'
-              );
-              uConfig.lastSpotTradeOpenedAt = Date.now();
-
-              if (this.currentMode === 'LIVE' && binanceConnector.connected && uKey === this.currentUser) {
+              if (isUserLive) {
                 binanceConnector.placeSpotMarketOrder({
                   symbol: candidate.asset.symbol,
                   side: 'BUY',
                   quoteOrderQty: notional
                 }).then(liveOrder => {
-                  this.log(`🪙 [BINANCE LIVE] Real Market Buy executed on Binance! Order ID: ${liveOrder.orderId}`, 'SUCCESS');
+                  this.log(`🪙 [BINANCE LIVE] Real Auto-Buy executed on Binance! Order ID: ${liveOrder.orderId} (${candidate.asset.symbol} with $${notional} USDT)`, 'SUCCESS');
+                  binanceConnector.getBalances().then(bals => {
+                    this.syncLiveSpotPositions(bals, marketDataService.getAllPricesMap());
+                  }).catch(() => {});
                 }).catch(err => {
-                  this.log(`⚠️ [BINANCE LIVE] Order warning: ${err.message}`, 'WARN');
+                  this.log(`⚠️ [BINANCE LIVE] Auto-order notice: ${err.message}`, 'WARN');
                 });
+                uConfig.lastSpotTradeOpenedAt = Date.now();
+              } else {
+                const spotPos = uSpotEngine.openPosition({
+                  symbol: candidate.asset.symbol,
+                  name: candidate.asset.name,
+                  category: 'Crypto',
+                  decimals: precision,
+                  side: 'LONG',
+                  entryPrice,
+                  stopLoss,
+                  takeProfit,
+                  stopDistance: stopDist,
+                  targetDistance: targetDist,
+                  units,
+                  notional,
+                  confidence: candidate.signal.confidence,
+                  reason: `Spot Scalp Slot ${uSpotEngine.activePositions.length + 1}/${uSpotSlots}${scaleLabel} (${candidate.signal.reason})`,
+                  riskRewardRatio: Number((uSpotRisk.takeProfitPct / uSpotRisk.stopLossPct).toFixed(1)),
+                  maxHoldMinutes: candidate.signal.maxHoldMinutes || uSpotRisk.maxHoldMinutes || 120,
+                  tradingStyle: 'SPOT_BUY',
+                  exitRule: candidate.signal.exitRule || 'HOT_RETEST_TRAILING_LOCK',
+                  feeRate: uSpotRisk.feeRate || (uSpotRisk.useBnbFeeDiscount ? 0.00075 : 0.0010),
+                  leverage: 1,
+                  margin: notional,
+                  liquidationPrice: 0
+                });
+
+                this.log(
+                  `🪙 [SPOT - ${uKey}] SCALP OPEN${scaleLabel}: Bought ${candidate.asset.symbol} with $${notional} (Portion ${uSpotEngine.activePositions.length}/${uSpotSlots}) @ $${formatAssetPrice(entryPrice, precision)} (Win Prob: ${candidate.signal.winProbability || 74.5}%, Fee: -$${spotPos?.entryFee || 0}). Target: +${candidate.signal.takeProfitPct || uSpotRisk.takeProfitPct}% ($${formatAssetPrice(takeProfit, precision)}) | Stop: -${candidate.signal.stopLossPct || uSpotRisk.stopLossPct}% ($${formatAssetPrice(stopLoss, precision)}) | Trailing Lock @ +1.0%`,
+                  'SUCCESS'
+                );
+                uConfig.lastSpotTradeOpenedAt = Date.now();
               }
             }
           }
@@ -964,6 +980,11 @@ export class AutonomousAgentLoop {
           }
         }
       }
+      if (Array.isArray(this.liveSpotPositions)) {
+        for (const pos of this.liveSpotPositions) {
+          if (pos.symbol) openSpotAssets.add(pos.symbol);
+        }
+      }
 
       if (openSpotAssets.size > 0) {
         for (const sym of openSpotAssets) {
@@ -986,26 +1007,13 @@ export class AutonomousAgentLoop {
         }
       }
 
-      // Spot Engine Trigger Checks (For ALL users' demo engines)
+      // Spot Engine Trigger Checks (For DEMO simulated paper trading ONLY)
       for (const uKey of Object.keys(this.engines)) {
         const uSpotEngine = this.engines[uKey]?.SPOT;
         if (uSpotEngine) {
           const spotClosed = uSpotEngine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
           for (const closed of spotClosed) {
-            if (this.currentMode === 'LIVE') {
-              if (!this.liveSpotClosedTrades) this.liveSpotClosedTrades = [];
-              const exists = this.liveSpotClosedTrades.some(t => t.id === closed.id);
-              if (!exists) {
-                this.liveSpotClosedTrades.unshift({
-                  ...closed,
-                  isLiveBrokerOrder: true,
-                  exitTime: new Date().toISOString()
-                });
-                this.liveSpotRealizedPnL = Number(((this.liveSpotRealizedPnL || 0) + (closed.finalPnL || 0)).toFixed(2));
-              }
-            }
-
-            // Anti-Churn Revenge Trade Protection: 15-Minute strict lockout on Losses; 5-Minute on profit
+            // Anti-Churn Revenge Trade Protection for Demo
             const isLoss = (closed.finalPnL || 0) < -0.0001 || closed.exitReason === 'STOP_LOSS_TRIGGER';
             const lockMs = isLoss ? 15 * 60 * 1000 : 5 * 60 * 1000;
             const lockExpiry = Date.now() + lockMs;
@@ -1018,76 +1026,133 @@ export class AutonomousAgentLoop {
             userConfig.spotCooldownUntil.set(`${cleanName}-USD`, lockExpiry);
             userConfig.spotCooldownUntil.set(`${cleanName}USDT`, lockExpiry);
 
-            if (this.currentMode === 'LIVE' && uKey === this.currentUser) {
-              if (!this.spotCooldownUntil) this.spotCooldownUntil = new Map();
-              this.spotCooldownUntil.set(closed.symbol, lockExpiry);
-              this.spotCooldownUntil.set(cleanName, lockExpiry);
-              this.spotCooldownUntil.set(`${cleanName}-USD`, lockExpiry);
-              this.spotCooldownUntil.set(`${cleanName}USDT`, lockExpiry);
-            }
-
             const userSpotRisk = userConfig.spotRiskManager;
             const feeStr = closed.fee ? ` (Fee: -$${closed.fee})` : '';
             const holdCapStr = `${userSpotRisk.maxHoldMinutes || 60}M`;
 
             if (closed.exitReason === 'TAKE_PROFIT_TRIGGER') {
-              this.log(`🪙 [SPOT] TARGET HIT (+${userSpotRisk.takeProfitPct}%): ${closed.symbol}! Sold holding for Realized Net: +$${closed.finalPnL} (+${closed.finalPnLPercent}%)${feeStr}!`, 'SUCCESS');
+              this.log(`🎯 [SPOT DEMO] TARGET HIT (+${userSpotRisk.takeProfitPct}%): ${closed.symbol}! Sold holding for Realized Net: +$${closed.finalPnL} (+${closed.finalPnLPercent}%)${feeStr}!`, 'SUCCESS');
             } else if (closed.exitReason === 'TRAILING_STOP_TRIGGER') {
-              this.log(`🛡️ [SPOT] TRAILING PROFIT SECURED: ${closed.symbol}! Banked gain on trailing stop: +$${closed.finalPnL} (+${closed.finalPnLPercent}%)${feeStr}!`, 'SUCCESS');
+              this.log(`🛡️ [SPOT DEMO] TRAILING PROFIT SECURED: ${closed.symbol}! Banked gain on trailing stop: +$${closed.finalPnL} (+${closed.finalPnLPercent}%)${feeStr}!`, 'SUCCESS');
             } else if (closed.exitReason === 'BREAKEVEN_STOP_TRIGGER') {
-              this.log(`🔒 [SPOT] BREAK-EVEN SHIELD HIT: ${closed.symbol} closed with zero fee loss (Net: $${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}${feeStr})!`, 'INFO');
+              this.log(`🔒 [SPOT DEMO] BREAK-EVEN SHIELD HIT: ${closed.symbol} closed with zero fee loss (Net: $${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}${feeStr})!`, 'INFO');
             } else if (closed.exitReason === 'TIME_LIMIT_EXIT') {
-              this.log(`⏱️ [SPOT] ${holdCapStr} HOLD EXPIRY: ${closed.symbol} auto-closed at ${holdCapStr} cap. Realized Net: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL} (${closed.finalPnLPercent}%)${feeStr}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'INFO');
+              this.log(`⏱️ [SPOT DEMO] ${holdCapStr} HOLD EXPIRY: ${closed.symbol} auto-closed at ${holdCapStr} cap. Realized Net: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL} (${closed.finalPnLPercent}%)${feeStr}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'INFO');
             } else if (closed.exitReason === 'STOP_LOSS_TRIGGER') {
-              this.log(`🪙 [SPOT] STOP TRIGGERED (-${userSpotRisk.stopLossPct}%): ${closed.symbol} sold at stop. Loss capped: -$${Math.abs(closed.finalPnL)} (${closed.finalPnLPercent}%)${feeStr}. Coin locked on 15m cooldown.`, 'WARN');
+              this.log(`🪙 [SPOT DEMO] STOP TRIGGERED (-${userSpotRisk.stopLossPct}%): ${closed.symbol} sold at stop. Loss capped: -$${Math.abs(closed.finalPnL)} (${closed.finalPnLPercent}%)${feeStr}. Coin locked on 15m cooldown.`, 'WARN');
             } else {
-              this.log(`🪙 [SPOT] EXIT: ${closed.symbol} closed (${closed.exitReason}). Realized Net: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}${feeStr}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'WARN');
+              this.log(`🪙 [SPOT DEMO] EXIT: ${closed.symbol} closed (${closed.exitReason}). Realized Net: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}${feeStr}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'WARN');
             }
-
-        // Live Binance Exit Sell
-        if (this.currentMode === 'LIVE' && binanceConnector.connected) {
-          const rawAsset = (closed.name || closed.symbol.replace(/[-_/]/g, '').replace(/USD$/, '')).toUpperCase();
-          try {
-            const balances = await binanceConnector.getBalances();
-            const coinBal = balances.find(b => b.asset.toUpperCase() === rawAsset);
-            const qtyToSell = coinBal && coinBal.free > 0.00001 ? coinBal.free : closed.units;
-            if (qtyToSell > 0) {
-              await binanceConnector.placeSpotMarketOrder({
-                symbol: `${rawAsset}USDT`,
-                side: 'SELL',
-                quantity: qtyToSell
-              });
-              this.log(`🪙 [BINANCE LIVE] Real Spot Exit executed on Binance! Sold ${qtyToSell} ${rawAsset}`, 'SUCCESS');
-              
-              // Check if any fractional remainder (dust) is left over and sweep into BNB
-              const updatedBals = await binanceConnector.getBalances();
-              const remainingBal = updatedBals.find(b => b.asset.toUpperCase() === rawAsset);
-              if (remainingBal && remainingBal.free > 0.00001) {
-                await binanceConnector.convertDustToBnb([rawAsset]).then(dustRes => {
-                  if (dustRes && (dustRes.totalTransfered || dustRes.transferResult?.length)) {
-                    this.log(`✨ [BINANCE LIVE] Leftover dust for ${rawAsset} (${remainingBal.free}) swept into BNB!`, 'SUCCESS');
-                  }
-                }).catch(() => {});
-              }
-            }
-          } catch (err) {
-            this.log(`⚠️ [BINANCE LIVE] Exit sell notice: ${err.message}`, 'WARN');
-          }
-
-          if (!this.liveSpotClosedTrades) this.liveSpotClosedTrades = [];
-          this.liveSpotClosedTrades.unshift({
-            ...closed,
-            id: `BINANCE-${rawAsset}-${Date.now()}`,
-            isLiveBrokerOrder: true,
-            exitTime: new Date().toISOString()
-          });
-          this.liveSpotRealizedPnL = Number(((this.liveSpotRealizedPnL || 0) + (closed.finalPnL || 0)).toFixed(2));
-          this.savePersistedSpotTrades();
           }
         }
       }
-    }
 
+      // A3. Dedicated Live Binance Spot Holdings Guardian (Active PnL, TP, SL, and Hold Duration Watchdog)
+      if (this.currentMode === 'LIVE' && binanceConnector.connected && Array.isArray(this.liveSpotPositions) && this.liveSpotPositions.length > 0) {
+        const liveActive = [...this.liveSpotPositions];
+        for (const pos of liveActive) {
+          const rawAsset = (pos.name || pos.symbol.replace(/[-_/]/g, '').replace(/USD$/, '')).toUpperCase();
+          const livePrice = pricesMap[pos.symbol] || pricesMap[`${rawAsset}USDT`] || pos.currentPrice || pos.entryPrice;
+          if (!livePrice || livePrice <= 0) continue;
+
+          pos.currentPrice = livePrice;
+          pos.highestPrice = Math.max(pos.highestPrice || 0, livePrice);
+          pos.lowestPrice = Math.min(pos.lowestPrice || Infinity, livePrice);
+
+          const gross = (livePrice - pos.entryPrice) * pos.units;
+          const exitFee = Number((livePrice * pos.units * (pos.feeRate || 0.00075)).toFixed(4));
+          const currentProfit = Number((gross - (pos.entryFee || 0) - exitFee).toFixed(2));
+          pos.unrealizedPnL = currentProfit;
+          pos.pnlPercent = pos.notional > 0 ? Number(((currentProfit / pos.notional) * 100).toFixed(2)) : 0;
+
+          const openMs = pos.openTime ? new Date(pos.openTime).getTime() : Date.now();
+          const holdMinutes = (Date.now() - openMs) / 60000;
+          const maxHoldMinutes = pos.maxHoldMinutes || this.spotRiskManager.maxHoldMinutes || 60;
+
+          let exitReason = null;
+          let exitMsg = '';
+
+          // 1. Take Profit Target Hit
+          if (pos.takeProfit && livePrice >= pos.takeProfit) {
+            exitReason = 'TAKE_PROFIT_TRIGGER';
+            exitMsg = `🎯 [BINANCE LIVE] TP Hit: ${pos.symbol} reached target ($${livePrice} >= $${pos.takeProfit})!`;
+          }
+          // 2. Stop Loss Protection Trigger
+          else if (pos.stopLoss && livePrice <= pos.stopLoss) {
+            exitReason = 'STOP_LOSS_TRIGGER';
+            exitMsg = `🛑 [BINANCE LIVE] Stop Loss Hit: ${pos.symbol} ($${livePrice} <= $${pos.stopLoss})!`;
+          }
+          // 3. Max Hold Duration Expiry
+          else if (holdMinutes >= maxHoldMinutes) {
+            exitReason = 'TIME_LIMIT_EXIT';
+            exitMsg = `⏱️ [BINANCE LIVE] ${maxHoldMinutes}m Hold Expiry: ${pos.symbol} held for ${Math.round(holdMinutes)}m.`;
+          }
+
+          if (exitReason) {
+            try {
+              const balances = await binanceConnector.getBalances();
+              const coinBal = balances.find(b => b.asset.toUpperCase() === rawAsset);
+              const qtyToSell = coinBal && coinBal.free > 0.00001 ? coinBal.free : pos.units;
+
+              if (qtyToSell > 0) {
+                await binanceConnector.placeSpotMarketOrder({
+                  symbol: `${rawAsset}USDT`,
+                  side: 'SELL',
+                  quantity: qtyToSell
+                });
+                this.log(`${exitMsg} Sold ${qtyToSell} ${rawAsset} on Binance! Realized Net: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`, currentProfit >= 0 ? 'SUCCESS' : 'WARN');
+
+                // Dust conversion sweep
+                const postBals = await binanceConnector.getBalances();
+                const remBal = postBals.find(b => b.asset.toUpperCase() === rawAsset);
+                if (remBal && remBal.free > 0.00001) {
+                  await binanceConnector.convertDustToBnb([rawAsset]).then(res => {
+                    if (res && (res.totalTransfered || res.transferResult?.length)) {
+                      this.log(`✨ [BINANCE LIVE] Leftover dust for ${rawAsset} (${remBal.free}) swept into BNB!`, 'SUCCESS');
+                    }
+                  }).catch(() => {});
+                }
+              }
+            } catch (err) {
+              this.log(`⚠️ [BINANCE LIVE] Exit sell notice for ${rawAsset}: ${err.message}`, 'WARN');
+            }
+
+            if (!this.liveSpotClosedTrades) this.liveSpotClosedTrades = [];
+            this.liveSpotClosedTrades.unshift({
+              id: `BINANCE-${rawAsset}-${Date.now()}`,
+              symbol: pos.symbol,
+              name: rawAsset,
+              side: 'LONG',
+              entryPrice: pos.entryPrice,
+              exitPrice: livePrice,
+              units: pos.units,
+              notional: pos.notional,
+              finalPnL: currentProfit,
+              finalPnLPercent: pos.pnlPercent,
+              fee: Number(((pos.entryFee || 0) + exitFee).toFixed(4)),
+              exitReason,
+              openTime: pos.openTime,
+              exitTime: new Date().toISOString(),
+              isLiveBrokerOrder: true
+            });
+            this.liveSpotRealizedPnL = Number(((this.liveSpotRealizedPnL || 0) + currentProfit).toFixed(2));
+            this.savePersistedSpotTrades();
+
+            // Remove from active positions
+            this.liveSpotPositions = this.liveSpotPositions.filter(p => (p.name || '').toUpperCase() !== rawAsset);
+
+            // Cooldown protection
+            const isLoss = currentProfit < -0.0001;
+            const lockMs = isLoss ? 15 * 60 * 1000 : 5 * 60 * 1000;
+            const lockExpiry = Date.now() + lockMs;
+            if (!this.spotCooldownUntil) this.spotCooldownUntil = new Map();
+            this.spotCooldownUntil.set(pos.symbol, lockExpiry);
+            this.spotCooldownUntil.set(rawAsset, lockExpiry);
+            this.spotCooldownUntil.set(`${rawAsset}-USD`, lockExpiry);
+            this.spotCooldownUntil.set(`${rawAsset}USDT`, lockExpiry);
+          }
+        }
+      }
     } catch (error) {
       console.error('Error during agent cycle:', error);
       this.log(`Cycle error: ${error.message}`, 'ERROR');
@@ -1241,7 +1306,8 @@ export class AutonomousAgentLoop {
       }
       updatedLivePositions.push(trackedPos);
     }
-    return this.liveSpotPositions || [];
+    this.liveSpotPositions = updatedLivePositions;
+    return this.liveSpotPositions;
   }
 
   getDashboardData(forcedMode = null, forcedAccount = null, userEmail = null) {
