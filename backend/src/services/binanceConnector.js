@@ -126,7 +126,7 @@ export class BinanceConnector {
             success: false,
             latencyMs: Date.now() - startTime,
             isGeoBlocked: true,
-            error: 'Binance Global returned HTTP 451 (US Jurisdiction Restriction). The Hostinger cloud server IP (217.196.54.11) is in a US datacenter where Binance restricts API traffic. To trade or test with $100 risk-free with zero restrictions, use the built-in Demo Spot Engine (click the Wallet/Balance button in the top header and set balance to $100).'
+            error: 'Binance Global returned HTTP 451 (US Jurisdiction Restriction). The Hostinger backend server is in a US datacenter (Phoenix) where Binance restricts direct API connections. To connect your real Binance account, please paste your free Cloudflare Worker URL in the proxy field above, or test with Binance Testnet / Demo Mode.'
           };
         }
         throw new Error(`Binance ping failed with HTTP ${pingRes.status}`);
