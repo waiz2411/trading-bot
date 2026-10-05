@@ -1058,7 +1058,17 @@ export class AutonomousAgentLoop {
                 quantity: qtyToSell
               });
               this.log(`🪙 [BINANCE LIVE] Real Spot Exit executed on Binance! Sold ${qtyToSell} ${rawAsset}`, 'SUCCESS');
-              await binanceConnector.getBalances();
+              
+              // Check if any fractional remainder (dust) is left over and sweep into BNB
+              const updatedBals = await binanceConnector.getBalances();
+              const remainingBal = updatedBals.find(b => b.asset.toUpperCase() === rawAsset);
+              if (remainingBal && remainingBal.free > 0.00001) {
+                await binanceConnector.convertDustToBnb([rawAsset]).then(dustRes => {
+                  if (dustRes && (dustRes.totalTransfered || dustRes.transferResult?.length)) {
+                    this.log(`✨ [BINANCE LIVE] Leftover dust for ${rawAsset} (${remainingBal.free}) swept into BNB!`, 'SUCCESS');
+                  }
+                }).catch(() => {});
+              }
             }
           } catch (err) {
             this.log(`⚠️ [BINANCE LIVE] Exit sell notice: ${err.message}`, 'WARN');

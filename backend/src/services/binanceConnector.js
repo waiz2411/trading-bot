@@ -305,9 +305,10 @@ export class BinanceConnector {
       const filter = await this.getSymbolLotSize(binanceSymbol);
       let formattedQty = Number(quantity);
       if (filter && filter.stepSize) {
-        const precision = Math.max(0, Math.round(-Math.log10(filter.stepSize)));
-        const factor = Math.pow(10, precision);
-        formattedQty = (Math.floor(formattedQty * factor) / factor).toFixed(precision);
+        const stepStr = filter.stepSize.toString();
+        const decimals = stepStr.includes('.') ? stepStr.split('.')[1].replace(/0+$/, '').length : 0;
+        const steps = Math.floor(formattedQty / filter.stepSize);
+        formattedQty = (steps * filter.stepSize).toFixed(decimals);
       } else {
         formattedQty = formattedQty.toFixed(4);
       }
@@ -348,6 +349,43 @@ export class BinanceConnector {
       cummulativeQuoteQty: data.cummulativeQuoteQty,
       fills: data.fills || []
     };
+  }
+
+  /**
+   * Convert leftover small balances (dust) to BNB via Binance SAPI
+   */
+  async convertDustToBnb(assets = []) {
+    if (!this.connected || !this.apiKey || !this.apiSecret) return null;
+    try {
+      const assetList = (Array.isArray(assets) ? assets : [assets])
+        .map(a => a.toUpperCase())
+        .filter(a => a && a !== 'USDT' && a !== 'BNB' && a !== 'USDC' && a !== 'FDUSD');
+      if (assetList.length === 0) return null;
+
+      const params = new URLSearchParams();
+      for (const a of assetList) {
+        params.append('asset', a);
+      }
+      const signedQuery = this.signQuery(params.toString());
+      const res = await fetch(`${this.baseUrl}/sapi/v1/asset/dust?${signedQuery}`, {
+        method: 'POST',
+        headers: {
+          'X-MBX-APIKEY': this.apiKey,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await this.getBalances().catch(() => {});
+        return data;
+      } else {
+        console.warn('[BinanceConnector] Dust conversion notice:', data.msg || res.statusText);
+        return null;
+      }
+    } catch (err) {
+      console.warn('[BinanceConnector] Dust conversion error:', err.message);
+      return null;
+    }
   }
 }
 

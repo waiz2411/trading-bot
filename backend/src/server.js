@@ -260,6 +260,23 @@ app.get('/api/broker/binance/balances', async (req, res) => {
   }
 });
 
+app.post('/api/broker/binance/convert-dust', async (req, res) => {
+  try {
+    const { assets } = req.body || {};
+    let targetAssets = assets;
+    if (!targetAssets || targetAssets.length === 0) {
+      const balances = await binanceConnector.getBalances();
+      targetAssets = balances
+        .filter(b => b.asset !== 'USDT' && b.asset !== 'BNB' && b.free > 0.00001)
+        .map(b => b.asset);
+    }
+    const result = await binanceConnector.convertDustToBnb(targetAssets);
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Transparent Binance Proxy Route (Permits US nodes like Hostinger to proxy through European nodes like Render)
 app.all('/api/binance-proxy/*', async (req, res) => {
   try {
