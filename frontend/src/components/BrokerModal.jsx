@@ -444,9 +444,18 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
                     placeholder="https://binance-proxy.yourname.workers.dev (leave empty if non-US server)..."
                     className="w-full px-3.5 py-2.5 bg-terminal-950 border border-terminal-border rounded-xl text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
                   />
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Free Cloudflare Workers give 100,000 requests/day ($0 cost) with non-US edge egress (Frankfurt, Singapore).
-                  </p>
+                  <div className="flex items-center justify-between mt-1 text-[10px]">
+                    <span className="text-slate-400">
+                      Free Cloudflare Workers ($0 cost) or built-in European gateway.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setBinanceProxyUrl('https://trading-bot-test-z6bi.onrender.com/api/binance-proxy')}
+                      className="text-emerald-400 hover:text-emerald-300 hover:underline font-mono font-bold flex items-center gap-1"
+                    >
+                      <span>⚡ Use Germany Gateway</span>
+                    </button>
+                  </div>
                 </div>
               )}
 

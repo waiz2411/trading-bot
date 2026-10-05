@@ -117,7 +117,25 @@ export class BinanceConnector {
 
     try {
       // 1. Test latency with ping
-      const pingRes = await fetch(`${this.baseUrl}/api/v3/ping`, { method: 'GET' });
+      let pingRes = await fetch(`${this.baseUrl}/api/v3/ping`, { method: 'GET' });
+      if (!pingRes.ok && pingRes.status === 451) {
+        // Automatic failover: If the requested endpoint (e.g. Anycast worker running in US) returned 451,
+        // retry via our dedicated European Frankfurt gateway
+        const europeanGateway = 'https://trading-bot-test-z6bi.onrender.com/api/binance-proxy';
+        if (this.baseUrl !== europeanGateway) {
+          console.log(`[BinanceConnector] Endpoint ${this.baseUrl} returned HTTP 451. Retrying via European Frankfurt Gateway...`);
+          try {
+            const euPing = await fetch(`${europeanGateway}/api/v3/ping`, { method: 'GET' });
+            if (euPing.ok) {
+              this.proxyUrl = europeanGateway;
+              pingRes = euPing;
+            }
+          } catch (eFail) {
+            console.warn('[BinanceConnector] European gateway fallback check failed:', eFail.message);
+          }
+        }
+      }
+
       if (!pingRes.ok) {
         if (pingRes.status === 451) {
           this.status = 'ERROR';
@@ -126,7 +144,7 @@ export class BinanceConnector {
             success: false,
             latencyMs: Date.now() - startTime,
             isGeoBlocked: true,
-            error: 'Binance Global returned HTTP 451 (US Jurisdiction Restriction). The Hostinger backend server is in a US datacenter (Phoenix) where Binance restricts direct API connections. To connect your real Binance account, please paste your free Cloudflare Worker URL in the proxy field above, or test with Binance Testnet / Demo Mode.'
+            error: 'Binance Global returned HTTP 451 (US Jurisdiction Restriction). The proxy URL reached Binance from a US datacenter. Click "Use Built-in Germany Gateway" below to route through Frankfurt, Germany.'
           };
         }
         throw new Error(`Binance ping failed with HTTP ${pingRes.status}`);
