@@ -296,9 +296,16 @@ app.all('/api/binance-proxy/*', async (req, res) => {
       headers
     };
 
-    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
+    const hasBody = req.body && (
+      (typeof req.body === 'object' && Object.keys(req.body).length > 0) ||
+      (typeof req.body === 'string' && req.body.length > 0)
+    );
+
+    if (req.method !== 'GET' && req.method !== 'HEAD' && hasBody) {
       fetchOptions.body = typeof req.body === 'object' ? JSON.stringify(req.body) : req.body;
       headers['content-type'] = 'application/json';
+    } else {
+      delete headers['content-type'];
     }
 
     const binanceRes = await fetch(targetUrl, fetchOptions);

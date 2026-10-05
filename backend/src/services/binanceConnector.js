@@ -320,8 +320,7 @@ export class BinanceConnector {
     const res = await fetch(`${this.baseUrl}/api/v3/order?${signedQuery}`, {
       method: 'POST',
       headers: {
-        'X-MBX-APIKEY': this.apiKey,
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'X-MBX-APIKEY': this.apiKey
       }
     });
 
@@ -370,8 +369,7 @@ export class BinanceConnector {
       const res = await fetch(`${this.baseUrl}/sapi/v1/asset/dust?${signedQuery}`, {
         method: 'POST',
         headers: {
-          'X-MBX-APIKEY': this.apiKey,
-          'Content-Type': 'application/x-www-form-urlencoded'
+          'X-MBX-APIKEY': this.apiKey
         }
       });
       const data = await res.json();
