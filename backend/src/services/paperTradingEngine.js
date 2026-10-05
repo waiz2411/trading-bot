@@ -1,8 +1,13 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { evaluatePositionExit } from './strategyEngine.js';
 import { getAssetPrecision } from '../config/assets.js';
 import { db } from './db.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DATA_DIR = path.resolve(__dirname, '../data');
 
 /**
  * Intelligent Paper Trading Engine (Pro Scalp & Leveraged Execution)
@@ -38,9 +43,8 @@ export class PaperTradingEngine {
     // 1. Fast local file read
     try {
       const fileName = `persisted_engine_${this.accountType.toLowerCase()}_${this.userEmail}.json`;
-      const dirPath = path.resolve('backend/src/data');
-      if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
-      const filePath = path.resolve('backend/src/data', fileName);
+      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+      const filePath = path.join(DATA_DIR, fileName);
       if (fs.existsSync(filePath)) {
         const raw = fs.readFileSync(filePath, 'utf8');
         const data = JSON.parse(raw);
@@ -109,10 +113,9 @@ export class PaperTradingEngine {
 
   savePersistedState() {
     try {
-      const dirPath = path.resolve('backend/src/data');
-      if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
       const fileName = `persisted_engine_${this.accountType.toLowerCase()}_${this.userEmail}.json`;
-      const filePath = path.join(dirPath, fileName);
+      const filePath = path.join(DATA_DIR, fileName);
       const state = {
         accountType: this.accountType,
         balance: this.balance,

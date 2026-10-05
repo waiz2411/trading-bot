@@ -563,8 +563,8 @@ app.get('/api/dashboard', async (req, res) => {
     const user = await authService.validateToken(token);
     
     const userEmail = user ? user.email : 'default';
-    const userMode = user ? user.mode : agentLoop.currentMode;
-    const userAccount = user ? user.accountType : agentLoop.activeAccount;
+    const userMode = (user && user.mode) ? user.mode : agentLoop.currentMode;
+    const userAccount = (user && (user.accountType || user.account_type)) ? (user.accountType || user.account_type) : agentLoop.activeAccount;
 
     const uConfig = agentLoop.getConfig(userEmail);
     if (user && user.isAutoTradingEnabled !== undefined && uConfig.isAutoTradingEnabled === undefined) {

@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { marketDataService } from './marketData.js';
 import { calculateTechnicalMetrics } from './technicalAnalysis.js';
 import { evaluateStrategyConfluence, evaluateSpotConfluence, evaluateBtcHealth, scanRelativeStrengthLeaders, scanHotGainerLeaders } from './strategyEngine.js';
@@ -10,6 +11,10 @@ import { mt5Connector } from './mt5Connector.js';
 import { authService } from './authService.js';
 import { isHalalCompliant } from './halalFilter.js';
 import { getAssetPrecision, formatAssetPrice } from '../config/assets.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DATA_DIR = path.resolve(__dirname, '../data');
 
 export class AutonomousAgentLoop {
   constructor() {
@@ -112,14 +117,19 @@ export class AutonomousAgentLoop {
 
   loadPersistedSpotTrades() {
     try {
-      const filePath = path.resolve('backend/src/data/live_spot_trades.json');
+      const filePath = path.join(DATA_DIR, 'live_spot_trades.json');
       if (fs.existsSync(filePath)) {
         const raw = fs.readFileSync(filePath, 'utf8');
         const list = JSON.parse(raw);
         if (Array.isArray(list)) {
           // Live spot closed trades should ONLY be genuine live orders with real Binance order execution
-          // Reject legacy paper simulation trades with 'TRD-' prefix
-          this.liveSpotClosedTrades = list.filter(t => t.isLiveBrokerOrder && !String(t.id).startsWith('TRD-'));
+          // Reject legacy paper simulation trades with 'TRD-' prefix or known simulation symbols
+          const demoSymbols = new Set(['PARTI', 'RLC', 'MOVR', 'SCR', 'MEGA', 'TST', 'SEI', 'BANANA', 'PIVX']);
+          this.liveSpotClosedTrades = list.filter(t => 
+            t.isLiveBrokerOrder && 
+            !String(t.id).startsWith('TRD-') &&
+            !demoSymbols.has((t.name || '').toUpperCase())
+          );
           this.liveSpotRealizedPnL = Number(this.liveSpotClosedTrades.reduce((acc, t) => acc + (t.finalPnL || 0), 0).toFixed(2));
         }
       }
@@ -128,9 +138,8 @@ export class AutonomousAgentLoop {
 
   savePersistedSpotTrades() {
     try {
-      const dirPath = path.resolve('backend/src/data');
-      if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
-      const filePath = path.join(dirPath, 'live_spot_trades.json');
+      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+      const filePath = path.join(DATA_DIR, 'live_spot_trades.json');
       fs.writeFileSync(filePath, JSON.stringify(this.liveSpotClosedTrades || [], null, 2), 'utf8');
     } catch (_) {}
   }
