@@ -1037,12 +1037,23 @@ app.post('/api/trades/execute', async (req, res) => {
 
       const isLive = agentLoop.currentMode === 'LIVE';
       let spotCash = agentLoop.getEngine('SPOT', userEmail).balance;
-      const maxSlots = agentLoop.spotRiskManager.maxSlots || 1;
+      const userSpotRisk = agentLoop.getConfig(userEmail).spotRiskManager;
+      let maxSlots = userSpotRisk.maxSlots || 1;
 
       if (isLive && binanceConnector.connected) {
         const balances = await binanceConnector.getBalances();
         const usdtObj = balances.find(b => b.asset === 'USDT');
         spotCash = usdtObj ? Number(usdtObj.free) : 0;
+
+        // Dynamic slot sizing: on micro-balance Spot accounts (< $20), collapse to 1 slot
+        // so that orders meet Binance's minNotional requirement ($5.00 USDT per trade)
+        if (spotCash < 20) {
+          maxSlots = 1;
+        }
+
+        if (spotCash < 5.0) {
+          return res.status(400).json({ error: `Insufficient Spot USDT balance ($${spotCash.toFixed(2)}). Binance requires at least $5.00 USDT per trade.` });
+        }
 
         // Count real active live spot holdings on Binance (>= $1.00 notional)
         const liveActiveCount = (agentLoop.liveSpotPositions || []).length;
@@ -1050,6 +1061,9 @@ app.post('/api/trades/execute', async (req, res) => {
           return res.status(400).json({ error: `Spot Account allows ${maxSlots} active coin position(s) at ${(100 / maxSlots).toFixed(0)}% allocation. Close current position first.` });
         }
       } else {
+        if (spotCash < 20) {
+          maxSlots = 1;
+        }
         if (agentLoop.getEngine('SPOT', userEmail).activePositions.length >= maxSlots) {
           return res.status(400).json({ error: `Spot Account allows ${maxSlots} active coin position(s) at ${(100 / maxSlots).toFixed(0)}% allocation. Close current position first.` });
         }
@@ -1059,8 +1073,12 @@ app.post('/api/trades/execute', async (req, res) => {
         return res.status(400).json({ error: `Insufficient Spot USDT balance ($${spotCash.toFixed(2)}) to open trade.` });
       }
 
-      const rawNotional = spotCash / maxSlots;
-      const notional = Number((Math.max(0.5, Math.min(rawNotional, spotCash - 0.01))).toFixed(2));
+      let rawNotional = spotCash / maxSlots;
+      if (isLive && rawNotional < 5.0 && spotCash >= 5.0) {
+        rawNotional = spotCash;
+      }
+      const minAllowed = isLive ? 5.0 : 0.5;
+      const notional = Number((Math.max(minAllowed, Math.min(rawNotional, spotCash > 1 ? spotCash - 0.01 : spotCash))).toFixed(2));
       const entryPrice = asset.price;
       const rawUnits = notional / entryPrice;
       const units = Number(rawUnits.toFixed(asset.decimals || 4));

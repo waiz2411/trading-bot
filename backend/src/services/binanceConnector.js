@@ -253,17 +253,18 @@ export class BinanceConnector {
         const data = await res.json();
         const symInfo = data.symbols?.[0];
         const lotFilter = symInfo?.filters?.find(f => f.filterType === 'LOT_SIZE');
-        if (lotFilter) {
-          const stepSize = parseFloat(lotFilter.stepSize) || 0.0001;
-          const minQty = parseFloat(lotFilter.minQty) || 0.0001;
-          this.symbolFilters[symbol] = { stepSize, minQty };
-          return this.symbolFilters[symbol];
-        }
+        const notionalFilter = symInfo?.filters?.find(f => f.filterType === 'NOTIONAL' || f.filterType === 'MIN_NOTIONAL');
+        const minNotional = notionalFilter ? (parseFloat(notionalFilter.minNotional) || 5.0) : 5.0;
+
+        const stepSize = lotFilter ? (parseFloat(lotFilter.stepSize) || 0.0001) : 0.0001;
+        const minQty = lotFilter ? (parseFloat(lotFilter.minQty) || 0.0001) : 0.0001;
+        this.symbolFilters[symbol] = { stepSize, minQty, minNotional };
+        return this.symbolFilters[symbol];
       }
     } catch (err) {
       console.warn(`Could not fetch lot size for ${symbol}:`, err.message);
     }
-    return { stepSize: 0.01, minQty: 0.01 };
+    return { stepSize: 0.01, minQty: 0.01, minNotional: 5.0 };
   }
 
   async getPrice(symbol) {
@@ -300,7 +301,13 @@ export class BinanceConnector {
     params.append('type', 'MARKET');
 
     if (side.toUpperCase() === 'BUY' && quoteOrderQty) {
-      params.append('quoteOrderQty', Number(quoteOrderQty).toFixed(2));
+      const filter = await this.getSymbolLotSize(binanceSymbol);
+      const minNotional = filter?.minNotional || 5.0;
+      const numNotional = Number(quoteOrderQty);
+      if (numNotional < minNotional) {
+        throw new Error(`Order size ($${numNotional.toFixed(2)}) is below Binance minimum required order size ($${minNotional.toFixed(2)} USDT).`);
+      }
+      params.append('quoteOrderQty', numNotional.toFixed(2));
     } else if (quantity) {
       const filter = await this.getSymbolLotSize(binanceSymbol);
       let formattedQty = Number(quantity);

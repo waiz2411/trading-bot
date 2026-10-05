@@ -62,8 +62,8 @@ export class AutonomousAgentLoop {
           maxHoldMinutes: 120
         }),
         spotRiskManager: {
-          maxSlots: 4,
-          allocationPct: 25,
+          maxSlots: 1,
+          allocationPct: 100,
           maxTradesPerPair: 1,
           stopLossPct: 1.10,
           takeProfitPct: 1.60,
@@ -648,7 +648,17 @@ export class AutonomousAgentLoop {
 
         // 4B. PURE SPOT CRYPTO AUTO-OPEN FOR uKey
         const isUserLive = (this.currentMode === 'LIVE' && binanceConnector.connected && uKey === this.currentUser);
-        const uSpotSlots = uSpotRisk.maxSlots || 4;
+        const usdtObj = (binanceConnector.cachedBalances || []).find(b => b.asset === 'USDT');
+        const liveUsdtFree = usdtObj ? Number(usdtObj.free) : 0;
+        const totalCash = isUserLive ? liveUsdtFree : uSpotEngine.balance;
+
+        if (isUserLive && totalCash < 5.0) {
+          // Cannot place any order on Binance below $5.00
+          continue;
+        }
+
+        const dynamicSlots = (totalCash < 20 || !uSpotRisk.maxSlots) ? 1 : uSpotRisk.maxSlots;
+        const uSpotSlots = dynamicSlots;
         const uSpotOpen = isUserLive ? (this.liveSpotPositions || []) : (uSpotEngine.activePositions || []);
         const uTimeSinceLastSpot = Date.now() - (uConfig.lastSpotTradeOpenedAt || 0);
 
@@ -698,10 +708,10 @@ export class AutonomousAgentLoop {
               return volB - volA;
             });
 
-            const usdtObj = (binanceConnector.cachedBalances || []).find(b => b.asset === 'USDT');
-            const liveUsdtFree = usdtObj ? Number(usdtObj.free) : 0;
-            const totalCash = isUserLive ? liveUsdtFree : uSpotEngine.balance;
-            const portionSize = Number((totalCash / uSpotSlots).toFixed(2));
+            let portionSize = Number((totalCash / uSpotSlots).toFixed(2));
+            if (isUserLive && portionSize < 5.0 && totalCash >= 5.0) {
+              portionSize = totalCash;
+            }
             const maxPerCoin = uSpotRisk.maxTradesPerPair || 2;
 
             for (const candidate of uValidSpotBuys) {
@@ -723,9 +733,10 @@ export class AutonomousAgentLoop {
                 ? (this.liveSpotPositions || []).reduce((acc, p) => acc + (p.notional || 0), 0)
                 : uSpotEngine.activePositions.reduce((acc, p) => acc + (p.notional || 0), 0);
               const availableCash = Math.max(0, totalCash - currentUsed);
-              const notional = Number(Math.max(0.5, Math.min(portionSize, availableCash, totalCash > 1 ? totalCash - 0.01 : totalCash)).toFixed(2));
+              const minAllowed = isUserLive ? 5.0 : 0.5;
+              const notional = Number(Math.max(minAllowed, Math.min(portionSize, availableCash, totalCash > 1 ? totalCash - 0.01 : totalCash)).toFixed(2));
 
-              if (notional < 0.5) break;
+              if (notional < minAllowed) break;
 
               const entryPrice = candidate.signal.entryPrice;
               const precision = getAssetPrecision(entryPrice, candidate.asset.decimals || 4);
@@ -1592,9 +1603,15 @@ export class AutonomousAgentLoop {
       ...userMarginRisk.getSettings(),
       maxConcurrentTrades: dynamicMarginSlots
     };
+    const spotCash = spotPortfolio.balance != null ? spotPortfolio.balance : (userSpotEngine.balance || 10);
+    const dynamicSpotSlots = (spotCash < 20 || !userSpotRisk.maxSlots) ? 1 : userSpotRisk.maxSlots;
+    const dynamicAllocationPct = Number((100 / dynamicSpotSlots).toFixed(0));
+
     const spotRisk = {
       ...userSpotRisk,
-      maxConcurrentTrades: userSpotRisk.maxSlots || 4,
+      maxSlots: dynamicSpotSlots,
+      maxConcurrentTrades: dynamicSpotSlots,
+      allocationPct: dynamicAllocationPct,
       tradingStyle: 'SPOT_BUY',
       defaultLeverage: 1,
       tradeDirection: 'LONG_ONLY',
