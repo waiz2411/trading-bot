@@ -7,7 +7,7 @@
     "install:backend": "npm --prefix backend install",
     "install:frontend": "npm --prefix frontend install --include=dev",
     "install:all": "npm run install:backend && npm run install:frontend",
-    "build:frontend": "npm --prefix frontend run build",
+    "build:frontend": "npm --prefix frontend run build && node -e \"const fs=require('fs'); const dest='/home/u932536786/domains/slategrey-reindeer-680249.hostingersite.com/public_html'; if (fs.existsSync(dest)) { fs.cpSync('frontend/dist', dest, {recursive: true}); console.log('✅ Synced to Hostinger public_html'); }\"",
     "build": "npm run install:all && npm run build:frontend",
     "start": "node backend/src/server.js",
     "dev:backend": "npm --prefix backend run dev",
