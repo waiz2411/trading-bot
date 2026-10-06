@@ -71,10 +71,10 @@ export class AutonomousAgentLoop {
           maxSlots: 1,
           allocationPct: 100,
           maxTradesPerPair: 1,
-          stopLossPct: 2.20,
-          takeProfitPct: 3.80,
-          trailingTriggerPct: 2.00,
-          trailingDistancePct: 0.60,
+          stopLossPct: 1.10,
+          takeProfitPct: 1.60,
+          trailingTriggerPct: 1.00,
+          trailingDistancePct: 0.35,
           pullbackDiscountPct: 0.70,
           maxHoldMinutes: 120,
           minConfidenceThreshold: 90,
@@ -399,7 +399,7 @@ export class AutonomousAgentLoop {
         if (binanceConnector.connected) {
           if (!this.binanceSyncCount) this.binanceSyncCount = 0;
           this.binanceSyncCount++;
-          if (this.binanceSyncCount % 20 === 0) {
+          if (this.binanceSyncCount % 8 === 0) {
             await binanceConnector.getBalances().catch(() => {});
           }
         }
@@ -1117,74 +1117,85 @@ export class AutonomousAgentLoop {
           }
 
           if (exitReason) {
+            let orderSuccess = false;
             try {
               const balances = await binanceConnector.getBalances();
               const coinBal = balances.find(b => b.asset.toUpperCase() === rawAsset);
               const qtyToSell = coinBal && coinBal.free > 0.00001 ? coinBal.free : pos.units;
 
               if (qtyToSell > 0) {
-                await binanceConnector.placeSpotMarketOrder({
+                const sellRes = await binanceConnector.placeSpotMarketOrder({
                   symbol: `${rawAsset}USDT`,
                   side: 'SELL',
                   quantity: qtyToSell
                 });
-                this.log(`${exitMsg} Sold ${qtyToSell} ${rawAsset} on Binance! Realized Net: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`, currentProfit >= 0 ? 'SUCCESS' : 'WARN');
+                if (sellRes && (sellRes.success || sellRes.orderId || sellRes.status === 'FILLED')) {
+                  orderSuccess = true;
+                  this.log(`${exitMsg} Sold ${qtyToSell} ${rawAsset} on Binance! Realized Net: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`, currentProfit >= 0 ? 'SUCCESS' : 'WARN');
 
-                // Dust conversion sweep
-                const postBals = await binanceConnector.getBalances();
-                const remBal = postBals.find(b => b.asset.toUpperCase() === rawAsset);
-                if (remBal && remBal.free > 0.00001) {
-                  await binanceConnector.convertDustToBnb([rawAsset]).then(res => {
-                    if (res && (res.totalTransfered || res.transferResult?.length)) {
-                      this.log(`✨ [BINANCE LIVE] Leftover dust for ${rawAsset} (${remBal.free}) swept into BNB!`, 'SUCCESS');
-                    }
-                  }).catch(() => {});
+                  // Dust conversion sweep
+                  const postBals = await binanceConnector.getBalances(true);
+                  const remBal = postBals.find(b => b.asset.toUpperCase() === rawAsset);
+                  if (remBal && remBal.free > 0.00001) {
+                    await binanceConnector.convertDustToBnb([rawAsset]).then(res => {
+                      if (res && (res.totalTransfered || res.transferResult?.length)) {
+                        this.log(`✨ [BINANCE LIVE] Leftover dust for ${rawAsset} (${remBal.free}) swept into BNB!`, 'SUCCESS');
+                      }
+                    }).catch(() => {});
+                  }
+                } else {
+                  this.log(`⚠️ [BINANCE LIVE] Sell order for ${rawAsset} not confirmed by Binance. Holding position.`, 'WARN');
                 }
+              } else {
+                this.log(`⚠️ [BINANCE LIVE] Cannot exit ${rawAsset}: available balance is 0.`, 'WARN');
               }
             } catch (err) {
               this.log(`⚠️ [BINANCE LIVE] Exit sell notice for ${rawAsset}: ${err.message}`, 'WARN');
             }
 
-            if (!this.liveSpotClosedTrades) this.liveSpotClosedTrades = [];
-            this.liveSpotClosedTrades.unshift({
-              id: `BINANCE-${rawAsset}-${Date.now()}`,
-              symbol: pos.symbol,
-              name: rawAsset,
-              side: 'LONG',
-              entryPrice: pos.entryPrice,
-              exitPrice: livePrice,
-              units: pos.units,
-              notional: pos.notional,
-              finalPnL: currentProfit,
-              finalPnLPercent: pos.pnlPercent,
-              fee: Number(((pos.entryFee || 0) + exitFee).toFixed(4)),
-              exitReason,
-              openTime: pos.openTime,
-              exitTime: new Date().toISOString(),
-              isLiveBrokerOrder: true
-            });
-            this.liveSpotRealizedPnL = Number(((this.liveSpotRealizedPnL || 0) + currentProfit).toFixed(2));
-            this.savePersistedSpotTrades();
+            // ONLY record trade as closed and remove from active positions if Binance sell confirmed!
+            if (orderSuccess) {
+              if (!this.liveSpotClosedTrades) this.liveSpotClosedTrades = [];
+              this.liveSpotClosedTrades.unshift({
+                id: `BINANCE-${rawAsset}-${Date.now()}`,
+                symbol: pos.symbol,
+                name: rawAsset,
+                side: 'LONG',
+                entryPrice: pos.entryPrice,
+                exitPrice: livePrice,
+                units: pos.units,
+                notional: pos.notional,
+                finalPnL: currentProfit,
+                finalPnLPercent: pos.pnlPercent,
+                fee: Number(((pos.entryFee || 0) + exitFee).toFixed(4)),
+                exitReason,
+                openTime: pos.openTime,
+                exitTime: new Date().toISOString(),
+                isLiveBrokerOrder: true
+              });
+              this.liveSpotRealizedPnL = Number(((this.liveSpotRealizedPnL || 0) + currentProfit).toFixed(2));
+              this.savePersistedSpotTrades();
 
-            // Remove from active positions
-            this.liveSpotPositions = this.liveSpotPositions.filter(p => (p.name || '').toUpperCase() !== rawAsset);
+              // Remove from active positions
+              this.liveSpotPositions = this.liveSpotPositions.filter(p => (p.name || '').toUpperCase() !== rawAsset);
 
-            // Cooldown protection: 60 minutes on losses, 10 minutes on wins
-            const isLoss = currentProfit < -0.0001 || exitReason === 'STOP_LOSS_TRIGGER';
-            const lockMs = isLoss ? 60 * 60 * 1000 : 10 * 60 * 1000;
-            const lockExpiry = Date.now() + lockMs;
-            if (!this.spotCooldownUntil) this.spotCooldownUntil = new Map();
-            this.spotCooldownUntil.set(pos.symbol, lockExpiry);
-            this.spotCooldownUntil.set(rawAsset, lockExpiry);
-            this.spotCooldownUntil.set(`${rawAsset}-USD`, lockExpiry);
-            this.spotCooldownUntil.set(`${rawAsset}USDT`, lockExpiry);
+              // Cooldown protection: 60 minutes on losses, 10 minutes on wins
+              const isLoss = currentProfit < -0.0001 || exitReason === 'STOP_LOSS_TRIGGER';
+              const lockMs = isLoss ? 60 * 60 * 1000 : 10 * 60 * 1000;
+              const lockExpiry = Date.now() + lockMs;
+              if (!this.spotCooldownUntil) this.spotCooldownUntil = new Map();
+              this.spotCooldownUntil.set(pos.symbol, lockExpiry);
+              this.spotCooldownUntil.set(rawAsset, lockExpiry);
+              this.spotCooldownUntil.set(`${rawAsset}-USD`, lockExpiry);
+              this.spotCooldownUntil.set(`${rawAsset}USDT`, lockExpiry);
 
-            for (const u of Object.values(this.configs)) {
-              if (!u.spotCooldownUntil) u.spotCooldownUntil = new Map();
-              u.spotCooldownUntil.set(pos.symbol, lockExpiry);
-              u.spotCooldownUntil.set(rawAsset, lockExpiry);
-              u.spotCooldownUntil.set(`${rawAsset}-USD`, lockExpiry);
-              u.spotCooldownUntil.set(`${rawAsset}USDT`, lockExpiry);
+              for (const u of Object.values(this.configs)) {
+                if (!u.spotCooldownUntil) u.spotCooldownUntil = new Map();
+                u.spotCooldownUntil.set(pos.symbol, lockExpiry);
+                u.spotCooldownUntil.set(rawAsset, lockExpiry);
+                u.spotCooldownUntil.set(`${rawAsset}-USD`, lockExpiry);
+                u.spotCooldownUntil.set(`${rawAsset}USDT`, lockExpiry);
+              }
             }
           }
         }

@@ -44,10 +44,26 @@ export class BinanceConnector {
       this.connected = false;
       this.status = 'DISCONNECTED';
     }
+    // Only initialize cachedBalances from DB if in-memory cache is currently empty
     if (balances && Array.isArray(balances) && balances.length > 0) {
-      this.cachedBalances = balances;
+      if (!this.cachedBalances || this.cachedBalances.length === 0) {
+        this.cachedBalances = balances;
+      }
     }
     return this.getStatus();
+  }
+
+  async parseJsonResponse(res) {
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch (_) {
+      const cleanSnippet = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 150);
+      if (!res.ok) {
+        throw new Error(`Proxy/Binance error (HTTP ${res.status}): ${cleanSnippet || res.statusText}`);
+      }
+      throw new Error(`Non-JSON response from API (HTTP ${res.status}): ${cleanSnippet}`);
+    }
   }
 
   getStatus() {
@@ -79,7 +95,7 @@ export class BinanceConnector {
       const startTime = Date.now();
       const res = await fetch(`${this.baseUrl}/api/v3/time`);
       if (res.ok) {
-        const data = await res.json();
+        const data = await this.parseJsonResponse(res);
         const endTime = Date.now();
         const latency = Math.round((endTime - startTime) / 2);
         this.timeOffset = data.serverTime - endTime;
@@ -165,7 +181,7 @@ export class BinanceConnector {
         }
       });
 
-      const accountData = await accountRes.json();
+      const accountData = await this.parseJsonResponse(accountRes);
 
       if (!accountRes.ok) {
         this.status = 'ERROR';
@@ -222,8 +238,8 @@ export class BinanceConnector {
     }
 
     const now = Date.now();
-    // Cache for 20 seconds unless explicitly forced (e.g. immediately after order placement)
-    if (!force && this.lastBalanceFetch && (now - this.lastBalanceFetch < 20000)) {
+    // Cache for 12 seconds unless explicitly forced (e.g. immediately after order placement)
+    if (!force && this.lastBalanceFetch && (now - this.lastBalanceFetch < 12000)) {
       return this.cachedBalances;
     }
 
@@ -238,7 +254,7 @@ export class BinanceConnector {
         method: 'GET',
         headers: { 'X-MBX-APIKEY': this.apiKey }
       });
-      const data = await res.json();
+      const data = await this.parseJsonResponse(res);
       if (res.ok && data.balances) {
         this.lastBalanceFetch = now;
         this.bannedUntil = 0;
@@ -257,7 +273,7 @@ export class BinanceConnector {
       }
       return this.cachedBalances;
     } catch (err) {
-      console.error('Failed to update Binance balances:', err);
+      console.error('Failed to update Binance balances:', err.message);
       return this.cachedBalances;
     }
   }
@@ -269,7 +285,7 @@ export class BinanceConnector {
     try {
       const res = await fetch(`${this.baseUrl}/api/v3/exchangeInfo?symbol=${symbol}`);
       if (res.ok) {
-        const data = await res.json();
+        const data = await this.parseJsonResponse(res);
         const symInfo = data.symbols?.[0];
         const lotFilter = symInfo?.filters?.find(f => f.filterType === 'LOT_SIZE');
         const notionalFilter = symInfo?.filters?.find(f => f.filterType === 'NOTIONAL' || f.filterType === 'MIN_NOTIONAL');
@@ -291,7 +307,7 @@ export class BinanceConnector {
     try {
       const res = await fetch(`${this.baseUrl}/api/v3/ticker/price?symbol=${binanceSymbol}`);
       if (res.ok) {
-        const data = await res.json();
+        const data = await this.parseJsonResponse(res);
         return parseFloat(data.price) || null;
       }
     } catch (_) {}
@@ -350,7 +366,7 @@ export class BinanceConnector {
       }
     });
 
-    const data = await res.json();
+    const data = await this.parseJsonResponse(res);
 
     if (!res.ok) {
       // Automatic recovery from timestamp drift (code -1021)
@@ -398,9 +414,9 @@ export class BinanceConnector {
           'X-MBX-APIKEY': this.apiKey
         }
       });
-      const data = await res.json();
+      const data = await this.parseJsonResponse(res);
       if (res.ok) {
-        await this.getBalances().catch(() => {});
+        await this.getBalances(true).catch(() => {});
         return data;
       } else {
         console.warn('[BinanceConnector] Dust conversion notice:', data.msg || res.statusText);

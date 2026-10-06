@@ -466,8 +466,8 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
   // Exact 74.5% Win-Rate Geometry (Validated on 2-month Binance dataset)
   // Pullback Retest Entry at -0.70% discount from the pump high
   const pullbackDiscountPct = Number((spotRiskSettings.pullbackDiscountPct || 0.70).toFixed(2));
-  const takeProfitPct = Number((spotRiskSettings.takeProfitPct || 3.80).toFixed(2));
-  const stopLossPct = Number((spotRiskSettings.stopLossPct || 2.20).toFixed(2));
+  const takeProfitPct = Number((spotRiskSettings.takeProfitPct || 1.60).toFixed(2));
+  const stopLossPct = Number((spotRiskSettings.stopLossPct || 1.10).toFixed(2));
 
   // Limit entry price at discount
   const entryPrice = Number((rawPrice * (1 - pullbackDiscountPct / 100)).toFixed(precision));
