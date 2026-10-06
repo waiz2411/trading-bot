@@ -731,9 +731,9 @@ export class AutonomousAgentLoop {
               return volB - volA;
             });
 
-            let portionSize = Number((totalCash / uSpotSlots).toFixed(2));
+            let portionSize = Number((Math.floor((totalCash / uSpotSlots) * 100) / 100).toFixed(2));
             if (isUserLive && portionSize < 5.0 && totalCash >= 5.0) {
-              portionSize = totalCash;
+              portionSize = Number((Math.floor((totalCash - 0.03) * 100) / 100).toFixed(2));
             }
             const maxPerCoin = uSpotRisk.maxTradesPerPair || 2;
 
@@ -757,7 +757,8 @@ export class AutonomousAgentLoop {
                 : uSpotEngine.activePositions.reduce((acc, p) => acc + (p.notional || 0), 0);
               const availableCash = Math.max(0, totalCash - currentUsed);
               const minAllowed = isUserLive ? 5.0 : 0.5;
-              const notional = Number(Math.max(minAllowed, Math.min(portionSize, availableCash, totalCash > 1 ? totalCash - 0.01 : totalCash)).toFixed(2));
+              const maxSafeNotional = isUserLive ? (Math.floor((availableCash - 0.03) * 100) / 100) : availableCash;
+              const notional = Number(Math.max(minAllowed, Math.min(portionSize, maxSafeNotional)).toFixed(2));
 
               if (notional < minAllowed) break;
 
