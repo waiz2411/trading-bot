@@ -167,7 +167,9 @@ export class AutonomousAgentLoop {
       const user = await authService.getUserByEmail(userEmail);
       if (user) {
         if (user.is_auto_trading !== undefined || user.isAutoTradingEnabled !== undefined) {
-          this.isAutoTradingEnabled = Boolean(user.is_auto_trading ?? user.isAutoTradingEnabled);
+          const autoVal = Boolean(user.is_auto_trading ?? user.isAutoTradingEnabled);
+          this.isAutoTradingEnabled = autoVal;
+          uConfig.isAutoTradingEnabled = autoVal;
         }
         if (user.account_type || user.accountType) {
           this.activeAccount = user.account_type || user.accountType;
@@ -661,7 +663,11 @@ export class AutonomousAgentLoop {
         // 4B. PURE SPOT CRYPTO AUTO-OPEN FOR uKey
         const uMode = uConfig.mode || (uKey === this.currentUser ? this.currentMode : 'SIMULATED');
         const isUserLive = (uMode === 'LIVE' && binanceConnector.connected);
-        const usdtObj = (binanceConnector.cachedBalances || []).find(b => b.asset === 'USDT');
+        let usdtObj = (binanceConnector.cachedBalances || []).find(b => b.asset === 'USDT');
+        if (isUserLive && (!usdtObj || !binanceConnector.cachedBalances || binanceConnector.cachedBalances.length === 0)) {
+          const freshBals = await binanceConnector.getBalances(true).catch(() => []);
+          usdtObj = (freshBals || []).find(b => b.asset === 'USDT');
+        }
         const liveUsdtFree = usdtObj ? Number(usdtObj.free) : 0;
         const totalCash = isUserLive ? liveUsdtFree : uSpotEngine.balance;
 

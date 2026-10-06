@@ -764,8 +764,11 @@ app.post('/api/trades/close/:id', async (req, res) => {
     const { id } = req.params;
 
     // 1. Direct Binance Spot Position Close (supports BINANCE-xxx, xxx-USD, or live holdings)
-    const isSpotContext = agentLoop.activeAccount === 'SPOT';
-    const isLive = agentLoop.currentMode === 'LIVE';
+    const userAccount = (user && (user.accountType || user.account_type)) || agentLoop.activeAccount;
+    const userMode = (user && user.mode) || agentLoop.currentMode;
+    const isSpotContext = userAccount === 'SPOT';
+    const isLive = userMode === 'LIVE';
+
     const liveSpotMatch = isLive ? (agentLoop.liveSpotPositions || []).find(p => 
       p.id === id || p.symbol === id || (p.name && id.includes(p.name)) || id.includes(p.symbol)
     ) : null;
@@ -788,25 +791,33 @@ app.post('/api/trades/close/:id', async (req, res) => {
       let tradeFinalPnL = 0;
 
       if (isLive && binanceConnector.connected) {
-        const balances = await binanceConnector.getBalances();
+        const balances = await binanceConnector.getBalances(true);
         const coinBal = balances.find(b => b.asset.toUpperCase() === assetName);
         const qtyToSell = coinBal && coinBal.free > 0.00001 ? coinBal.free : (liveSpotMatch ? liveSpotMatch.units : 0);
 
         if (qtyToSell > 0) {
           try {
-            await binanceConnector.placeSpotMarketOrder({
+            const sellRes = await binanceConnector.placeSpotMarketOrder({
               symbol: binanceSymbol,
               side: 'SELL',
               quantity: qtyToSell
             });
-            soldUnits = qtyToSell;
-            agentLoop.log(`🪙 [BINANCE LIVE] Manual Exit: Sold ${qtyToSell} ${assetName} on Binance Spot`, 'SUCCESS');
-
-            // Dust sweep
-            await binanceConnector.convertDustToBnb([assetName]).catch(() => {});
+            if (sellRes && (sellRes.success || sellRes.orderId || sellRes.status === 'FILLED')) {
+              soldUnits = qtyToSell;
+              agentLoop.log(`🪙 [BINANCE LIVE] Manual Exit: Sold ${qtyToSell} ${assetName} on Binance Spot`, 'SUCCESS');
+              // Dust sweep
+              await binanceConnector.convertDustToBnb([assetName]).catch(() => {});
+            } else {
+              return res.status(400).json({ error: 'Binance sell order rejected or unconfirmed.' });
+            }
           } catch (sellErr) {
             agentLoop.log(`⚠️ [BINANCE LIVE] Manual exit sell notice for ${assetName}: ${sellErr.message}`, 'WARN');
+            return res.status(400).json({ error: `Binance Sell Error: ${sellErr.message}` });
           }
+        } else {
+          // If coin has already been sold on Binance, clear from tracked positions
+          agentLoop.liveSpotPositions = (agentLoop.liveSpotPositions || []).filter(p => (p.name || '').toUpperCase() !== assetName);
+          return res.status(400).json({ error: `Cannot close ${assetName}: no available balance found on Binance (already sold or dust).` });
         }
 
         // Calculate realized PnL for the live closed position
