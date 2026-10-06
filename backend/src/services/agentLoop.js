@@ -396,21 +396,21 @@ export class AutonomousAgentLoop {
       }
 
       // 2. Update live market prices & broker telemetry
-      if (this.currentMode === 'LIVE') {
+      if (mt5Connector.hasCredentials || mt5Connector.connected) {
         await mt5Connector.tryGatewayConnection().catch(() => {});
-        if (binanceConnector.connected) {
-          if (!this.binanceSyncCount) this.binanceSyncCount = 0;
-          this.binanceSyncCount++;
-          if (this.binanceSyncCount % 8 === 0) {
-            await binanceConnector.getBalances().catch(() => {});
-          }
+      }
+      if (binanceConnector.connected) {
+        if (!this.binanceSyncCount) this.binanceSyncCount = 0;
+        this.binanceSyncCount++;
+        if (this.binanceSyncCount % 8 === 0) {
+          await binanceConnector.getBalances().catch(() => {});
         }
       }
       await marketDataService.updateAll(mt5Connector.marketTicks);
       const markets = marketDataService.getAllMarkets();
       const pricesMap = marketDataService.getAllPricesMap();
 
-      if (this.currentMode === 'LIVE' && binanceConnector.connected) {
+      if (binanceConnector.connected) {
         this.syncLiveSpotPositions(binanceConnector.cachedBalances, pricesMap);
       }
 
@@ -1082,7 +1082,7 @@ export class AutonomousAgentLoop {
       }
 
       // A3. Dedicated Live Binance Spot Holdings Guardian (Active PnL, TP, SL, and Hold Duration Watchdog)
-      if (this.currentMode === 'LIVE' && binanceConnector.connected && Array.isArray(this.liveSpotPositions) && this.liveSpotPositions.length > 0) {
+      if (binanceConnector.connected && Array.isArray(this.liveSpotPositions) && this.liveSpotPositions.length > 0) {
         const liveActive = [...this.liveSpotPositions];
         for (const pos of liveActive) {
           const rawAsset = (pos.name || pos.symbol.replace(/[-_/]/g, '').replace(/USD$/, '')).toUpperCase();

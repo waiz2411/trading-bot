@@ -207,6 +207,13 @@ export class AuthService {
     if (rows.length === 0) return null;
     const user = rows[0];
     user.brokerConnections = await this.getUserBrokerConfigs(user.id);
+    if (!user.mode) {
+      if (user.brokerConnections?.binance?.connected || user.brokerConnections?.mt5?.connected) {
+        user.mode = 'LIVE';
+      } else {
+        user.mode = 'SIMULATED';
+      }
+    }
     return user;
   }
 
@@ -220,6 +227,13 @@ export class AuthService {
     if (rows.length === 0) return null;
     const user = rows[0];
     user.brokerConnections = await this.getUserBrokerConfigs(user.id);
+    if (!user.mode) {
+      if (user.brokerConnections?.binance?.connected || user.brokerConnections?.mt5?.connected) {
+        user.mode = 'LIVE';
+      } else {
+        user.mode = 'SIMULATED';
+      }
+    }
     return user;
   }
 

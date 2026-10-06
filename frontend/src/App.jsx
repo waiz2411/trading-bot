@@ -374,13 +374,17 @@ export default function App() {
       const json = await res.json();
       if (json.success) {
         showNotification(
-          `Position closed: ${json.closedTrade?.symbol} (${json.closedTrade?.finalPnL >= 0 ? '+' : ''}$${json.closedTrade?.finalPnL})`,
-          json.closedTrade?.finalPnL >= 0 ? 'SUCCESS' : 'WARN'
+          json.message || `Position closed: ${json.closedTrade?.symbol || id} (${(json.closedTrade?.finalPnL || 0) >= 0 ? '+' : ''}$${json.closedTrade?.finalPnL ?? 0})`,
+          (json.closedTrade?.finalPnL || 0) >= 0 ? 'SUCCESS' : 'WARN'
         );
+        await fetchDashboard();
+      } else {
+        showNotification(json.error || 'Failed to close position', 'ERROR');
         await fetchDashboard();
       }
     } catch (err) {
-      showNotification('Failed to close position', 'ERROR');
+      showNotification('Failed to close position: ' + err.message, 'ERROR');
+      await fetchDashboard();
     } finally {
       setIsClosingId(null);
     }

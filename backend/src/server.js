@@ -764,10 +764,11 @@ app.post('/api/trades/close/:id', async (req, res) => {
     const { id } = req.params;
 
     // 1. Direct Binance Spot Position Close (supports BINANCE-xxx, xxx-USD, or live holdings)
+    const isLiveSpotTrade = id.startsWith('BINANCE-') || (agentLoop.liveSpotPositions || []).some(p => p.id === id || p.symbol === id || (p.name && id.includes(p.name)));
     const userAccount = (user && (user.accountType || user.account_type)) || agentLoop.activeAccount;
-    const userMode = (user && user.mode) || agentLoop.currentMode;
-    const isSpotContext = userAccount === 'SPOT';
-    const isLive = userMode === 'LIVE';
+    const userMode = (user && user.mode) || (isLiveSpotTrade ? 'LIVE' : agentLoop.currentMode);
+    const isSpotContext = userAccount === 'SPOT' || isLiveSpotTrade;
+    const isLive = userMode === 'LIVE' || isLiveSpotTrade;
 
     const liveSpotMatch = isLive ? (agentLoop.liveSpotPositions || []).find(p => 
       p.id === id || p.symbol === id || (p.name && id.includes(p.name)) || id.includes(p.symbol)
@@ -776,7 +777,7 @@ app.post('/api/trades/close/:id', async (req, res) => {
       p.id === id || p.symbol === id || id.includes(p.symbol) || (p.name && id.includes(p.name))
     );
 
-    if (id.startsWith('BINANCE-') || liveSpotMatch || (isSpotContext && (id.endsWith('-USD') || demoSpotMatch))) {
+    if (id.startsWith('BINANCE-') || isLiveSpotTrade || liveSpotMatch || (isSpotContext && (id.endsWith('-USD') || demoSpotMatch))) {
       let assetName = '';
       if (liveSpotMatch) {
         assetName = (liveSpotMatch.name || liveSpotMatch.symbol.replace(/[-_/]/g, '').replace(/USD$/, '')).toUpperCase();
@@ -795,7 +796,7 @@ app.post('/api/trades/close/:id', async (req, res) => {
         const coinBal = balances.find(b => b.asset.toUpperCase() === assetName);
         const qtyToSell = coinBal && coinBal.free > 0.00001 ? coinBal.free : (liveSpotMatch ? liveSpotMatch.units : 0);
 
-        if (qtyToSell > 0) {
+        if (coinBal && coinBal.free > 0.00001) {
           try {
             const sellRes = await binanceConnector.placeSpotMarketOrder({
               symbol: binanceSymbol,
@@ -815,9 +816,9 @@ app.post('/api/trades/close/:id', async (req, res) => {
             return res.status(400).json({ error: `Binance Sell Error: ${sellErr.message}` });
           }
         } else {
-          // If coin has already been sold on Binance, clear from tracked positions
-          agentLoop.liveSpotPositions = (agentLoop.liveSpotPositions || []).filter(p => (p.name || '').toUpperCase() !== assetName);
-          return res.status(400).json({ error: `Cannot close ${assetName}: no available balance found on Binance (already sold or dust).` });
+          // If coin has already been sold on Binance (free <= 0.00001), synchronize closure cleanly
+          soldUnits = liveSpotMatch ? liveSpotMatch.units : 0;
+          agentLoop.log(`🪙 [BINANCE LIVE] Manual Exit: ${assetName} was already sold on Binance. Synchronizing closure.`, 'INFO');
         }
 
         // Calculate realized PnL for the live closed position
