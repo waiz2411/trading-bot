@@ -21,6 +21,8 @@ export class BinanceConnector {
     this.cachedBalances = [];
     this.latencyMs = 0;
     this.timeOffset = 0; // Milliseconds difference with Binance server clock
+    this.lastBalanceFetch = 0;
+    this.bannedUntil = 0;
   }
 
   get baseUrl() {
@@ -214,8 +216,19 @@ export class BinanceConnector {
     }
   }
 
-  async getBalances() {
+  async getBalances(force = false) {
     if (!this.connected) {
+      return this.cachedBalances;
+    }
+
+    const now = Date.now();
+    // Cache for 20 seconds unless explicitly forced (e.g. immediately after order placement)
+    if (!force && this.lastBalanceFetch && (now - this.lastBalanceFetch < 20000)) {
+      return this.cachedBalances;
+    }
+
+    // Proactively back off if Binance currently has an IP weight ban active
+    if (this.bannedUntil && now < this.bannedUntil) {
       return this.cachedBalances;
     }
 
@@ -227,6 +240,8 @@ export class BinanceConnector {
       });
       const data = await res.json();
       if (res.ok && data.balances) {
+        this.lastBalanceFetch = now;
+        this.bannedUntil = 0;
         this.cachedBalances = data.balances
           .map(b => ({
             asset: b.asset,
@@ -235,6 +250,10 @@ export class BinanceConnector {
             total: (parseFloat(b.free) || 0) + (parseFloat(b.locked) || 0)
           }))
           .filter(b => b.total > 0.00001);
+      } else if (data.code === -1003 || res.status === 429 || res.status === 418) {
+        const match = data.msg && data.msg.match(/banned until (\d+)/);
+        this.bannedUntil = match ? Number(match[1]) : (now + 120000);
+        console.warn(`[BinanceConnector] Weight rate limit hit. Backing off until ${new Date(this.bannedUntil).toISOString()}`);
       }
       return this.cachedBalances;
     } catch (err) {
@@ -342,8 +361,8 @@ export class BinanceConnector {
       throw new Error(data.msg || `Binance order rejected: ${res.statusText}`);
     }
 
-    // Refresh balances after order
-    await this.getBalances().catch(() => {});
+    // Refresh balances immediately after order execution
+    await this.getBalances(true).catch(() => {});
 
     return {
       success: true,

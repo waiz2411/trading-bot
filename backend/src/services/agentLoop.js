@@ -51,6 +51,7 @@ export class AutonomousAgentLoop {
     const userKey = email || 'default';
     if (!this.configs[userKey]) {
       this.configs[userKey] = {
+        mode: 'SIMULATED',
         isAutoTradingEnabled: undefined,
         lastSpotTradeOpenedAt: 0,
         lastMarginTradeOpenedAt: 0,
@@ -70,10 +71,10 @@ export class AutonomousAgentLoop {
           maxSlots: 1,
           allocationPct: 100,
           maxTradesPerPair: 1,
-          stopLossPct: 1.10,
-          takeProfitPct: 1.60,
-          trailingTriggerPct: 1.00,
-          trailingDistancePct: 0.35,
+          stopLossPct: 2.20,
+          takeProfitPct: 3.80,
+          trailingTriggerPct: 2.00,
+          trailingDistancePct: 0.60,
           pullbackDiscountPct: 0.70,
           maxHoldMinutes: 120,
           minConfidenceThreshold: 90,
@@ -147,6 +148,8 @@ export class AutonomousAgentLoop {
   async setUserMode(userEmail, mode = 'SIMULATED') {
     this.currentUser = userEmail;
     this.currentMode = mode;
+    const uConfig = this.getConfig(userEmail);
+    uConfig.mode = mode;
 
     // Purge phantom simulated trades when in LIVE broker mode
     if (mode === 'LIVE') {
@@ -396,7 +399,7 @@ export class AutonomousAgentLoop {
         if (binanceConnector.connected) {
           if (!this.binanceSyncCount) this.binanceSyncCount = 0;
           this.binanceSyncCount++;
-          if (this.binanceSyncCount % 2 === 0) {
+          if (this.binanceSyncCount % 20 === 0) {
             await binanceConnector.getBalances().catch(() => {});
           }
         }
@@ -656,7 +659,8 @@ export class AutonomousAgentLoop {
         }
 
         // 4B. PURE SPOT CRYPTO AUTO-OPEN FOR uKey
-        const isUserLive = (this.currentMode === 'LIVE' && binanceConnector.connected && uKey === this.currentUser);
+        const uMode = uConfig.mode || (uKey === this.currentUser ? this.currentMode : 'SIMULATED');
+        const isUserLive = (uMode === 'LIVE' && binanceConnector.connected);
         const usdtObj = (binanceConnector.cachedBalances || []).find(b => b.asset === 'USDT');
         const liveUsdtFree = usdtObj ? Number(usdtObj.free) : 0;
         const totalCash = isUserLive ? liveUsdtFree : uSpotEngine.balance;
@@ -684,7 +688,11 @@ export class AutonomousAgentLoop {
               uCooldownMap?.get(asset.symbol) || 0,
               uCooldownMap?.get(cleanName) || 0,
               uCooldownMap?.get(`${cleanName}-USD`) || 0,
-              uCooldownMap?.get(`${cleanName}USDT`) || 0
+              uCooldownMap?.get(`${cleanName}USDT`) || 0,
+              this.spotCooldownUntil?.get(asset.symbol) || 0,
+              this.spotCooldownUntil?.get(cleanName) || 0,
+              this.spotCooldownUntil?.get(`${cleanName}-USD`) || 0,
+              this.spotCooldownUntil?.get(`${cleanName}USDT`) || 0
             );
             if (spotLockExpiry > Date.now()) continue;
 
@@ -1161,15 +1169,23 @@ export class AutonomousAgentLoop {
             // Remove from active positions
             this.liveSpotPositions = this.liveSpotPositions.filter(p => (p.name || '').toUpperCase() !== rawAsset);
 
-            // Cooldown protection
-            const isLoss = currentProfit < -0.0001;
-            const lockMs = isLoss ? 15 * 60 * 1000 : 5 * 60 * 1000;
+            // Cooldown protection: 60 minutes on losses, 10 minutes on wins
+            const isLoss = currentProfit < -0.0001 || exitReason === 'STOP_LOSS_TRIGGER';
+            const lockMs = isLoss ? 60 * 60 * 1000 : 10 * 60 * 1000;
             const lockExpiry = Date.now() + lockMs;
             if (!this.spotCooldownUntil) this.spotCooldownUntil = new Map();
             this.spotCooldownUntil.set(pos.symbol, lockExpiry);
             this.spotCooldownUntil.set(rawAsset, lockExpiry);
             this.spotCooldownUntil.set(`${rawAsset}-USD`, lockExpiry);
             this.spotCooldownUntil.set(`${rawAsset}USDT`, lockExpiry);
+
+            for (const u of Object.values(this.configs)) {
+              if (!u.spotCooldownUntil) u.spotCooldownUntil = new Map();
+              u.spotCooldownUntil.set(pos.symbol, lockExpiry);
+              u.spotCooldownUntil.set(rawAsset, lockExpiry);
+              u.spotCooldownUntil.set(`${rawAsset}-USD`, lockExpiry);
+              u.spotCooldownUntil.set(`${rawAsset}USDT`, lockExpiry);
+            }
           }
         }
       }
@@ -1231,9 +1247,9 @@ export class AutonomousAgentLoop {
           isLiveBrokerOrder: true
         };
 
-        // Set 15-minute anti-churn lockout on losses, 5-minute on wins
+        // Set 60-minute anti-churn lockout on losses, 10-minute on wins
         const isLoss = finalPnL < -0.0001 || closedRecord.exitReason === 'STOP_LOSS_TRIGGER';
-        const lockMs = isLoss ? 15 * 60 * 1000 : 5 * 60 * 1000;
+        const lockMs = isLoss ? 60 * 60 * 1000 : 10 * 60 * 1000;
         const lockExpiry = Date.now() + lockMs;
 
         if (!this.spotCooldownUntil) this.spotCooldownUntil = new Map();
@@ -1242,7 +1258,15 @@ export class AutonomousAgentLoop {
         this.spotCooldownUntil.set(`${posAsset}-USD`, lockExpiry);
         this.spotCooldownUntil.set(`${posAsset}USDT`, lockExpiry);
 
-        const spotCd = isLoss ? 600 : 200;
+        for (const u of Object.values(this.configs)) {
+          if (!u.spotCooldownUntil) u.spotCooldownUntil = new Map();
+          u.spotCooldownUntil.set(pos.symbol, lockExpiry);
+          u.spotCooldownUntil.set(posAsset, lockExpiry);
+          u.spotCooldownUntil.set(`${posAsset}-USD`, lockExpiry);
+          u.spotCooldownUntil.set(`${posAsset}USDT`, lockExpiry);
+        }
+
+        const spotCd = isLoss ? 1200 : 200;
         this.spotCooldowns.set(pos.symbol, spotCd);
         this.spotCooldowns.set(`${posAsset}-USD`, spotCd);
         this.spotCooldowns.set(`${posAsset}USDT`, spotCd);

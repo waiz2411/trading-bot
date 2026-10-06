@@ -440,14 +440,34 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
     };
   }
 
+  // RSI Momentum Filter: Do not enter if RSI is overbought (> 70) or dumping (< 42)
+  if (technicals.rsi) {
+    if (technicals.rsi > 70) {
+      return {
+        action: 'NEUTRAL',
+        side: null,
+        confidence: 25,
+        reason: `RSI Overbought: RSI ${technicals.rsi.toFixed(1)} is exhausted (> 70). Awaiting consolidation.`
+      };
+    }
+    if (technicals.rsi < 42) {
+      return {
+        action: 'NEUTRAL',
+        side: null,
+        confidence: 20,
+        reason: `RSI Weak: RSI ${technicals.rsi.toFixed(1)} is in downward drift (< 42).`
+      };
+    }
+  }
+
   const rawPrice = asset.price || technicals.currentPrice;
   const precision = getAssetPrecision(rawPrice, asset.decimals || 4);
 
   // Exact 74.5% Win-Rate Geometry (Validated on 2-month Binance dataset)
   // Pullback Retest Entry at -0.70% discount from the pump high
   const pullbackDiscountPct = Number((spotRiskSettings.pullbackDiscountPct || 0.70).toFixed(2));
-  const takeProfitPct = Number((spotRiskSettings.takeProfitPct || 1.60).toFixed(2));
-  const stopLossPct = Number((spotRiskSettings.stopLossPct || 1.10).toFixed(2));
+  const takeProfitPct = Number((spotRiskSettings.takeProfitPct || 3.80).toFixed(2));
+  const stopLossPct = Number((spotRiskSettings.stopLossPct || 2.20).toFixed(2));
 
   // Limit entry price at discount
   const entryPrice = Number((rawPrice * (1 - pullbackDiscountPct / 100)).toFixed(precision));
