@@ -1282,6 +1282,8 @@ app.post('/api/portfolio/reset', async (req, res) => {
     const targetAccount = (account || agentLoop.activeAccount).toUpperCase();
     const engine = agentLoop.getEngine(targetAccount, userEmail);
     const initBal = initialBalance !== undefined ? parseFloat(initialBalance) : 10;
+    const resetState = engine.reset(initBal);
+    agentLoop.log(`🔄 [${targetAccount}] Portfolio reset to $${initBal.toLocaleString('en-US')} virtual balance.`, 'WARN');
     const userMode = (user && user.mode) ? user.mode : (userEmail === 'waiztahseen@gmail.com' ? 'LIVE' : 'SIMULATED');
     res.json({ success: true, portfolio: resetState, dashboard: agentLoop.getDashboardData(userMode, targetAccount, userEmail) });
   } catch (err) {
