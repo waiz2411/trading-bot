@@ -523,30 +523,18 @@ export class PaperTradingEngine {
           }
         } else if (pos.side === 'LONG') {
           const runUp = pos.highestPrice - pos.entryPrice;
+          const rawGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;
 
-          // Fee-Compensated Break-Even: Price gained 70% of target distance
-          if (!pos.breakEvenLocked && (runUp >= pos.targetDistance * 0.70 || runUp >= pos.entryPrice * 0.0080)) {
-            const targetFeeBuffer = Math.min(pos.targetDistance * 0.40, Math.max(roundTripFeeBuffer, pos.stopDistance * 0.12));
-            const proposedStop = Number((pos.entryPrice + targetFeeBuffer).toFixed(dec));
-            // Stop MUST be strictly below current live price, below take-profit, and above current stopLoss
+          // Break-Even Profit Lock (+0.50% move -> Lock in +0.20% Profit)
+          if (!pos.breakEvenLocked && (rawGainPct >= 0.50 || runUp >= pos.entryPrice * 0.0050)) {
+            const proposedStop = Number((pos.entryPrice * 1.0020).toFixed(dec));
             if (proposedStop < livePrice && (!pos.takeProfit || proposedStop < pos.takeProfit) && proposedStop > pos.stopLoss) {
               pos.stopLoss = proposedStop;
               pos.breakEvenLocked = true;
             }
           }
 
-          // Dynamic Scalp Trailing Stop: Price reached 75% of target distance -> Trail closely behind highest price!
-          if (runUp >= pos.targetDistance * 0.75) {
-            const trailBuffer = Math.min(pos.stopDistance * 0.22, pos.targetDistance * 0.25);
-            const newTrailStop = Number((pos.highestPrice - trailBuffer).toFixed(dec));
-            if (newTrailStop < livePrice && newTrailStop > pos.stopLoss) {
-              pos.stopLoss = newTrailStop;
-              pos.trailingStopActive = true;
-            }
-          }
-
-          // Hot-Coin 74.5% Win Rate Lock: Once price gains >= +1.0%, trail stop closely at 0.35% below peak!
-          const rawGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;
+          // Hot-Coin Trailing Stop: Once price gains >= +1.0%, trail stop closely at 0.35% below peak!
           if (rawGainPct >= 1.00) {
             const hotTrailStop = Number((pos.highestPrice * (1 - 0.0035)).toFixed(dec));
             if (hotTrailStop < livePrice && hotTrailStop > pos.stopLoss) {

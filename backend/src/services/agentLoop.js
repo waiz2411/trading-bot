@@ -402,7 +402,7 @@ export class AutonomousAgentLoop {
       if (binanceConnector.connected) {
         if (!this.binanceSyncCount) this.binanceSyncCount = 0;
         this.binanceSyncCount++;
-        if (this.binanceSyncCount % 8 === 0) {
+        if (this.binanceSyncCount % 12 === 0) {
           await binanceConnector.getBalances().catch(() => {});
         }
       }
@@ -665,7 +665,7 @@ export class AutonomousAgentLoop {
         const isUserLive = (uMode === 'LIVE' && binanceConnector.connected);
         let usdtObj = (binanceConnector.cachedBalances || []).find(b => b.asset === 'USDT');
         if (isUserLive && (!usdtObj || !binanceConnector.cachedBalances || binanceConnector.cachedBalances.length === 0)) {
-          const freshBals = await binanceConnector.getBalances(true).catch(() => []);
+          const freshBals = await binanceConnector.getBalances(false).catch(() => []);
           usdtObj = (freshBals || []).find(b => b.asset === 'USDT');
         }
         const liveUsdtFree = usdtObj ? Number(usdtObj.free) : 0;
@@ -1103,18 +1103,46 @@ export class AutonomousAgentLoop {
           const holdMinutes = (Date.now() - openMs) / 60000;
           const maxHoldMinutes = pos.maxHoldMinutes || this.spotRiskManager.maxHoldMinutes || 60;
 
+          // A. Break-Even Profit Lock (+0.50% move -> Lock in +0.20% Profit)
+          const peakGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;
+          const precision = pos.decimals || 4;
+          if (peakGainPct >= 0.50) {
+            const beStop = Number((pos.entryPrice * 1.0020).toFixed(precision));
+            if (beStop > (pos.stopLoss || 0)) {
+              pos.stopLoss = beStop;
+              pos.breakEvenLocked = true;
+            }
+          }
+
+          // B. Hot-Coin Trailing Profit Lock (>= +1.00% gain -> Trail 0.35% behind peak)
+          if (peakGainPct >= 1.00) {
+            const trailStop = Number((pos.highestPrice * (1 - 0.0035)).toFixed(precision));
+            if (trailStop > (pos.stopLoss || 0)) {
+              pos.stopLoss = trailStop;
+              pos.trailingStopActive = true;
+            }
+          }
+
           let exitReason = null;
           let exitMsg = '';
 
-          // 1. Take Profit Target Hit
+          // 1. Take Profit Target Hit (+1.60%)
           if (pos.takeProfit && livePrice >= pos.takeProfit) {
             exitReason = 'TAKE_PROFIT_TRIGGER';
             exitMsg = `🎯 [BINANCE LIVE] TP Hit: ${pos.symbol} reached target ($${livePrice} >= $${pos.takeProfit})!`;
           }
-          // 2. Stop Loss Protection Trigger
+          // 2. Break-Even Lock, Trailing Lock, or Stop Loss Protection Trigger
           else if (pos.stopLoss && livePrice <= pos.stopLoss) {
-            exitReason = 'STOP_LOSS_TRIGGER';
-            exitMsg = `🛑 [BINANCE LIVE] Stop Loss Hit: ${pos.symbol} ($${livePrice} <= $${pos.stopLoss})!`;
+            if (pos.breakEvenLocked && !pos.trailingStopActive) {
+              exitReason = 'BREAKEVEN_STOP_TRIGGER';
+              exitMsg = `🔒 [BINANCE LIVE] Break-Even Lock: ${pos.symbol} secured +0.20% profit ($${livePrice} <= $${pos.stopLoss})!`;
+            } else if (pos.trailingStopActive) {
+              exitReason = 'TRAILING_PROFIT_LOCK';
+              exitMsg = `🛡️ [BINANCE LIVE] Trailing Profit Lock: ${pos.symbol} secured +${peakGainPct.toFixed(2)}% peak gain at $${livePrice}!`;
+            } else {
+              exitReason = 'STOP_LOSS_TRIGGER';
+              exitMsg = `🛑 [BINANCE LIVE] Stop Loss Hit: ${pos.symbol} ($${livePrice} <= $${pos.stopLoss})!`;
+            }
           }
           // 3. Max Hold Duration Expiry
           else if (holdMinutes >= maxHoldMinutes) {

@@ -238,8 +238,8 @@ export class BinanceConnector {
     }
 
     const now = Date.now();
-    // Cache for 12 seconds unless explicitly forced (e.g. immediately after order placement)
-    if (!force && this.lastBalanceFetch && (now - this.lastBalanceFetch < 12000)) {
+    // Cache for 20 seconds during ordinary loops, minimum 5 seconds even if forced
+    if (this.lastBalanceFetch && (now - this.lastBalanceFetch < (force ? 5000 : 20000))) {
       return this.cachedBalances;
     }
 
@@ -322,6 +322,10 @@ export class BinanceConnector {
   async placeSpotMarketOrder({ symbol, side = 'BUY', quoteOrderQty, quantity }, isRetry = false) {
     if (!this.connected || !this.apiKey || !this.apiSecret) {
       throw new Error('Binance Spot is not connected. Configure credentials in Live Broker settings.');
+    }
+
+    if (this.bannedUntil && Date.now() < this.bannedUntil) {
+      throw new Error(`Binance rate limit backoff active until ${new Date(this.bannedUntil).toISOString()}`);
     }
 
     // Proactively sync server time if not synced recently

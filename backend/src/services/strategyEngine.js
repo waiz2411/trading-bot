@@ -528,28 +528,43 @@ export function evaluatePositionExit(position, technicals, currentPrice) {
   const { side, entryPrice } = position;
   const ema20 = technicals.ema21 || technicals.ema20 || technicals.ema9;
 
-  // 1. Hot-Coin Trailing Profit Lock (74.5% Win-Rate Engine):
-  // Once trade reaches >= +1.0% gain, lock in profit if price retraces 0.35% from highest price
-  if (side === 'LONG' && (position.exitRule === 'HOT_RETEST_TRAILING_LOCK' || position.trailingStopActive)) {
+  // 1. Break-Even Profit Lock (+0.50% move -> Lock +0.20% Profit) & Trailing Profit Lock
+  if (side === 'LONG') {
     if (currentPrice > (position.highestPrice || entryPrice)) {
       position.highestPrice = currentPrice;
     }
     const peakPrice = position.highestPrice || entryPrice;
     const peakGainPct = ((peakPrice - entryPrice) / entryPrice) * 100;
 
-    if (peakGainPct >= 1.00) {
+    // A. Break-Even Lock at +0.50% move -> Ratchet stop to +0.20% profit above entry
+    if (peakGainPct >= 0.50) {
+      const beStop = entryPrice * 1.0020;
+      if (beStop > (position.stopLoss || 0)) {
+        position.stopLoss = beStop;
+        position.breakEvenLocked = true;
+      }
+    }
+
+    // B. Hot-Coin Trailing Profit Lock at >= +1.00% gain -> Trail 0.35% behind peak
+    if (peakGainPct >= 1.00 && (position.exitRule === 'HOT_RETEST_TRAILING_LOCK' || position.trailingStopActive)) {
       const lockStop = peakPrice * (1 - 0.0035);
-      if (lockStop > position.stopLoss) {
+      if (lockStop > (position.stopLoss || 0)) {
         position.stopLoss = lockStop;
         position.trailingStopActive = true;
       }
-      if (currentPrice <= position.stopLoss) {
-        return {
-          shouldExit: true,
-          reason: 'TRAILING_PROFIT_LOCK',
-          message: `Hot Scalp Lock: Secured +${peakGainPct.toFixed(2)}% peak gain via trailing lock at $${currentPrice}.`
-        };
-      }
+    }
+
+    if (position.stopLoss && currentPrice <= position.stopLoss) {
+      const isBE = position.breakEvenLocked && !position.trailingStopActive;
+      return {
+        shouldExit: true,
+        reason: isBE ? 'BREAKEVEN_STOP_TRIGGER' : (position.trailingStopActive ? 'TRAILING_PROFIT_LOCK' : 'STOP_LOSS_TRIGGER'),
+        message: isBE
+          ? `Break-Even Lock: Banked +0.20% profit at $${currentPrice} after +${peakGainPct.toFixed(2)}% run.`
+          : (position.trailingStopActive 
+              ? `Hot Scalp Lock: Secured +${peakGainPct.toFixed(2)}% peak gain via trailing lock at $${currentPrice}.`
+              : `Stop Loss hit at $${currentPrice}.`)
+      };
     }
   }
 
