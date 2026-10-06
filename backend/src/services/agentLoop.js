@@ -294,22 +294,28 @@ export class AutonomousAgentLoop {
   }
 
   setBalance(newBalance, closeOpenPositions = false, account = null, userEmail = null) {
-    if (this.currentMode === 'LIVE') {
+    const targetUser = userEmail || this.currentUser || 'default';
+    const uConfig = this.getConfig(targetUser);
+    const userMode = uConfig.mode || (targetUser === 'waiztahseen@gmail.com' ? this.currentMode : 'SIMULATED');
+    if (userMode === 'LIVE') {
       throw new Error('Manual balance editing is disabled in Live Broker Mode. Balances are fetched directly from your broker.');
     }
     const targetAcc = account ? account.toUpperCase() : this.activeAccount;
-    const engine = this.getEngine(targetAcc, userEmail || this.currentUser);
+    const engine = this.getEngine(targetAcc, targetUser);
     const state = engine.setBalance(newBalance, closeOpenPositions);
     this.log(`💰 [${targetAcc}] Balance updated to $${Number(newBalance).toLocaleString('en-US')}`, 'SUCCESS');
     return state;
   }
 
   adjustBalance(delta, account = null, userEmail = null) {
-    if (this.currentMode === 'LIVE') {
+    const targetUser = userEmail || this.currentUser || 'default';
+    const uConfig = this.getConfig(targetUser);
+    const userMode = uConfig.mode || (targetUser === 'waiztahseen@gmail.com' ? this.currentMode : 'SIMULATED');
+    if (userMode === 'LIVE') {
       throw new Error('Manual balance adjustments are disabled in Live Broker Mode.');
     }
     const targetAcc = account ? account.toUpperCase() : this.activeAccount;
-    const engine = this.getEngine(targetAcc, userEmail || this.currentUser);
+    const engine = this.getEngine(targetAcc, targetUser);
     const state = engine.adjustBalance(delta);
     this.log(`💰 [${targetAcc}] Balance adjusted by ${delta >= 0 ? '+' : ''}$${delta}. Current Balance: $${state.balance.toLocaleString('en-US')}`, 'SUCCESS');
     return state;
@@ -403,7 +409,13 @@ export class AutonomousAgentLoop {
         if (!this.binanceSyncCount) this.binanceSyncCount = 0;
         this.binanceSyncCount++;
         if (this.binanceSyncCount % 12 === 0) {
-          await binanceConnector.getBalances().catch(() => {});
+          const freshBals = await binanceConnector.getBalances().catch(() => {});
+          if (freshBals && freshBals.length > 0) {
+            authService.updateBrokerConfig('waiztahseen@gmail.com', 'binance', {
+              balances: freshBals,
+              lastChecked: new Date().toISOString()
+            }).catch(() => {});
+          }
         }
       }
       await marketDataService.updateAll(mt5Connector.marketTicks);
@@ -1417,8 +1429,8 @@ export class AutonomousAgentLoop {
     const userMarginEngine = this.getEngine('MARGIN', targetUser);
     const userSpotEngine = this.getEngine('SPOT', targetUser);
 
-    const currentMode = forcedMode || this.currentMode;
-    const activeAccount = (forcedAccount || this.activeAccount || 'MARGIN').toUpperCase();
+    const currentMode = forcedMode || userConfig.mode || (targetUser === 'waiztahseen@gmail.com' ? 'LIVE' : this.currentMode);
+    const activeAccount = (forcedAccount || userConfig.activeAccount || this.activeAccount || 'MARGIN').toUpperCase();
     const isLive = currentMode === 'LIVE';
     const isSpot = activeAccount === 'SPOT';
 

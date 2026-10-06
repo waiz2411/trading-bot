@@ -563,12 +563,22 @@ app.get('/api/dashboard', async (req, res) => {
     const user = await authService.validateToken(token);
     
     const userEmail = user ? user.email : 'default';
-    const userMode = (user && user.mode) ? user.mode : agentLoop.currentMode;
+    const userMode = (user && user.mode) ? user.mode : (userEmail === 'waiztahseen@gmail.com' ? 'LIVE' : 'SIMULATED');
     const userAccount = (user && (user.accountType || user.account_type)) ? (user.accountType || user.account_type) : agentLoop.activeAccount;
 
     const uConfig = agentLoop.getConfig(userEmail);
     if (user && user.isAutoTradingEnabled !== undefined && uConfig.isAutoTradingEnabled === undefined) {
       uConfig.isAutoTradingEnabled = user.isAutoTradingEnabled;
+    }
+
+    if (userMode === 'LIVE' && binanceConnector.connected) {
+      const freshBals = await binanceConnector.getBalances().catch(() => {});
+      if (freshBals && freshBals.length > 0 && userEmail && userEmail !== 'default') {
+        authService.updateBrokerConfig(userEmail, 'binance', {
+          balances: freshBals,
+          lastChecked: new Date().toISOString()
+        }).catch(() => {});
+      }
     }
 
     const data = agentLoop.getDashboardData(userMode, userAccount, userEmail);
@@ -721,14 +731,16 @@ app.post('/api/portfolio/balance', async (req, res) => {
     const token = authHeader.replace(/^Bearer\s+/i, '');
     const user = await authService.validateToken(token);
     const userEmail = user ? user.email : 'default';
+    const userMode = (user && user.mode) ? user.mode : (userEmail === 'waiztahseen@gmail.com' ? 'LIVE' : 'SIMULATED');
 
     const { balance, closeOpenPositions, account } = req.body;
     const num = parseFloat(balance);
     if (isNaN(num) || num <= 0) {
       return res.status(400).json({ error: 'Please provide a valid positive balance' });
     }
-    const state = agentLoop.setBalance(num, !!closeOpenPositions, account, userEmail);
-    res.json({ success: true, portfolio: state, dashboard: agentLoop.getDashboardData(null, null, userEmail) });
+    const targetAccount = (account || agentLoop.activeAccount).toUpperCase();
+    const state = agentLoop.setBalance(num, !!closeOpenPositions, targetAccount, userEmail);
+    res.json({ success: true, portfolio: state, dashboard: agentLoop.getDashboardData(userMode, targetAccount, userEmail) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -741,14 +753,16 @@ app.post('/api/portfolio/adjust', async (req, res) => {
     const token = authHeader.replace(/^Bearer\s+/i, '');
     const user = await authService.validateToken(token);
     const userEmail = user ? user.email : 'default';
+    const userMode = (user && user.mode) ? user.mode : (userEmail === 'waiztahseen@gmail.com' ? 'LIVE' : 'SIMULATED');
 
     const { delta, account } = req.body;
     const num = parseFloat(delta);
     if (isNaN(num)) {
       return res.status(400).json({ error: 'Invalid delta amount' });
     }
-    const state = agentLoop.adjustBalance(num, account, userEmail);
-    res.json({ success: true, portfolio: state, dashboard: agentLoop.getDashboardData(null, null, userEmail) });
+    const targetAccount = (account || agentLoop.activeAccount).toUpperCase();
+    const state = agentLoop.adjustBalance(num, targetAccount, userEmail);
+    res.json({ success: true, portfolio: state, dashboard: agentLoop.getDashboardData(userMode, targetAccount, userEmail) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1268,9 +1282,8 @@ app.post('/api/portfolio/reset', async (req, res) => {
     const targetAccount = (account || agentLoop.activeAccount).toUpperCase();
     const engine = agentLoop.getEngine(targetAccount, userEmail);
     const initBal = initialBalance !== undefined ? parseFloat(initialBalance) : 10;
-    const resetState = engine.reset(initBal);
-    agentLoop.log(`🔄 [${targetAccount}] Portfolio reset to $${initBal.toLocaleString('en-US')} virtual balance.`, 'WARN');
-    res.json({ success: true, portfolio: resetState, dashboard: agentLoop.getDashboardData(null, null, userEmail) });
+    const userMode = (user && user.mode) ? user.mode : (userEmail === 'waiztahseen@gmail.com' ? 'LIVE' : 'SIMULATED');
+    res.json({ success: true, portfolio: resetState, dashboard: agentLoop.getDashboardData(userMode, targetAccount, userEmail) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
