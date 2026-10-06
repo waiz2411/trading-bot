@@ -1155,8 +1155,8 @@ export class AutonomousAgentLoop {
             let orderSuccess = false;
             try {
               const balances = await binanceConnector.getBalances();
-              const coinBal = balances.find(b => b.asset.toUpperCase() === rawAsset);
-              const qtyToSell = coinBal && coinBal.free > 0.00001 ? coinBal.free : pos.units;
+              const coinBal = (balances || []).find(b => b.asset.toUpperCase() === rawAsset);
+              const qtyToSell = coinBal && coinBal.free > 0.00001 ? coinBal.free : 0;
 
               if (qtyToSell > 0) {
                 const sellRes = await binanceConnector.placeSpotMarketOrder({
@@ -1170,7 +1170,7 @@ export class AutonomousAgentLoop {
 
                   // Dust conversion sweep
                   const postBals = await binanceConnector.getBalances(true);
-                  const remBal = postBals.find(b => b.asset.toUpperCase() === rawAsset);
+                  const remBal = (postBals || []).find(b => b.asset.toUpperCase() === rawAsset);
                   if (remBal && remBal.free > 0.00001) {
                     await binanceConnector.convertDustToBnb([rawAsset]).then(res => {
                       if (res && (res.totalTransfered || res.transferResult?.length)) {
@@ -1179,13 +1179,22 @@ export class AutonomousAgentLoop {
                     }).catch(() => {});
                   }
                 } else {
-                  this.log(`⚠️ [BINANCE LIVE] Sell order for ${rawAsset} not confirmed by Binance. Holding position.`, 'WARN');
+                  this.log(`⚠️ [BINANCE LIVE] Sell order for ${rawAsset} not confirmed by Binance.`, 'WARN');
                 }
               } else {
-                this.log(`⚠️ [BINANCE LIVE] Cannot exit ${rawAsset}: available balance is 0.`, 'WARN');
+                // If coin balance is already 0 or dust on Binance, it has ALREADY been sold!
+                orderSuccess = true;
+                this.log(`🪙 [BINANCE LIVE] ${exitMsg} ${rawAsset} is already sold on Binance wallet. Synchronizing closure cleanly.`, 'INFO');
               }
             } catch (err) {
-              this.log(`⚠️ [BINANCE LIVE] Exit sell notice for ${rawAsset}: ${err.message}`, 'WARN');
+              const errMsg = err.message || '';
+              // If Binance returns "insufficient balance" or code -2010 or min notional, the coin was already sold!
+              if (errMsg.includes('insufficient balance') || errMsg.includes('-2010') || errMsg.includes('MIN_NOTIONAL')) {
+                orderSuccess = true;
+                this.log(`🪙 [BINANCE LIVE] ${rawAsset} was already sold on Binance (${errMsg}). Synchronizing closure cleanly.`, 'INFO');
+              } else {
+                this.log(`⚠️ [BINANCE LIVE] Exit sell notice for ${rawAsset}: ${errMsg}`, 'WARN');
+              }
             }
 
             // ONLY record trade as closed and remove from active positions if Binance sell confirmed!

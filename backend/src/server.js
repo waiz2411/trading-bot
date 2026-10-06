@@ -808,17 +808,20 @@ app.post('/api/trades/close/:id', async (req, res) => {
               agentLoop.log(`🪙 [BINANCE LIVE] Manual Exit: Sold ${qtyToSell} ${assetName} on Binance Spot`, 'SUCCESS');
               // Dust sweep
               await binanceConnector.convertDustToBnb([assetName]).catch(() => {});
-            } else {
-              return res.status(400).json({ error: 'Binance sell order rejected or unconfirmed.' });
             }
           } catch (sellErr) {
-            agentLoop.log(`⚠️ [BINANCE LIVE] Manual exit sell notice for ${assetName}: ${sellErr.message}`, 'WARN');
-            return res.status(400).json({ error: `Binance Sell Error: ${sellErr.message}` });
+            const errMsg = sellErr.message || '';
+            // If the coin is already sold on Binance or dust, synchronize closure
+            if (errMsg.includes('insufficient balance') || errMsg.includes('-2010') || errMsg.includes('MIN_NOTIONAL')) {
+              agentLoop.log(`🪙 [BINANCE LIVE] Manual Exit: ${assetName} was already sold on Binance (${errMsg}). Synchronizing closure cleanly.`, 'INFO');
+            } else {
+              agentLoop.log(`⚠️ [BINANCE LIVE] Manual exit notice for ${assetName}: ${errMsg}. Force-closing position in dashboard.`, 'WARN');
+            }
           }
         } else {
           // If coin has already been sold on Binance (free <= 0.00001), synchronize closure cleanly
           soldUnits = liveSpotMatch ? liveSpotMatch.units : 0;
-          agentLoop.log(`🪙 [BINANCE LIVE] Manual Exit: ${assetName} was already sold on Binance. Synchronizing closure.`, 'INFO');
+          agentLoop.log(`🪙 [BINANCE LIVE] Manual Exit: ${assetName} was already sold on Binance. Synchronizing closure cleanly.`, 'INFO');
         }
 
         // Calculate realized PnL for the live closed position

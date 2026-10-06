@@ -353,7 +353,7 @@ export class BinanceConnector {
       if (filter && filter.stepSize) {
         const stepStr = filter.stepSize.toString();
         const decimals = stepStr.includes('.') ? stepStr.split('.')[1].replace(/0+$/, '').length : 0;
-        const steps = Math.floor(formattedQty / filter.stepSize);
+        const steps = Math.floor(formattedQty / filter.stepSize + 0.0000001);
         formattedQty = (steps * filter.stepSize).toFixed(decimals);
       } else {
         formattedQty = formattedQty.toFixed(4);
