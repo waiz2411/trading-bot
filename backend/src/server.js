@@ -1291,9 +1291,16 @@ try {
 }
 
 if (!process.env.PRIMARY_BACKEND_URL) {
-  agentLoop.setUserMode('test@gmail.com', 'LIVE');
-  agentLoop.isAutoTradingEnabled = false; // Always start in PAUSED mode until user explicitly clicks Start
-  agentLoop.start();
+  const startupUser = 'waiztahseen@gmail.com';
+  agentLoop.setUserMode(startupUser, 'LIVE').then(() => {
+    agentLoop.isAutoTradingEnabled = true;
+    agentLoop.getConfig(startupUser).isAutoTradingEnabled = true;
+    agentLoop.start();
+    console.log(`🚀 Scalping bot started automatically for ${startupUser} in LIVE broker mode.`);
+  }).catch(err => {
+    console.error('Failed to initialize startup user mode:', err.message);
+    agentLoop.start();
+  });
 } else {
   console.log('⏸️ Autonomous trading loop paused on Replica server (Master Hostinger executes all live trades).');
 }
