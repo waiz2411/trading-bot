@@ -1308,7 +1308,7 @@ try {
   console.error('⚠️ Database init error (will retry on query):', dbErr.message);
 }
 
-if (!process.env.PRIMARY_BACKEND_URL) {
+if (!process.env.PRIMARY_BACKEND_URL && !process.env.RENDER) {
   const startupUser = 'waiztahseen@gmail.com';
   agentLoop.setUserMode(startupUser, 'LIVE').then(() => {
     agentLoop.isAutoTradingEnabled = true;
@@ -1320,7 +1320,7 @@ if (!process.env.PRIMARY_BACKEND_URL) {
     agentLoop.start();
   });
 } else {
-  console.log('⏸️ Autonomous trading loop paused on Replica server (Master Hostinger executes all live trades).');
+  console.log('⏸️ Autonomous trading loop paused on Proxy/Replica server (Master Hostinger executes all live trades).');
 }
 
 const SOCKET_PATH = process.env.SOCKET_PATH;
