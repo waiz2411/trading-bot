@@ -35,11 +35,19 @@ export default function TradeHistory({ closedTrades = [] }) {
             Time Limit Expiry
           </span>
         );
+      case 'TRAILING_PROFIT_LOCK':
       case 'TRAILING_STOP_TRIGGER':
         return (
           <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-mono font-bold flex items-center gap-1 shadow-sm shadow-emerald-500/10">
             <ShieldCheck className="w-3 h-3 text-emerald-400" />
             Trailing Profit Locked
+          </span>
+        );
+      case 'SAFETY_TIMEOUT_EXIT':
+        return (
+          <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[10px] font-mono font-semibold flex items-center gap-1">
+            <Timer className="w-3 h-3 text-cyan-400" />
+            Safety Time Cap (Profit)
           </span>
         );
       case 'BREAKEVEN_STOP_TRIGGER':

@@ -16,11 +16,12 @@
 
 // Absolute Blacklist of Non-Halal Tokens (Meme, Riba lending, Casino/Gambling, Privacy, Leveraged)
 export const HARAM_BLACKLIST = new Set([
-  // Meme Coins
+  // Meme Coins & Volatile Illiquid Traps
   'DOGE', 'SHIB', 'PEPE', 'FLOKI', 'BONK', 'WIF', 'MEME', 'TURBO', 'BOME', 'POPCAT',
   'MOG', 'BRETT', 'NEIRO', 'MEW', 'MYRO', 'SPX', 'LADYS', 'BABYDOGE', 'ELON', 'SAMO',
   'CORGIAI', 'SUNDOG', 'CAT', 'COQ', 'SLERF', 'TOSHI', 'PONKE', 'GIGA', 'GOAT', 'MOODENG',
   'DOGS', 'NOT', 'PUPPIES', 'WEN', 'SILLY', 'SMOG', 'COCO', 'TKO', 'WOOF', 'CHEEMS',
+  'PARTY', 'CHIP', 'MEGA', 'QUICK', 'MVLLB',
   // Riba / Lending / Yield Interest Protocols
   'AAVE', 'COMP', 'MKR', 'CRV', 'PENDLE', 'RDNT', 'JUST', 'VENUS', 'BENQI', 'MORPHO',
   'EULER', 'CREAM', 'AERODROME', 'KAMINO', 'MARGINFI', 'DRIFT', 'XVS', 'ALPACA', 'FOR',
@@ -133,7 +134,12 @@ export function isHalalCompliant(symbolOrBase) {
     .replace(/USD.*$/, '')
     .replace(/USDT$/, '');
 
-  // 1. Check explicit blacklist first
+  // 1. Must be clean ASCII characters (strictly rejects non-standard foreign tokens like Chinese memes)
+  if (!/^[A-Z0-9]+$/.test(clean)) {
+    return false;
+  }
+
+  // 2. Check explicit blacklist first
   if (HARAM_BLACKLIST.has(clean)) {
     return false;
   }

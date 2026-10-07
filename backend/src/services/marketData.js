@@ -219,10 +219,12 @@ export class MarketDataService {
         if (t.symbol.includes('UP') || t.symbol.includes('DOWN') || t.symbol.includes('BEAR') || t.symbol.includes('BULL')) continue;
 
         const baseAsset = t.symbol.replace(/USDT$/, '');
+        if (!/^[A-Z0-9]+$/.test(baseAsset)) continue;
+
         const quoteVol = parseFloat(t.quoteVolume || 0);
 
-        // Require at least $150k daily volume to ensure active orderbook & tight spread
-        if (quoteVol < 150000 && !CRYPTO_BINANCE_MAP[`${baseAsset}-USD`]) continue;
+        // Require at least $1.5M daily volume to ensure active orderbook & tight spread
+        if (quoteVol < 1500000 && !CRYPTO_BINANCE_MAP[`${baseAsset}-USD`]) continue;
 
         // Strict Shariah / Halal Verification
         if (!isHalalCompliant(baseAsset)) continue;

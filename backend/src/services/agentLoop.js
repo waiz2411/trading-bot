@@ -818,7 +818,7 @@ export class AutonomousAgentLoop {
                   confidence: candidate.signal.confidence,
                   reason: `Spot Scalp Slot ${uSpotEngine.activePositions.length + 1}/${uSpotSlots}${scaleLabel} (${candidate.signal.reason})`,
                   riskRewardRatio: Number((uSpotRisk.takeProfitPct / uSpotRisk.stopLossPct).toFixed(1)),
-                  maxHoldMinutes: candidate.signal.maxHoldMinutes || uSpotRisk.maxHoldMinutes || 120,
+                  maxHoldMinutes: candidate.signal.maxHoldMinutes || uSpotRisk.maxHoldMinutes || 45,
                   tradingStyle: 'SPOT_BUY',
                   exitRule: candidate.signal.exitRule || 'HOT_RETEST_TRAILING_LOCK',
                   feeRate: uSpotRisk.feeRate || (uSpotRisk.useBnbFeeDiscount ? 0.00075 : 0.0010),
@@ -1114,7 +1114,7 @@ export class AutonomousAgentLoop {
 
           const openMs = pos.openTime ? new Date(pos.openTime).getTime() : Date.now();
           const holdMinutes = (Date.now() - openMs) / 60000;
-          const maxHoldMinutes = pos.maxHoldMinutes || this.spotRiskManager.maxHoldMinutes || 60;
+          const maxHoldMinutes = pos.maxHoldMinutes || this.spotRiskManager.maxHoldMinutes || 45;
 
           // A. Break-Even Profit Lock (+0.50% move -> Lock in +0.20% Profit)
           const peakGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;

@@ -1,0 +1,517 @@
+{
+  "overview": {
+    "period": "2026-08-01 to 2026-10-01 (61 days)",
+    "totalCoinsTested": 30,
+    "takeProfitPct": "0.6%",
+    "stopLossPct": "0.7%",
+    "roundTripFeePct": "0.2%",
+    "maxHoldMinutes": 15,
+    "totalTrades": 25613,
+    "wins": 6648,
+    "losses": 18936,
+    "breakEvens": 29,
+    "winRate": "25.96%",
+    "totalNetReturnPct": "-5132.90%",
+    "totalGrossReturnPct": "-10.30%",
+    "totalFeesDeductedPct": "5122.60%",
+    "profitFactor": "0.26",
+    "avgTradeNetPnL": "-0.200%",
+    "avgDailyTrades": "419.9",
+    "avgDailyNetPnL": "-84.15%",
+    "exitReasons": {
+      "takeProfitHit": "3486 (13.6%)",
+      "stopLossHit": "2532 (9.9%)",
+      "fifteenMinTimeExpiry": "19595 (76.5%)"
+    }
+  },
+  "dailyBreakdown": [
+    {
+      "date": "2026-08-01",
+      "trades": 289,
+      "wins": 36,
+      "losses": 253,
+      "breakEvens": 0,
+      "netPnL": -57.96799999999998
+    },
+    {
+      "date": "2026-08-02",
+      "trades": 459,
+      "wins": 71,
+      "losses": 388,
+      "breakEvens": 0,
+      "netPnL": -81.01200000000009
+    },
+    {
+      "date": "2026-08-03",
+      "trades": 418,
+      "wins": 85,
+      "losses": 333,
+      "breakEvens": 0,
+      "netPnL": -73.93899999999998
+    },
+    {
+      "date": "2026-08-04",
+      "trades": 403,
+      "wins": 73,
+      "losses": 329,
+      "breakEvens": 1,
+      "netPnL": -70.25100000000006
+    },
+    {
+      "date": "2026-08-05",
+      "trades": 361,
+      "wins": 61,
+      "losses": 299,
+      "breakEvens": 1,
+      "netPnL": -65.8200000000001
+    },
+    {
+      "date": "2026-08-06",
+      "trades": 341,
+      "wins": 49,
+      "losses": 292,
+      "breakEvens": 0,
+      "netPnL": -73.5530000000001
+    },
+    {
+      "date": "2026-08-07",
+      "trades": 393,
+      "wins": 62,
+      "losses": 331,
+      "breakEvens": 0,
+      "netPnL": -82.23300000000003
+    },
+    {
+      "date": "2026-08-08",
+      "trades": 458,
+      "wins": 57,
+      "losses": 401,
+      "breakEvens": 0,
+      "netPnL": -80.87400000000007
+    },
+    {
+      "date": "2026-08-09",
+      "trades": 381,
+      "wins": 46,
+      "losses": 335,
+      "breakEvens": 0,
+      "netPnL": -81.06900000000009
+    },
+    {
+      "date": "2026-08-10",
+      "trades": 400,
+      "wins": 42,
+      "losses": 357,
+      "breakEvens": 1,
+      "netPnL": -83.26900000000006
+    },
+    {
+      "date": "2026-08-11",
+      "trades": 402,
+      "wins": 68,
+      "losses": 334,
+      "breakEvens": 0,
+      "netPnL": -72.27600000000005
+    },
+    {
+      "date": "2026-08-12",
+      "trades": 317,
+      "wins": 34,
+      "losses": 283,
+      "breakEvens": 0,
+      "netPnL": -72.22300000000003
+    },
+    {
+      "date": "2026-08-13",
+      "trades": 405,
+      "wins": 55,
+      "losses": 350,
+      "breakEvens": 0,
+      "netPnL": -81.69000000000007
+    },
+    {
+      "date": "2026-08-14",
+      "trades": 311,
+      "wins": 32,
+      "losses": 279,
+      "breakEvens": 0,
+      "netPnL": -67.90300000000006
+    },
+    {
+      "date": "2026-08-15",
+      "trades": 399,
+      "wins": 34,
+      "losses": 363,
+      "breakEvens": 2,
+      "netPnL": -83.1660000000001
+    },
+    {
+      "date": "2026-08-16",
+      "trades": 322,
+      "wins": 24,
+      "losses": 298,
+      "breakEvens": 0,
+      "netPnL": -68.88300000000001
+    },
+    {
+      "date": "2026-08-17",
+      "trades": 444,
+      "wins": 69,
+      "losses": 374,
+      "breakEvens": 1,
+      "netPnL": -86.72600000000011
+    },
+    {
+      "date": "2026-08-18",
+      "trades": 388,
+      "wins": 50,
+      "losses": 337,
+      "breakEvens": 1,
+      "netPnL": -87.46500000000013
+    },
+    {
+      "date": "2026-08-19",
+      "trades": 556,
+      "wins": 134,
+      "losses": 422,
+      "breakEvens": 0,
+      "netPnL": -95.87199999999993
+    },
+    {
+      "date": "2026-08-20",
+      "trades": 380,
+      "wins": 133,
+      "losses": 247,
+      "breakEvens": 0,
+      "netPnL": -70.59400000000001
+    },
+    {
+      "date": "2026-08-21",
+      "trades": 654,
+      "wins": 291,
+      "losses": 363,
+      "breakEvens": 0,
+      "netPnL": -92.77600000000008
+    },
+    {
+      "date": "2026-08-22",
+      "trades": 344,
+      "wins": 147,
+      "losses": 197,
+      "breakEvens": 0,
+      "netPnL": -49.93400000000002
+    },
+    {
+      "date": "2026-08-23",
+      "trades": 487,
+      "wins": 148,
+      "losses": 338,
+      "breakEvens": 1,
+      "netPnL": -105.12600000000003
+    },
+    {
+      "date": "2026-08-24",
+      "trades": 399,
+      "wins": 137,
+      "losses": 262,
+      "breakEvens": 0,
+      "netPnL": -103.2500000000001
+    },
+    {
+      "date": "2026-08-25",
+      "trades": 326,
+      "wins": 105,
+      "losses": 221,
+      "breakEvens": 0,
+      "netPnL": -71.363
+    },
+    {
+      "date": "2026-08-26",
+      "trades": 432,
+      "wins": 98,
+      "losses": 332,
+      "breakEvens": 2,
+      "netPnL": -96.53199999999995
+    },
+    {
+      "date": "2026-08-27",
+      "trades": 435,
+      "wins": 122,
+      "losses": 312,
+      "breakEvens": 1,
+      "netPnL": -98.50700000000015
+    },
+    {
+      "date": "2026-08-28",
+      "trades": 306,
+      "wins": 85,
+      "losses": 221,
+      "breakEvens": 0,
+      "netPnL": -78.39300000000006
+    },
+    {
+      "date": "2026-08-29",
+      "trades": 429,
+      "wins": 52,
+      "losses": 374,
+      "breakEvens": 3,
+      "netPnL": -96.817
+    },
+    {
+      "date": "2026-08-30",
+      "trades": 407,
+      "wins": 86,
+      "losses": 320,
+      "breakEvens": 1,
+      "netPnL": -81.56000000000014
+    },
+    {
+      "date": "2026-08-31",
+      "trades": 473,
+      "wins": 137,
+      "losses": 335,
+      "breakEvens": 1,
+      "netPnL": -79.22699999999999
+    },
+    {
+      "date": "2026-09-01",
+      "trades": 431,
+      "wins": 142,
+      "losses": 289,
+      "breakEvens": 0,
+      "netPnL": -89.742
+    },
+    {
+      "date": "2026-09-02",
+      "trades": 509,
+      "wins": 142,
+      "losses": 367,
+      "breakEvens": 0,
+      "netPnL": -101.47500000000002
+    },
+    {
+      "date": "2026-09-03",
+      "trades": 564,
+      "wins": 165,
+      "losses": 398,
+      "breakEvens": 1,
+      "netPnL": -100.26600000000005
+    },
+    {
+      "date": "2026-09-04",
+      "trades": 431,
+      "wins": 97,
+      "losses": 333,
+      "breakEvens": 1,
+      "netPnL": -81.99200000000013
+    },
+    {
+      "date": "2026-09-05",
+      "trades": 506,
+      "wins": 111,
+      "losses": 393,
+      "breakEvens": 2,
+      "netPnL": -92.92100000000002
+    },
+    {
+      "date": "2026-09-06",
+      "trades": 507,
+      "wins": 152,
+      "losses": 354,
+      "breakEvens": 1,
+      "netPnL": -90.39200000000004
+    },
+    {
+      "date": "2026-09-07",
+      "trades": 453,
+      "wins": 121,
+      "losses": 332,
+      "breakEvens": 0,
+      "netPnL": -123.65100000000007
+    },
+    {
+      "date": "2026-09-08",
+      "trades": 366,
+      "wins": 120,
+      "losses": 246,
+      "breakEvens": 0,
+      "netPnL": -81.05200000000002
+    },
+    {
+      "date": "2026-09-09",
+      "trades": 309,
+      "wins": 65,
+      "losses": 244,
+      "breakEvens": 0,
+      "netPnL": -98.08800000000008
+    },
+    {
+      "date": "2026-09-10",
+      "trades": 326,
+      "wins": 88,
+      "losses": 238,
+      "breakEvens": 0,
+      "netPnL": -72.14799999999997
+    },
+    {
+      "date": "2026-09-11",
+      "trades": 269,
+      "wins": 80,
+      "losses": 189,
+      "breakEvens": 0,
+      "netPnL": -62.24299999999999
+    },
+    {
+      "date": "2026-09-12",
+      "trades": 403,
+      "wins": 48,
+      "losses": 355,
+      "breakEvens": 0,
+      "netPnL": -86.48999999999998
+    },
+    {
+      "date": "2026-09-13",
+      "trades": 386,
+      "wins": 96,
+      "losses": 290,
+      "breakEvens": 0,
+      "netPnL": -72.90300000000012
+    },
+    {
+      "date": "2026-09-14",
+      "trades": 449,
+      "wins": 112,
+      "losses": 337,
+      "breakEvens": 0,
+      "netPnL": -85.4870000000001
+    },
+    {
+      "date": "2026-09-15",
+      "trades": 182,
+      "wins": 27,
+      "losses": 153,
+      "breakEvens": 2,
+      "netPnL": -64.978
+    },
+    {
+      "date": "2026-09-16",
+      "trades": 500,
+      "wins": 162,
+      "losses": 338,
+      "breakEvens": 0,
+      "netPnL": -88.1299999999997
+    },
+    {
+      "date": "2026-09-17",
+      "trades": 574,
+      "wins": 174,
+      "losses": 400,
+      "breakEvens": 0,
+      "netPnL": -109.96699999999986
+    },
+    {
+      "date": "2026-09-18",
+      "trades": 530,
+      "wins": 227,
+      "losses": 302,
+      "breakEvens": 1,
+      "netPnL": -54.372000000000035
+    },
+    {
+      "date": "2026-09-19",
+      "trades": 459,
+      "wins": 163,
+      "losses": 296,
+      "breakEvens": 0,
+      "netPnL": -85.85900000000004
+    },
+    {
+      "date": "2026-09-20",
+      "trades": 460,
+      "wins": 162,
+      "losses": 297,
+      "breakEvens": 1,
+      "netPnL": -89.31800000000003
+    },
+    {
+      "date": "2026-09-21",
+      "trades": 534,
+      "wins": 224,
+      "losses": 309,
+      "breakEvens": 1,
+      "netPnL": -92.25900000000001
+    },
+    {
+      "date": "2026-09-22",
+      "trades": 480,
+      "wins": 194,
+      "losses": 286,
+      "breakEvens": 0,
+      "netPnL": -82.89299999999986
+    },
+    {
+      "date": "2026-09-23",
+      "trades": 383,
+      "wins": 128,
+      "losses": 255,
+      "breakEvens": 0,
+      "netPnL": -85.18299999999996
+    },
+    {
+      "date": "2026-09-24",
+      "trades": 518,
+      "wins": 180,
+      "losses": 338,
+      "breakEvens": 0,
+      "netPnL": -97.02000000000008
+    },
+    {
+      "date": "2026-09-25",
+      "trades": 477,
+      "wins": 189,
+      "losses": 288,
+      "breakEvens": 0,
+      "netPnL": -91.65800000000003
+    },
+    {
+      "date": "2026-09-26",
+      "trades": 413,
+      "wins": 109,
+      "losses": 302,
+      "breakEvens": 2,
+      "netPnL": -106.61200000000002
+    },
+    {
+      "date": "2026-09-27",
+      "trades": 426,
+      "wins": 120,
+      "losses": 305,
+      "breakEvens": 1,
+      "netPnL": -88.53499999999988
+    },
+    {
+      "date": "2026-09-28",
+      "trades": 322,
+      "wins": 115,
+      "losses": 207,
+      "breakEvens": 0,
+      "netPnL": -78.54600000000002
+    },
+    {
+      "date": "2026-09-29",
+      "trades": 493,
+      "wins": 184,
+      "losses": 309,
+      "breakEvens": 0,
+      "netPnL": -85.58100000000002
+    },
+    {
+      "date": "2026-09-30",
+      "trades": 434,
+      "wins": 128,
+      "losses": 306,
+      "breakEvens": 0,
+      "netPnL": -102.864
+    }
+  ]
+}
