@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import http from 'http';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
@@ -1323,6 +1324,14 @@ if (!process.env.PRIMARY_BACKEND_URL && !process.env.RENDER) {
   console.log('⏸️ Autonomous trading loop paused on Proxy/Replica server (Master Hostinger executes all live trades).');
 }
 
+// Always listen on TCP port for ultra-reliable local reverse-proxy communication
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`=======================================================`);
+  console.log(`🚀 Scalping Agent Backend running on port ${PORT}`);
+  console.log(`📡 Autonomous Scalp Loop active: 27 Global Markets | 500x Lev | 1:1.3 R:R`);
+  console.log(`=======================================================`);
+});
+
 const SOCKET_PATH = process.env.SOCKET_PATH;
 if (SOCKET_PATH) {
   try {
@@ -1330,21 +1339,16 @@ if (SOCKET_PATH) {
       fs.unlinkSync(SOCKET_PATH);
     }
   } catch (_) {}
-  
-  app.listen(SOCKET_PATH, () => {
-    try { fs.chmodSync(SOCKET_PATH, '777'); } catch (_) {}
-    console.log(`=======================================================`);
-    console.log(`🚀 Scalping Agent Backend running on Unix Socket: ${SOCKET_PATH}`);
-    console.log(`📡 Autonomous Scalp Loop active: 27 Global Markets | 500x Lev | 1:1.3 R:R`);
-    console.log(`=======================================================`);
-  });
-} else {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`=======================================================`);
-    console.log(`🚀 Scalping Agent Backend running on port ${PORT}`);
-    console.log(`📡 Autonomous Scalp Loop active: 27 Global Markets | 500x Lev | 1:1.3 R:R`);
-    console.log(`=======================================================`);
-  });
+
+  try {
+    const socketServer = http.createServer(app);
+    socketServer.listen(SOCKET_PATH, () => {
+      try { fs.chmodSync(SOCKET_PATH, '777'); } catch (_) {}
+      console.log(`🚀 Scalping Agent Backend also listening on Unix Socket: ${SOCKET_PATH}`);
+    });
+  } catch (sockErr) {
+    console.warn('⚠️ Unix socket setup notice:', sockErr.message);
+  }
 }
 
 
