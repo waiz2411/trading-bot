@@ -273,13 +273,23 @@ export default function Header({
               onClick={() => onOpenBrokerModal && onOpenBrokerModal(isSpot ? 'BINANCE' : 'MT5')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono font-semibold transition-all shadow-sm cursor-pointer ${
                 isSpot
-                  ? 'bg-emerald-600/20 hover:bg-emerald-600/30 border-emerald-500/40 text-emerald-300 hover:text-white'
+                  ? (brokers?.binance?.isRateLimited
+                      ? 'bg-amber-600/40 hover:bg-amber-600/60 border-amber-500/80 text-amber-200 animate-pulse'
+                      : 'bg-emerald-600/20 hover:bg-emerald-600/30 border-emerald-500/40 text-emerald-300 hover:text-white')
                   : 'bg-amber-600/20 hover:bg-amber-600/30 border-amber-500/40 text-amber-300 hover:text-white'
               }`}
-              title={isSpot ? "Configure Binance Spot API (Spot Trading ONLY)" : "Configure MetaTrader 5 (Margin Scalping ONLY)"}
+              title={
+                isSpot
+                  ? (brokers?.binance?.isRateLimited ? `Binance API Cooldown (${Math.ceil((brokers.binance.remainingBanSeconds || 0) / 60)}m remaining)` : "Configure Binance Spot API (Spot Trading ONLY)")
+                  : "Configure MetaTrader 5 (Margin Scalping ONLY)"
+              }
             >
-              <Key className={`w-3.5 h-3.5 ${isSpot ? 'text-emerald-400' : 'text-amber-400'}`} />
-              <span>{isSpot ? 'Binance API' : 'MT5 Broker'}</span>
+              <Key className={`w-3.5 h-3.5 ${isSpot ? (brokers?.binance?.isRateLimited ? 'text-amber-300' : 'text-emerald-400') : 'text-amber-400'}`} />
+              <span>
+                {isSpot
+                  ? (brokers?.binance?.isRateLimited ? `🟠 Binance Cooldown (${Math.ceil((brokers.binance.remainingBanSeconds || 0) / 60)}m)` : 'Binance API')
+                  : 'MT5 Broker'}
+              </span>
             </button>
           ) : (
             <button

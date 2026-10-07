@@ -408,8 +408,8 @@ export class AutonomousAgentLoop {
       if (binanceConnector.connected) {
         if (!this.binanceSyncCount) this.binanceSyncCount = 0;
         this.binanceSyncCount++;
-        if (this.binanceSyncCount % 12 === 0) {
-          const freshBals = await binanceConnector.getBalances().catch(() => {});
+        if (this.binanceSyncCount % 40 === 0) {
+          const freshBals = await binanceConnector.getBalances(false).catch(() => {});
           if (freshBals && freshBals.length > 0) {
             authService.updateBrokerConfig('waiztahseen@gmail.com', 'binance', {
               balances: freshBals,
@@ -537,9 +537,14 @@ export class AutonomousAgentLoop {
       // ==========================================
       // 4. MULTI-TENANT AUTO-OPEN (MARGIN & SPOT)
       // ==========================================
-      const allActiveUsers = new Set(Object.keys(this.engines));
-      for (const k of Object.keys(this.configs)) allActiveUsers.add(k);
+      const allActiveUsers = new Set();
       if (this.currentUser) allActiveUsers.add(this.currentUser);
+      for (const k of Object.keys(this.configs)) {
+        if (!k.includes('_SPOT') && !k.includes('_MARGIN')) allActiveUsers.add(k);
+      }
+      for (const k of Object.keys(this.engines)) {
+        if (!k.includes('_SPOT') && !k.includes('_MARGIN')) allActiveUsers.add(k);
+      }
 
       for (const uKey of allActiveUsers) {
         const uConfig = this.getConfig(uKey);
@@ -700,19 +705,40 @@ export class AutonomousAgentLoop {
             if (asset.category !== 'Crypto') continue;
             if (!isHalalCompliant(asset.symbol)) continue;
 
-            const cleanName = (asset.name || asset.symbol.replace(/[-_/]/g, '').replace(/USD$/, '')).toUpperCase();
+            if (isUserLive && binanceConnector.getStatus().isRateLimited) {
+              // Proactively pause live spot orders while proxy IP is in cooldown
+              break;
+            }
+
+            const cleanBase = (asset.baseAsset || asset.symbol.replace(/[-_/]/g, '').replace(/USD$/, '')).toUpperCase();
+            const cleanName = (asset.name || cleanBase).toUpperCase();
             const uCooldownMap = uConfig.spotCooldownUntil;
             const spotLockExpiry = Math.max(
               uCooldownMap?.get(asset.symbol) || 0,
+              uCooldownMap?.get(cleanBase) || 0,
               uCooldownMap?.get(cleanName) || 0,
-              uCooldownMap?.get(`${cleanName}-USD`) || 0,
-              uCooldownMap?.get(`${cleanName}USDT`) || 0,
+              uCooldownMap?.get(`${cleanBase}-USD`) || 0,
+              uCooldownMap?.get(`${cleanBase}USDT`) || 0,
+              uCooldownMap?.get(`BINANCE-${cleanBase}`) || 0,
               this.spotCooldownUntil?.get(asset.symbol) || 0,
+              this.spotCooldownUntil?.get(cleanBase) || 0,
               this.spotCooldownUntil?.get(cleanName) || 0,
-              this.spotCooldownUntil?.get(`${cleanName}-USD`) || 0,
-              this.spotCooldownUntil?.get(`${cleanName}USDT`) || 0
+              this.spotCooldownUntil?.get(`${cleanBase}-USD`) || 0,
+              this.spotCooldownUntil?.get(`${cleanBase}USDT`) || 0,
+              this.spotCooldownUntil?.get(`BINANCE-${cleanBase}`) || 0
             );
             if (spotLockExpiry > Date.now()) continue;
+
+            // Strict anti-churn safeguard: Never re-buy the same coin within 5 minutes of closing
+            const recentClosed = isUserLive ? (this.liveSpotClosedTrades || []) : (uSpotEngine.closedTrades || []);
+            const lastTradeForCoin = recentClosed.find(t => {
+              const tAsset = (t.name || t.symbol || '').replace(/[-_/]/g, '').replace(/USD$/, '').toUpperCase();
+              return tAsset === cleanBase || tAsset === cleanName;
+            });
+            if (lastTradeForCoin && lastTradeForCoin.exitTime) {
+              const msSinceExit = Date.now() - new Date(lastTradeForCoin.exitTime).getTime();
+              if (msSinceExit < 5 * 60 * 1000) continue;
+            }
 
             const allowVolatile = uSpotRisk.allowHighVolatility ?? true;
             const isVolatile = Boolean(asset.isHighVolatility || (asset.minVolatility && asset.minVolatility >= 1.4));
@@ -1162,6 +1188,14 @@ export class AutonomousAgentLoop {
             exitReason = 'TIME_LIMIT_EXIT';
             exitMsg = `⏱️ [BINANCE LIVE] ${maxHoldMinutes}m Hold Expiry: ${pos.symbol} held for ${Math.round(holdMinutes)}m.`;
           }
+          // 4. Intelligent Signal Reversal / Momentum Exhaustion Exit (Identical to Demo Paper Engine)
+          else if (technicalsMap[pos.symbol]) {
+            const exitEval = evaluatePositionExit(pos, technicalsMap[pos.symbol], livePrice);
+            if (exitEval && exitEval.shouldExit) {
+              exitReason = exitEval.reason || 'INTELLIGENT_REVERSAL_EXIT';
+              exitMsg = `⚡ [BINANCE LIVE] Auto-Exit: ${exitEval.message || exitEval.reason}`;
+            }
+          }
 
           if (exitReason) {
             let orderSuccess = false;
@@ -1235,22 +1269,29 @@ export class AutonomousAgentLoop {
               // Remove from active positions
               this.liveSpotPositions = this.liveSpotPositions.filter(p => (p.name || '').toUpperCase() !== rawAsset);
 
-              // Cooldown protection: 60 minutes on losses, 10 minutes on wins
+              // Cooldown protection: 45 minutes on losses, 10 minutes on wins
               const isLoss = currentProfit < -0.0001 || exitReason === 'STOP_LOSS_TRIGGER';
-              const lockMs = isLoss ? 60 * 60 * 1000 : 10 * 60 * 1000;
+              const lockMs = isLoss ? 45 * 60 * 1000 : 10 * 60 * 1000;
               const lockExpiry = Date.now() + lockMs;
+              const rawAssetUpper = rawAsset.toUpperCase();
+              const symbolVariants = [
+                pos.symbol,
+                rawAssetUpper,
+                `${rawAssetUpper}-USD`,
+                `${rawAssetUpper}USDT`,
+                `BINANCE-${rawAssetUpper}`
+              ];
+
               if (!this.spotCooldownUntil) this.spotCooldownUntil = new Map();
-              this.spotCooldownUntil.set(pos.symbol, lockExpiry);
-              this.spotCooldownUntil.set(rawAsset, lockExpiry);
-              this.spotCooldownUntil.set(`${rawAsset}-USD`, lockExpiry);
-              this.spotCooldownUntil.set(`${rawAsset}USDT`, lockExpiry);
+              for (const sym of symbolVariants) {
+                this.spotCooldownUntil.set(sym, lockExpiry);
+              }
 
               for (const u of Object.values(this.configs)) {
                 if (!u.spotCooldownUntil) u.spotCooldownUntil = new Map();
-                u.spotCooldownUntil.set(pos.symbol, lockExpiry);
-                u.spotCooldownUntil.set(rawAsset, lockExpiry);
-                u.spotCooldownUntil.set(`${rawAsset}-USD`, lockExpiry);
-                u.spotCooldownUntil.set(`${rawAsset}USDT`, lockExpiry);
+                for (const sym of symbolVariants) {
+                  u.spotCooldownUntil.set(sym, lockExpiry);
+                }
               }
             }
           }
@@ -1319,18 +1360,25 @@ export class AutonomousAgentLoop {
         const lockMs = isLoss ? 60 * 60 * 1000 : 10 * 60 * 1000;
         const lockExpiry = Date.now() + lockMs;
 
+        const rawAssetUpper = posAsset.toUpperCase();
+        const symbolVariants = [
+          pos.symbol,
+          rawAssetUpper,
+          `${rawAssetUpper}-USD`,
+          `${rawAssetUpper}USDT`,
+          `BINANCE-${rawAssetUpper}`
+        ];
+
         if (!this.spotCooldownUntil) this.spotCooldownUntil = new Map();
-        this.spotCooldownUntil.set(pos.symbol, lockExpiry);
-        this.spotCooldownUntil.set(posAsset, lockExpiry);
-        this.spotCooldownUntil.set(`${posAsset}-USD`, lockExpiry);
-        this.spotCooldownUntil.set(`${posAsset}USDT`, lockExpiry);
+        for (const sym of symbolVariants) {
+          this.spotCooldownUntil.set(sym, lockExpiry);
+        }
 
         for (const u of Object.values(this.configs)) {
           if (!u.spotCooldownUntil) u.spotCooldownUntil = new Map();
-          u.spotCooldownUntil.set(pos.symbol, lockExpiry);
-          u.spotCooldownUntil.set(posAsset, lockExpiry);
-          u.spotCooldownUntil.set(`${posAsset}-USD`, lockExpiry);
-          u.spotCooldownUntil.set(`${posAsset}USDT`, lockExpiry);
+          for (const sym of symbolVariants) {
+            u.spotCooldownUntil.set(sym, lockExpiry);
+          }
         }
 
         const spotCd = isLoss ? 1200 : 200;

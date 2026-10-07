@@ -572,7 +572,7 @@ app.get('/api/dashboard', async (req, res) => {
     }
 
     if (userMode === 'LIVE' && binanceConnector.connected) {
-      const freshBals = await binanceConnector.getBalances().catch(() => {});
+      const freshBals = await binanceConnector.getBalances(false).catch(() => {});
       if (freshBals && freshBals.length > 0 && userEmail && userEmail !== 'default') {
         authService.updateBrokerConfig(userEmail, 'binance', {
           balances: freshBals,

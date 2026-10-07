@@ -67,15 +67,23 @@ export class BinanceConnector {
   }
 
   getStatus() {
+    const isRateLimited = Boolean(this.bannedUntil && Date.now() < this.bannedUntil);
+    const remainingBanSeconds = isRateLimited ? Math.ceil((this.bannedUntil - Date.now()) / 1000) : 0;
     return {
       connected: this.connected,
-      status: this.status,
+      status: isRateLimited ? 'RATE_LIMITED' : this.status,
       isTestnet: this.isTestnet,
       hasCredentials: !!(this.apiKey && this.apiSecret),
       apiKeyMasked: this.apiKey ? `${this.apiKey.slice(0, 6)}...` : '',
       latencyMs: this.latencyMs,
       lastChecked: this.lastChecked,
-      balances: this.cachedBalances
+      balances: this.cachedBalances,
+      isRateLimited,
+      bannedUntil: this.bannedUntil ? new Date(this.bannedUntil).toISOString() : null,
+      remainingBanSeconds,
+      rateLimitMessage: isRateLimited
+        ? `Binance API IP Weight Limit Hit: Requests temporarily paused until ${new Date(this.bannedUntil).toLocaleTimeString()} UTC (${Math.ceil(remainingBanSeconds / 60)}m remaining). This is an IP-level rate limit from the shared proxy node, not an account ban.`
+        : null
     };
   }
 
@@ -238,8 +246,8 @@ export class BinanceConnector {
     }
 
     const now = Date.now();
-    // Cache for 20 seconds during ordinary loops, minimum 5 seconds even if forced
-    if (this.lastBalanceFetch && (now - this.lastBalanceFetch < (force ? 5000 : 20000))) {
+    // Cache for 45 seconds during ordinary loops, minimum 5 seconds even if forced
+    if (this.lastBalanceFetch && (now - this.lastBalanceFetch < (force ? 5000 : 45000))) {
       return this.cachedBalances;
     }
 
@@ -258,6 +266,7 @@ export class BinanceConnector {
       if (res.ok && data.balances) {
         this.lastBalanceFetch = now;
         this.bannedUntil = 0;
+        this.status = 'CONNECTED';
         this.cachedBalances = data.balances
           .map(b => ({
             asset: b.asset,
@@ -269,11 +278,17 @@ export class BinanceConnector {
       } else if (data.code === -1003 || res.status === 429 || res.status === 418) {
         const match = data.msg && data.msg.match(/banned until (\d+)/);
         this.bannedUntil = match ? Number(match[1]) : (now + 120000);
+        this.status = 'RATE_LIMITED';
         console.warn(`[BinanceConnector] Weight rate limit hit. Backing off until ${new Date(this.bannedUntil).toISOString()}`);
       }
       return this.cachedBalances;
     } catch (err) {
-      console.error('Failed to update Binance balances:', err.message);
+      const errMsg = err.message || '';
+      if (errMsg.includes('429') || errMsg.includes('banned until') || errMsg.includes('-1003')) {
+        const match = errMsg.match(/banned until (\d+)/);
+        this.bannedUntil = match ? Number(match[1]) : (now + 120000);
+        this.status = 'RATE_LIMITED';
+      }
       return this.cachedBalances;
     }
   }

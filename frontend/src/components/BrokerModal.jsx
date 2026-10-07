@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Check, AlertCircle, RefreshCw, Eye, EyeOff, ShieldCheck, Zap, Coins, Globe, Key, Server, Cpu, Cloud, Copy, Download, KeyRound } from 'lucide-react';
 
-export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUpdated, initialTab = 'BINANCE' }) {
+export default function BrokerModal({ user, brokers, onClose, onUpdateBrokers, onBrokerUpdated, initialTab = 'BINANCE' }) {
   const isUserMargin = user?.accountType === 'MARGIN';
   const isUserSpot = user?.accountType === 'SPOT';
   const isAdmin = user?.role === 'ADMIN';
@@ -39,6 +39,7 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
   const [binanceTesting, setBinanceTesting] = useState(false);
   const [binanceResult, setBinanceResult] = useState(null);
   const [serverGeo, setServerGeo] = useState(null);
+  const [copiedWorkerCode, setCopiedWorkerCode] = useState(false);
 
   // MT5 State
   const [mt5Method, setMt5Method] = useState('METAAPI'); // 'METAAPI' | 'EA' | 'BRIDGE'
@@ -295,6 +296,29 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
           {/* ==================================================== */}
           {activeTab === 'BINANCE' && (
             <div className="space-y-4">
+              {/* Binance Rate Limit Notice Card */}
+              {brokers?.binance?.isRateLimited && (
+                <div className="p-4 rounded-xl bg-gradient-to-r from-amber-950/80 via-orange-950/60 to-terminal-950 border border-amber-500/70 space-y-2.5 shadow-xl animate-pulse">
+                  <div className="flex items-center gap-2 text-amber-300 font-bold text-xs">
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>Binance API IP Rate Limit Active (Temporary Proxy Cooldown)</span>
+                  </div>
+                  <p className="text-[11px] text-amber-100/90 leading-relaxed font-sans">
+                    The proxy IP address temporarily reached Binance's 1,200 weight/min limit.
+                    <strong> Your Binance account and API keys are 100% safe and not banned.</strong>
+                    API requests are automatically paused until{' '}
+                    <strong className="text-white">{brokers.binance.bannedUntil ? new Date(brokers.binance.bannedUntil).toLocaleTimeString() : 'cooldown expires'} UTC</strong>{' '}
+                    ({Math.ceil((brokers.binance.remainingBanSeconds || 0) / 60)} minutes remaining).
+                  </p>
+                  <div className="p-2.5 rounded-lg bg-terminal-950/80 border border-terminal-border text-[10px] text-slate-300 space-y-1 font-mono">
+                    <div className="font-bold text-amber-400">⚡ What happened & how to avoid shared rate limits?</div>
+                    <div>• <strong>Shared Proxy:</strong> The current European gateway is shared across servers, which can hit Binance weight caps.</div>
+                    <div>• <strong>Automatic Recovery:</strong> Once the timer expires, live trading and balance sync resume automatically.</div>
+                    <div>• <strong>Zero Rate Limits:</strong> Deploy a free personal Cloudflare Worker below for your own unshared, dedicated proxy.</div>
+                  </div>
+                </div>
+              )}
+
               <div className="p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex items-start gap-3">
                 <Cloud className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                 <div className="text-[11px] text-slate-300 font-sans leading-relaxed">
@@ -453,7 +477,28 @@ export default function BrokerModal({ user, onClose, onUpdateBrokers, onBrokerUp
                       onClick={() => setBinanceProxyUrl('https://trading-bot-test-z6bi.onrender.com/api/binance-proxy')}
                       className="text-emerald-400 hover:text-emerald-300 hover:underline font-mono font-bold flex items-center gap-1"
                     >
-                      <span>⚡ Use Germany Gateway</span>
+                      Use Default Render Proxy
+                    </button>
+                  </div>
+
+                  <div className="mt-2.5 p-2.5 rounded-lg bg-terminal-950 border border-terminal-border/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <div className="text-[10px] text-slate-300 font-sans">
+                      <span className="font-bold text-emerald-400 font-mono">⚡ Dedicated Proxy ($0 Cost):</span> Deploy a free Cloudflare Worker to get your own unshared IP that never hits shared rate limits.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const code = `export default {\n  async fetch(request) {\n    const url = new URL(request.url);\n    const subPath = url.pathname.replace(/^\\/api\\/binance-proxy/, '') + url.search;\n    const targetUrl = 'https://api.binance.com' + subPath;\n    const newHeaders = new Headers(request.headers);\n    newHeaders.delete('host');\n    return fetch(targetUrl, {\n      method: request.method,\n      headers: newHeaders,\n      body: (request.method !== 'GET' && request.method !== 'HEAD') ? request.body : undefined\n    });\n  }\n};`;
+                        if (navigator.clipboard) {
+                          navigator.clipboard.writeText(code);
+                          setCopiedWorkerCode(true);
+                          setTimeout(() => setCopiedWorkerCode(false), 2500);
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded bg-terminal-900 hover:bg-terminal-800 border border-terminal-border text-[10px] font-bold text-slate-200 shrink-0 transition-colors flex items-center gap-1 font-mono"
+                    >
+                      <Copy className="w-3 h-3 text-emerald-400" />
+                      <span>{copiedWorkerCode ? 'Copied Worker Code!' : 'Copy Worker Code'}</span>
                     </button>
                   </div>
                 </div>

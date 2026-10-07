@@ -11,7 +11,7 @@ import BalanceModal from './components/BalanceModal';
 import BrokerModal from './components/BrokerModal';
 import LoginPage from './components/LoginPage';
 import AdminPanel from './components/AdminPanel';
-import { Compass, Target, History, Terminal, Zap, ArrowDownRight, ArrowUpRight, Repeat, Coins, Key, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Compass, Target, History, Terminal, Zap, ArrowDownRight, ArrowUpRight, Repeat, Coins, Key, ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react';
 
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem('nexus_auth_token') || null);
@@ -599,6 +599,37 @@ export default function App() {
           </div>
         )}
 
+        {/* Binance IP Rate Limit Notice Banner */}
+        {isLiveMode && isSpot && data.brokers?.binance?.isRateLimited && (
+          <div className="p-4 rounded-xl bg-gradient-to-r from-amber-950/80 via-orange-950/70 to-terminal-950 border border-amber-500/70 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs font-mono shadow-2xl animate-pulse">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-lg bg-amber-500/20 text-amber-400 shrink-0 mt-0.5 border border-amber-500/50">
+                <AlertTriangle className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-amber-300 text-sm">
+                    🟠 Binance API Rate Limit Active (Temporary IP Cooldown)
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40 uppercase">
+                    {Math.ceil((data.brokers.binance.remainingBanSeconds || 0) / 60)}m Cooldown
+                  </span>
+                </div>
+                <p className="text-amber-100/90 font-sans text-xs mt-1 leading-relaxed">
+                  The proxy IP reached Binance's request weight cap. <strong>Your account is 100% safe and not banned.</strong> Live buy orders and balance polling are temporarily paused until <strong>{data.brokers.binance.bannedUntil ? new Date(data.brokers.binance.bannedUntil).toLocaleTimeString() : 'cooldown expires'} UTC</strong> to prevent penalties. Demo Paper trading continues trading normally.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => openBrokerModal('BINANCE')}
+              className="px-4 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition-all shadow-lg shrink-0 flex items-center gap-2"
+            >
+              <Key className="w-4 h-4" />
+              <span>Proxy & Cooldown Details</span>
+            </button>
+          </div>
+        )}
+
         {/* Disconnected Broker Notice when in LIVE mode */}
         {isLiveMode && !isBrokerConnected && (
           <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-500/60 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs font-mono shadow-2xl">
@@ -652,10 +683,16 @@ export default function App() {
               {isLiveMode ? (
                 <button
                   onClick={() => openBrokerModal('BINANCE')}
-                  className="px-2.5 py-0.5 rounded bg-emerald-600/30 hover:bg-emerald-600 text-emerald-200 hover:text-white border border-emerald-500/50 transition-colors flex items-center gap-1"
+                  className={`px-2.5 py-0.5 rounded border transition-colors flex items-center gap-1 font-bold ${
+                    data.brokers?.binance?.isRateLimited
+                      ? 'bg-amber-600/40 hover:bg-amber-600 text-amber-200 border-amber-500/60 shadow-md shadow-amber-600/20'
+                      : 'bg-emerald-600/30 hover:bg-emerald-600 text-emerald-200 hover:text-white border border-emerald-500/50'
+                  }`}
                 >
                   <Key className="w-3 h-3" />
-                  {data.brokers?.binance?.connected ? `Binance Connected ($${Number(data.portfolio?.balance ?? 0).toLocaleString('en-US')})` : 'Connect Binance'}
+                  {data.brokers?.binance?.isRateLimited
+                    ? `🟠 Binance Cooldown (${Math.ceil((data.brokers.binance.remainingBanSeconds || 0) / 60)}m)`
+                    : (data.brokers?.binance?.connected ? `Binance Connected ($${Number(data.portfolio?.balance ?? 0).toLocaleString('en-US')})` : 'Connect Binance')}
                 </button>
               ) : (
                 <button
@@ -894,6 +931,7 @@ export default function App() {
           isOpen={isBrokerModalOpen}
           onClose={() => setIsBrokerModalOpen(false)}
           user={user}
+          brokers={data.brokers}
           initialTab={brokerModalTab}
           onBrokerUpdated={() => {
             fetchDashboard();
