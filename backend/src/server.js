@@ -1329,6 +1329,24 @@ app.post('/api/portfolio/reset', async (req, res) => {
   }
 });
 
+// API: Clear closed trades ledger
+app.post('/api/ledger/clear', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = await authService.validateToken(token);
+    const userEmail = user ? user.email : 'default';
+    const { account } = req.body;
+    const targetAccount = (account || agentLoop.activeAccount).toUpperCase();
+    const userMode = (user && user.mode) ? user.mode : (userEmail === 'waiztahseen@gmail.com' ? 'LIVE' : 'SIMULATED');
+    agentLoop.clearLedger(userEmail, targetAccount, userMode);
+    agentLoop.log(`[${userMode}][${targetAccount}] Trade ledger successfully cleared. Win rate reset to 0%.`, 'INFO');
+    res.json({ success: true, dashboard: agentLoop.getDashboardData(userMode, targetAccount, userEmail) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Serve static frontend assets in production (Render single-service deployment)
 const distPath = path.resolve(__dirname, '../../frontend/dist');
 app.use(express.static(distPath));

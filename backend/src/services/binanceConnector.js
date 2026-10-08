@@ -303,6 +303,10 @@ export class BinanceConnector {
         this.bannedUntil = match ? Number(match[1]) : (now + 120000);
         this.status = 'RATE_LIMITED';
         console.warn(`[BinanceConnector] Weight rate limit hit. Backing off until ${new Date(this.bannedUntil).toISOString()}`);
+      } else if (data.code === -2015 || data.code === -2014) {
+        this.status = 'ERROR';
+        console.error(`[BinanceConnector] Permanent API Error: ${data.msg}. Proxy or API Key is invalid.`);
+        throw new Error(data.msg);
       }
       return this.cachedBalances;
     } catch (err) {
@@ -311,6 +315,11 @@ export class BinanceConnector {
         const match = errMsg.match(/banned until (\d+)/);
         this.bannedUntil = match ? Number(match[1]) : (now + 120000);
         this.status = 'RATE_LIMITED';
+        return this.cachedBalances;
+      }
+      if (errMsg.includes('-2015') || errMsg.includes('-2014') || errMsg.includes('Invalid API-key')) {
+        this.status = 'ERROR';
+        throw err;
       }
       return this.cachedBalances;
     }

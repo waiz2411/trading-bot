@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { History, ArrowUpRight, ArrowDownRight, CheckCircle2, XCircle, AlertCircle, ShieldCheck, Zap, Lock, Sparkles, Timer, ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-react';
 import { formatPrice } from '../utils/formatters.js';
 
-export default function TradeHistory({ closedTrades = [] }) {
+export default function TradeHistory({ closedTrades = [], onClearLedger }) {
   const [sortConfig, setSortConfig] = useState({ key: 'closeTime', direction: 'desc' });
 
   if (!closedTrades || closedTrades.length === 0) {
@@ -159,9 +159,19 @@ export default function TradeHistory({ closedTrades = [] }) {
             Closed Trades Audit Ledger ({closedTrades.length})
           </h2>
         </div>
-        <span className="text-[11px] font-mono text-slate-400">
-          Audited executions with intelligent exit classifications
-        </span>
+        <div className="flex items-center gap-4">
+          <span className="text-[11px] font-mono text-slate-400">
+            Audited executions with intelligent exit classifications
+          </span>
+          {onClearLedger && (
+            <button 
+              onClick={onClearLedger}
+              className="px-3 py-1 bg-red-900/20 hover:bg-red-900/40 border border-red-900/50 rounded text-[11px] font-mono text-red-400 transition-colors"
+            >
+              Clear Ledger
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="overflow-x-auto">

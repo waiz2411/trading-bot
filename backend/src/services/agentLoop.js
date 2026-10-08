@@ -795,13 +795,20 @@ export class AutonomousAgentLoop {
                 ? (this.liveSpotPositions || []).reduce((acc, p) => acc + (p.notional || 0), 0)
                 : uSpotEngine.activePositions.reduce((acc, p) => acc + (p.notional || 0), 0);
               const availableCash = Math.max(0, totalCash - currentUsed);
-              const minAllowed = isUserLive ? 5.0 : 0.5;
+              const minAllowed = isUserLive ? 5.1 : 0.5; // Binance requires strictly > $5 (5.1 is safe)
               const maxSafeNotional = isUserLive ? (Math.floor((availableCash - 0.03) * 100) / 100) : availableCash;
+              
+              if (maxSafeNotional < minAllowed) break;
+              
               const notional = Number(Math.max(minAllowed, Math.min(portionSize, maxSafeNotional)).toFixed(2));
 
-              if (notional < minAllowed) break;
-
-              const entryPrice = candidate.signal.entryPrice;
+              let entryPrice = candidate.signal.entryPrice;
+              
+              // Apply realistic 0.05% slippage to Demo to mirror live market orders
+              if (!isUserLive) {
+                entryPrice = entryPrice * 1.0005; // 0.05% worse entry
+              }
+              
               const precision = getAssetPrecision(entryPrice, candidate.asset.decimals || 4);
               const rawUnits = notional / entryPrice;
               const units = Number(rawUnits.toFixed(Math.max(4, precision)));
@@ -1143,20 +1150,20 @@ export class AutonomousAgentLoop {
           const holdMinutes = (Date.now() - openMs) / 60000;
           const maxHoldMinutes = pos.maxHoldMinutes || this.spotRiskManager.maxHoldMinutes || 45;
 
-          // A. Break-Even Profit Lock (+0.50% move -> Lock in +0.20% Profit)
+          // A. Break-Even Profit Lock (+0.80% move -> Lock in +0.35% Profit to clear fees)
           const peakGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;
           const precision = pos.decimals || 4;
-          if (peakGainPct >= 0.50) {
-            const beStop = Number((pos.entryPrice * 1.0020).toFixed(precision));
+          if (peakGainPct >= 0.80) {
+            const beStop = Number((pos.entryPrice * 1.0035).toFixed(precision));
             if (beStop > (pos.stopLoss || 0)) {
               pos.stopLoss = beStop;
               pos.breakEvenLocked = true;
             }
           }
 
-          // B. Hot-Coin Trailing Profit Lock (>= +1.00% gain -> Trail 0.35% behind peak)
-          if (peakGainPct >= 1.00) {
-            const trailStop = Number((pos.highestPrice * (1 - 0.0035)).toFixed(precision));
+          // B. Hot-Coin Trailing Profit Lock (>= +1.20% gain -> Trail 0.40% behind peak)
+          if (peakGainPct >= 1.20) {
+            const trailStop = Number((pos.highestPrice * (1 - 0.0040)).toFixed(precision));
             if (trailStop > (pos.stopLoss || 0)) {
               pos.stopLoss = trailStop;
               pos.trailingStopActive = true;
@@ -1207,6 +1214,14 @@ export class AutonomousAgentLoop {
 
             // Guard 2: Retry backoff - If previous exit failed on Binance, do not hammer API within 30 seconds
             if (pos.lastExitAttempt && (Date.now() - pos.lastExitAttempt < 30000)) {
+              continue;
+            }
+            pos.exitRetries = (pos.exitRetries || 0) + 1;
+            if (pos.exitRetries > 6) {
+              // If it fails 6 times (3 mins), stop auto-exiting to prevent permanent bans, wait for user intervention
+              if (pos.exitRetries === 7) {
+                 this.log(`🚨 [BINANCE LIVE] CRITICAL: ${rawAsset} exit failed 6 times. Auto-exit suspended. Manual intervention required via Binance App!`, 'ERROR');
+              }
               continue;
             }
             pos.lastExitAttempt = Date.now();
@@ -1485,6 +1500,29 @@ export class AutonomousAgentLoop {
     }
     this.liveSpotPositions = updatedLivePositions;
     return this.liveSpotPositions;
+  }
+
+  clearLedger(userEmail, accountType, mode) {
+    const isLive = mode === 'LIVE';
+    if (isLive) {
+      if (accountType === 'SPOT') {
+        this.liveSpotClosedTrades = [];
+        this.liveSpotRealizedPnL = 0;
+        this.savePersistedSpotTrades();
+      } else {
+        this.liveClosedTrades = [];
+        this.liveRealizedPnL = 0;
+        this.savePersistedTrades();
+      }
+    } else {
+      const engine = this.getEngine(accountType, userEmail);
+      if (engine) {
+        engine.closedTrades = [];
+        engine.realizedPnL = 0;
+        engine.totalPnL = 0;
+        engine.savePersistedState();
+      }
+    }
   }
 
   getDashboardData(forcedMode = null, forcedAccount = null, userEmail = null, userBrokers = null) {

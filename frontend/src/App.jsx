@@ -450,6 +450,25 @@ export default function App() {
     }
   };
 
+  const handleClearLedger = async () => {
+    const acc = data.activeAccount || 'MARGIN';
+    if (!window.confirm(`Clear trade ledger and reset win rate to 0% for [${acc}]? This action cannot be undone.`)) return;
+    try {
+      const res = await fetch('/api/ledger/clear', {
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ account: acc })
+      });
+      const json = await res.json();
+      if (json.success) {
+        showNotification(`[${acc}] Ledger cleared`, 'WARN');
+        await fetchDashboard();
+      }
+    } catch (err) {
+      showNotification('Failed to clear ledger', 'ERROR');
+    }
+  };
+
   const handleResetPortfolio = async (accountToReset = null) => {
     const acc = accountToReset || data.activeAccount || 'MARGIN';
     if (!window.confirm(`Reset [${acc}] demo portfolio balance?`)) return;
@@ -881,7 +900,10 @@ export default function App() {
 
         {activeTab === 'LEDGER' && (
           <div className="space-y-6">
-            <TradeHistory closedTrades={data.portfolio?.closedTrades} />
+            <TradeHistory 
+              closedTrades={data.portfolio?.closedTrades} 
+              onClearLedger={handleClearLedger}
+            />
           </div>
         )}
 
