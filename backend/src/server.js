@@ -278,23 +278,21 @@ app.post('/api/broker/binance/convert-dust', async (req, res) => {
   }
 });
 
-// Transparent Binance Proxy Route (Permits US nodes like Hostinger to proxy through European nodes like Render)
+// Transparent Binance Proxy Route with Hybrid Cloudflare & Direct Redundancy
 app.all('/api/binance-proxy/*', async (req, res) => {
   try {
     const subPath = req.originalUrl.replace(/^\/api\/binance-proxy/, '');
-    const targetUrl = `https://api.binance.com${subPath}`;
-    
-    const headers = {};
-    for (const [key, val] of Object.entries(req.headers)) {
-      const lower = key.toLowerCase();
-      if (lower !== 'host' && lower !== 'content-length' && lower !== 'connection') {
-        headers[key] = val;
-      }
-    }
+    const upstream = req.headers['x-binance-upstream'] || process.env.BINANCE_UPSTREAM_URL;
 
-    const fetchOptions = {
-      method: req.method,
-      headers
+    const buildHeaders = () => {
+      const headers = {};
+      for (const [key, val] of Object.entries(req.headers)) {
+        const lower = key.toLowerCase();
+        if (lower !== 'host' && lower !== 'content-length' && lower !== 'connection' && lower !== 'x-binance-upstream') {
+          headers[key] = val;
+        }
+      }
+      return headers;
     };
 
     const hasBody = req.body && (
@@ -302,17 +300,49 @@ app.all('/api/binance-proxy/*', async (req, res) => {
       (typeof req.body === 'string' && req.body.length > 0)
     );
 
-    if (req.method !== 'GET' && req.method !== 'HEAD' && hasBody) {
-      fetchOptions.body = typeof req.body === 'object' ? JSON.stringify(req.body) : req.body;
-      headers['content-type'] = 'application/json';
-    } else {
-      delete headers['content-type'];
+    const executeFetch = async (targetBase) => {
+      const headers = buildHeaders();
+      const fetchOptions = {
+        method: req.method,
+        headers
+      };
+      if (req.method !== 'GET' && req.method !== 'HEAD' && hasBody) {
+        fetchOptions.body = typeof req.body === 'object' ? JSON.stringify(req.body) : req.body;
+        headers['content-type'] = 'application/json';
+      } else {
+        delete headers['content-type'];
+      }
+      const targetUrl = `${targetBase.replace(/\/+$/, '')}${subPath}`;
+      return await fetch(targetUrl, fetchOptions);
+    };
+
+    // 1. If upstream (Cloudflare Worker) is provided, try upstream first
+    let binanceRes = null;
+    if (upstream && typeof upstream === 'string' && upstream.startsWith('http')) {
+      try {
+        const upRes = await executeFetch(upstream);
+        if (upRes.status !== 451) {
+          binanceRes = upRes;
+        }
+      } catch (_) {}
     }
 
-    const binanceRes = await fetch(targetUrl, fetchOptions);
+    // 2. If no upstream or upstream failed/451, fetch direct from Frankfurt
+    if (!binanceRes) {
+      binanceRes = await executeFetch('https://api.binance.com');
+      // 3. If direct Binance returned rate limit (429/418) and upstream exists, retry upstream
+      if ((binanceRes.status === 429 || binanceRes.status === 418) && upstream) {
+        try {
+          const retryRes = await executeFetch(upstream);
+          if (retryRes.ok) {
+            binanceRes = retryRes;
+          }
+        } catch (_) {}
+      }
+    }
+
     const contentType = binanceRes.headers.get('content-type') || 'application/json';
     const data = await binanceRes.text();
-    
     res.status(binanceRes.status).header('content-type', contentType).send(data);
   } catch (err) {
     res.status(502).json({ error: `Binance proxy error: ${err.message}` });

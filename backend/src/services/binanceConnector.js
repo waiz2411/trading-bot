@@ -23,6 +23,7 @@ export class BinanceConnector {
     this.timeOffset = 0; // Milliseconds difference with Binance server clock
     this.lastBalanceFetch = 0;
     this.bannedUntil = 0;
+    this.useEuropeanGateway = false;
   }
 
   get baseUrl() {
@@ -30,6 +31,35 @@ export class BinanceConnector {
     const proxy = process.env.BINANCE_PROXY_URL || this.proxyUrl;
     if (proxy) return proxy.replace(/\/+$/, '');
     return 'https://api.binance.com';
+  }
+
+  async request(endpoint, options = {}) {
+    const isWorkersDev = Boolean(this.proxyUrl && this.proxyUrl.includes('workers.dev'));
+    const europeanGateway = 'https://trading-bot-test-z6bi.onrender.com/api/binance-proxy';
+
+    let targetBase = this.baseUrl;
+    const headers = { ...(options.headers || {}) };
+
+    if (this.apiKey) {
+      headers['X-MBX-APIKEY'] = this.apiKey;
+    }
+
+    // When proxyUrl is a Cloudflare Worker (workers.dev) or when European failover is active,
+    // bridge via Frankfurt gateway with X-Binance-Upstream to ensure European Anycast IP routing.
+    if (!this.isTestnet && (isWorkersDev || this.useEuropeanGateway)) {
+      targetBase = europeanGateway;
+      if (this.proxyUrl) {
+        headers['X-Binance-Upstream'] = this.proxyUrl;
+      }
+    }
+
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${targetBase.replace(/\/+$/, '')}${cleanEndpoint}`;
+
+    return await fetch(url, {
+      ...options,
+      headers
+    });
   }
 
   configure({ apiKey, apiSecret, isTestnet = true, proxyUrl, connected, status, balances }) {
@@ -101,7 +131,7 @@ export class BinanceConnector {
   async syncTime() {
     try {
       const startTime = Date.now();
-      const res = await fetch(`${this.baseUrl}/api/v3/time`);
+      const res = await this.request('/api/v3/time');
       if (res.ok) {
         const data = await this.parseJsonResponse(res);
         const endTime = Date.now();
@@ -143,21 +173,17 @@ export class BinanceConnector {
 
     try {
       // 1. Test latency with ping
-      let pingRes = await fetch(`${this.baseUrl}/api/v3/ping`, { method: 'GET' });
-      if (!pingRes.ok && pingRes.status === 451) {
-        // Automatic failover: If the requested endpoint (e.g. Anycast worker running in US) returned 451,
-        // retry via our dedicated European Frankfurt gateway
-        const europeanGateway = 'https://trading-bot-test-z6bi.onrender.com/api/binance-proxy';
-        if (this.baseUrl !== europeanGateway) {
-          console.log(`[BinanceConnector] Endpoint ${this.baseUrl} returned HTTP 451. Retrying via European Frankfurt Gateway...`);
-          try {
-            const euPing = await fetch(`${europeanGateway}/api/v3/ping`, { method: 'GET' });
-            if (euPing.ok) {
-              pingRes = euPing;
-            }
-          } catch (eFail) {
-            console.warn('[BinanceConnector] European gateway fallback check failed:', eFail.message);
+      let pingRes = await this.request('/api/v3/ping', { method: 'GET' });
+      if (!pingRes.ok && pingRes.status === 451 && !this.useEuropeanGateway) {
+        console.log(`[BinanceConnector] Endpoint returned HTTP 451. Retrying via European Frankfurt Gateway...`);
+        this.useEuropeanGateway = true;
+        try {
+          const euPing = await this.request('/api/v3/ping', { method: 'GET' });
+          if (euPing.ok) {
+            pingRes = euPing;
           }
+        } catch (eFail) {
+          console.warn('[BinanceConnector] European gateway fallback check failed:', eFail.message);
         }
       }
 
@@ -181,11 +207,8 @@ export class BinanceConnector {
 
       // 3. Test authenticated account query
       const signedQuery = this.signQuery('');
-      const accountRes = await fetch(`${this.baseUrl}/api/v3/account?${signedQuery}`, {
-        method: 'GET',
-        headers: {
-          'X-MBX-APIKEY': this.apiKey
-        }
+      const accountRes = await this.request(`/api/v3/account?${signedQuery}`, {
+        method: 'GET'
       });
 
       const accountData = await this.parseJsonResponse(accountRes);
@@ -257,9 +280,8 @@ export class BinanceConnector {
 
     try {
       const signedQuery = this.signQuery('');
-      const res = await fetch(`${this.baseUrl}/api/v3/account?${signedQuery}`, {
-        method: 'GET',
-        headers: { 'X-MBX-APIKEY': this.apiKey }
+      const res = await this.request(`/api/v3/account?${signedQuery}`, {
+        method: 'GET'
       });
       const data = await this.parseJsonResponse(res);
       if (res.ok && data.balances) {
@@ -297,7 +319,7 @@ export class BinanceConnector {
     if (this.symbolFilters[symbol]) return this.symbolFilters[symbol];
 
     try {
-      const res = await fetch(`${this.baseUrl}/api/v3/exchangeInfo?symbol=${symbol}`);
+      const res = await this.request(`/api/v3/exchangeInfo?symbol=${symbol}`);
       if (res.ok) {
         const data = await this.parseJsonResponse(res);
         const symInfo = data.symbols?.[0];
@@ -319,7 +341,7 @@ export class BinanceConnector {
   async getPrice(symbol) {
     const binanceSymbol = this.formatSymbol(symbol);
     try {
-      const res = await fetch(`${this.baseUrl}/api/v3/ticker/price?symbol=${binanceSymbol}`);
+      const res = await this.request(`/api/v3/ticker/price?symbol=${binanceSymbol}`);
       if (res.ok) {
         const data = await this.parseJsonResponse(res);
         return parseFloat(data.price) || null;
@@ -377,11 +399,8 @@ export class BinanceConnector {
 
     const signedQuery = this.signQuery(params.toString());
 
-    const res = await fetch(`${this.baseUrl}/api/v3/order?${signedQuery}`, {
-      method: 'POST',
-      headers: {
-        'X-MBX-APIKEY': this.apiKey
-      }
+    const res = await this.request(`/api/v3/order?${signedQuery}`, {
+      method: 'POST'
     });
 
     const data = await this.parseJsonResponse(res);
@@ -426,11 +445,8 @@ export class BinanceConnector {
         params.append('asset', a);
       }
       const signedQuery = this.signQuery(params.toString());
-      const res = await fetch(`${this.baseUrl}/sapi/v1/asset/dust?${signedQuery}`, {
-        method: 'POST',
-        headers: {
-          'X-MBX-APIKEY': this.apiKey
-        }
+      const res = await this.request(`/sapi/v1/asset/dust?${signedQuery}`, {
+        method: 'POST'
       });
       const data = await this.parseJsonResponse(res);
       if (res.ok) {
