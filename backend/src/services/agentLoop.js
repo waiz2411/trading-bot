@@ -679,7 +679,8 @@ export class AutonomousAgentLoop {
 
         // 4B. PURE SPOT CRYPTO AUTO-OPEN FOR uKey
         const uMode = uConfig.mode || (uKey === this.currentUser ? this.currentMode : 'SIMULATED');
-        const isUserLive = (uMode === 'LIVE' && binanceConnector.connected);
+        const isUserBinanceOwner = Boolean(binanceConnector.ownerEmail ? binanceConnector.ownerEmail === uKey.toLowerCase() : uKey.toLowerCase() === 'waiztahseen@gmail.com');
+        const isUserLive = (uMode === 'LIVE' && binanceConnector.connected && isUserBinanceOwner);
         let usdtObj = (binanceConnector.cachedBalances || []).find(b => b.asset === 'USDT');
         if (isUserLive && (!usdtObj || !binanceConnector.cachedBalances || binanceConnector.cachedBalances.length === 0)) {
           const freshBals = await binanceConnector.getBalances(false).catch(() => []);
@@ -1474,7 +1475,7 @@ export class AutonomousAgentLoop {
     return this.liveSpotPositions;
   }
 
-  getDashboardData(forcedMode = null, forcedAccount = null, userEmail = null) {
+  getDashboardData(forcedMode = null, forcedAccount = null, userEmail = null, userBrokers = null) {
     const targetUser = userEmail || this.currentUser || 'default';
     const userConfig = this.getConfig(targetUser);
     const userMarginRisk = userConfig.marginRiskManager;
@@ -1487,8 +1488,46 @@ export class AutonomousAgentLoop {
     const isLive = currentMode === 'LIVE';
     const isSpot = activeAccount === 'SPOT';
 
-    const binanceStatus = binanceConnector.getStatus();
-    const mt5Status = mt5Connector.getStatus();
+    // Strict multi-tenant broker isolation: Only provide live broker connection if this specific user owns it
+    const userBinanceCfg = userBrokers?.binance;
+    const isThisUserBinanceOwner = Boolean(
+      (userBinanceCfg && userBinanceCfg.connected && userBinanceCfg.apiKey) ||
+      (binanceConnector.connected && binanceConnector.ownerEmail && binanceConnector.ownerEmail.toLowerCase() === targetUser.toLowerCase()) ||
+      (!binanceConnector.ownerEmail && targetUser.toLowerCase() === 'waiztahseen@gmail.com' && binanceConnector.connected)
+    );
+
+    const binanceStatus = isThisUserBinanceOwner
+      ? binanceConnector.getStatus()
+      : {
+          connected: false,
+          status: 'DISCONNECTED',
+          isTestnet: userBinanceCfg ? !!userBinanceCfg.isTestnet : true,
+          hasCredentials: false,
+          apiKeyMasked: '',
+          latencyMs: 0,
+          lastChecked: null,
+          balances: [],
+          isRateLimited: false,
+          bannedUntil: null,
+          remainingBanSeconds: 0,
+          rateLimitMessage: null
+        };
+
+    const userMT5Cfg = userBrokers?.mt5;
+    const isThisUserMT5Owner = Boolean(
+      (userMT5Cfg && userMT5Cfg.connected) ||
+      (mt5Connector.connected && mt5Connector.ownerEmail && mt5Connector.ownerEmail.toLowerCase() === targetUser.toLowerCase()) ||
+      (mt5Connector.connected && (!mt5Connector.ownerEmail || targetUser.toLowerCase() === 'waiztahseen@gmail.com'))
+    );
+
+    const mt5Status = isThisUserMT5Owner ? mt5Connector.getStatus() : {
+      connected: false,
+      status: 'DISCONNECTED',
+      accountInfo: null,
+      openPositions: [],
+      closedDeals: [],
+      error: null
+    };
     const pricesMap = marketDataService.getAllPricesMap();
 
     // 1. Resolve Margin Portfolio (MetaTrader 5 Only)

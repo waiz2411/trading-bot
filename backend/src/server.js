@@ -209,7 +209,7 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
 app.post('/api/broker/binance/config', (req, res) => {
   try {
     const { email, apiKey, apiSecret, isTestnet, proxyUrl } = req.body;
-    const status = binanceConnector.configure({ apiKey, apiSecret, isTestnet, proxyUrl });
+    const status = binanceConnector.configure({ apiKey, apiSecret, isTestnet, proxyUrl, ownerEmail: email });
     if (email) {
       authService.updateBrokerConfig(email, 'binance', {
         apiKey,
@@ -229,11 +229,11 @@ app.post('/api/broker/binance/config', (req, res) => {
 app.post('/api/broker/binance/test', async (req, res) => {
   try {
     const { email, apiKey, apiSecret, isTestnet, proxyUrl } = req.body;
+    const targetEmail = email || agentLoop.currentUser;
     if (apiKey || apiSecret || proxyUrl !== undefined) {
-      binanceConnector.configure({ apiKey, apiSecret, isTestnet, proxyUrl });
+      binanceConnector.configure({ apiKey, apiSecret, isTestnet, proxyUrl, ownerEmail: targetEmail });
     }
     const result = await binanceConnector.testConnection();
-    const targetEmail = email || agentLoop.currentUser;
     if (result.connected && targetEmail) {
       authService.updateBrokerConfig(targetEmail, 'binance', {
         apiKey,
@@ -602,7 +602,14 @@ app.get('/api/dashboard', async (req, res) => {
       uConfig.isAutoTradingEnabled = user.isAutoTradingEnabled;
     }
 
-    if (userMode === 'LIVE' && binanceConnector.connected) {
+    // Only update and sync balances for this user if this specific user has Binance connected and owns the active connector
+    const userBinanceCfg = user?.brokerConnections?.binance;
+    const isThisUserBinanceConnected = Boolean(
+      userBinanceCfg && userBinanceCfg.connected && userBinanceCfg.apiKey &&
+      (binanceConnector.ownerEmail ? binanceConnector.ownerEmail.toLowerCase() === userEmail.toLowerCase() : userEmail.toLowerCase() === 'waiztahseen@gmail.com')
+    );
+
+    if (userMode === 'LIVE' && isThisUserBinanceConnected && binanceConnector.connected) {
       const freshBals = await binanceConnector.getBalances(false).catch(() => {});
       if (freshBals && freshBals.length > 0 && userEmail && userEmail !== 'default') {
         authService.updateBrokerConfig(userEmail, 'binance', {
@@ -612,7 +619,7 @@ app.get('/api/dashboard', async (req, res) => {
       }
     }
 
-    const data = agentLoop.getDashboardData(userMode, userAccount, userEmail);
+    const data = agentLoop.getDashboardData(userMode, userAccount, userEmail, user?.brokerConnections);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1341,7 +1348,25 @@ try {
 
 if (!process.env.PRIMARY_BACKEND_URL && !process.env.RENDER) {
   const startupUser = 'waiztahseen@gmail.com';
-  agentLoop.setUserMode(startupUser, 'LIVE').then(() => {
+  agentLoop.setUserMode(startupUser, 'LIVE').then(async () => {
+    try {
+      const u = await authService.getUserByEmail(startupUser);
+      if (u && u.brokerConnections && u.brokerConnections.binance) {
+        const bCfg = u.brokerConnections.binance;
+        if (bCfg.apiKey && bCfg.apiSecret) {
+          binanceConnector.configure({
+            apiKey: bCfg.apiKey,
+            apiSecret: bCfg.apiSecret,
+            isTestnet: bCfg.isTestnet,
+            proxyUrl: bCfg.proxyUrl,
+            ownerEmail: startupUser,
+            connected: bCfg.connected,
+            status: bCfg.status,
+            balances: bCfg.balances
+          });
+        }
+      }
+    } catch (_) {}
     agentLoop.isAutoTradingEnabled = true;
     agentLoop.getConfig(startupUser).isAutoTradingEnabled = true;
     agentLoop.start();

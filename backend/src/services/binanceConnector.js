@@ -24,6 +24,7 @@ export class BinanceConnector {
     this.lastBalanceFetch = 0;
     this.bannedUntil = 0;
     this.useEuropeanGateway = false;
+    this.ownerEmail = '';
   }
 
   get baseUrl() {
@@ -62,10 +63,11 @@ export class BinanceConnector {
     });
   }
 
-  configure({ apiKey, apiSecret, isTestnet = true, proxyUrl, connected, status, balances }) {
+  configure({ apiKey, apiSecret, isTestnet = true, proxyUrl, connected, status, balances, ownerEmail }) {
     if (apiKey) this.apiKey = apiKey.trim();
     if (apiSecret) this.apiSecret = apiSecret.trim();
     if (proxyUrl !== undefined) this.proxyUrl = proxyUrl ? proxyUrl.trim() : '';
+    if (ownerEmail !== undefined) this.ownerEmail = (ownerEmail || '').trim().toLowerCase();
     this.isTestnet = !!isTestnet;
     if (connected !== undefined) {
       this.connected = Boolean(connected);
