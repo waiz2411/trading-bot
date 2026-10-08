@@ -1199,6 +1199,18 @@ export class AutonomousAgentLoop {
           }
 
           if (exitReason) {
+            // Guard 1: If user has PAUSED auto-trading, do not spam automated market exits
+            const userAutoTrading = this.configs[this.currentUser]?.isAutoTradingEnabled ?? this.isAutoTradingEnabled;
+            if (!userAutoTrading) {
+              continue;
+            }
+
+            // Guard 2: Retry backoff - If previous exit failed on Binance, do not hammer API within 30 seconds
+            if (pos.lastExitAttempt && (Date.now() - pos.lastExitAttempt < 30000)) {
+              continue;
+            }
+            pos.lastExitAttempt = Date.now();
+
             let orderSuccess = false;
             try {
               const balances = await binanceConnector.getBalances();
