@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { marketDataService } from './marketData.js';
 import { calculateTechnicalMetrics } from './technicalAnalysis.js';
-import { evaluateStrategyConfluence, evaluateSpotConfluence, evaluateBtcHealth, scanRelativeStrengthLeaders, scanHotGainerLeaders } from './strategyEngine.js';
+import { evaluateStrategyConfluence, evaluateSpotConfluence, evaluateBtcHealth, scanRelativeStrengthLeaders, scanHotGainerLeaders, evaluatePositionExit } from './strategyEngine.js';
 import { RiskManager } from './riskManager.js';
 import { PaperTradingEngine } from './paperTradingEngine.js';
 import { binanceConnector } from './binanceConnector.js';
@@ -1449,6 +1449,10 @@ export class AutonomousAgentLoop {
           maxHoldMinutes: this.spotRiskManager.maxHoldMinutes || 60,
           openTime: new Date().toISOString(),
           tradingStyle: 'SPOT_BUY',
+          exitRule: 'HOT_RETEST_TRAILING_LOCK',
+          trailingStopActive: false,
+          breakEvenLocked: false,
+          cycleCount: 0,
           feeRate,
           entryFee,
           estimatedExitFee: entryFee,
@@ -1462,6 +1466,7 @@ export class AutonomousAgentLoop {
         trackedPos.highestPrice = Math.max(trackedPos.highestPrice || 0, livePrice || 0);
         trackedPos.lowestPrice = Math.min(trackedPos.lowestPrice || Infinity, livePrice || Infinity);
         trackedPos.notional = notionalEst;
+        trackedPos.cycleCount = (trackedPos.cycleCount || 0) + 1;
       }
       updatedLivePositions.push(trackedPos);
     }
