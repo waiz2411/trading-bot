@@ -239,7 +239,7 @@ app.post('/api/broker/binance/test', async (req, res) => {
         apiKey,
         apiSecret,
         isTestnet: !!isTestnet,
-        proxyUrl: binanceConnector.proxyUrl || (proxyUrl ? proxyUrl.trim() : ''),
+        proxyUrl: (proxyUrl !== undefined && proxyUrl !== null && proxyUrl !== '') ? proxyUrl.trim() : (binanceConnector.proxyUrl || ''),
         connected: true,
         status: 'CONNECTED',
         balances: result.balances || [],

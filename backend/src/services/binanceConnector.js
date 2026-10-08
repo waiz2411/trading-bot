@@ -153,7 +153,6 @@ export class BinanceConnector {
           try {
             const euPing = await fetch(`${europeanGateway}/api/v3/ping`, { method: 'GET' });
             if (euPing.ok) {
-              this.proxyUrl = europeanGateway;
               pingRes = euPing;
             }
           } catch (eFail) {
