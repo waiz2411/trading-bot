@@ -97,7 +97,8 @@ export class BinanceConnector {
       apiKeyMasked: this.apiKey ? `${this.apiKey.slice(0, 6)}...` : '',
       latencyMs: this.latencyMs,
       lastChecked: this.lastChecked,
-      balances: this.cachedBalances,
+      balances: this.connected ? (this.cachedBalances || []) : [],
+      error: !this.connected ? (this.lastError || (this.apiKey ? 'Binance API not connected or credentials invalid' : 'API Key not provided')) : null,
       isRateLimited,
       bannedUntil: this.bannedUntil ? new Date(this.bannedUntil).toISOString() : null,
       remainingBanSeconds,
@@ -194,10 +195,12 @@ export class BinanceConnector {
       if (!accountRes.ok) {
         this.status = 'ERROR';
         this.connected = false;
+        this.cachedBalances = [];
         let errMsg = accountData.msg || `Binance API error (code ${accountData.code})`;
         if (accountData.code === -2015) {
           errMsg = 'Binance Error -2015: Invalid API-key, IP, or permissions. Please check: (1) "Enable Spot & Margin Trading" is checked in your Binance API settings, (2) If IP restriction is enabled, ensure your IP is added to the whitelist, and (3) You saved changes with Binance 2FA verification.';
         }
+        this.lastError = errMsg;
         return {
           success: false,
           latencyMs: this.latencyMs,
@@ -207,6 +210,7 @@ export class BinanceConnector {
 
       this.connected = true;
       this.status = 'CONNECTED';
+      this.lastError = null;
       this.lastChecked = new Date().toISOString();
 
       // Extract non-zero spot balances
@@ -232,17 +236,19 @@ export class BinanceConnector {
     } catch (err) {
       this.status = 'ERROR';
       this.connected = false;
+      this.cachedBalances = [];
+      this.lastError = err.message || 'Connection failed. Please check network and API credentials.';
       return {
         success: false,
         latencyMs: this.latencyMs,
-        error: err.message || 'Connection failed. Please check network and API credentials.'
+        error: this.lastError
       };
     }
   }
 
   async getBalances(force = false) {
     if (!this.connected) {
-      return this.cachedBalances;
+      return [];
     }
 
     const now = Date.now();

@@ -1,13 +1,68 @@
 import React from 'react';
-import { ArrowUpRight, ArrowDownRight, XCircle, Shield, Target, ShieldCheck, Lock, Activity, Timer } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, XCircle, Shield, Target, ShieldCheck, Lock, Activity, Timer, Key, ShieldAlert } from 'lucide-react';
 import { formatPrice, formatUnits } from '../utils/formatters.js';
 
-export default function ActivePositions({ positions = [], onCloseTrade, isClosingId, isLive = false, activeAccount = 'MARGIN' }) {
+export default function ActivePositions({
+  positions = [],
+  onCloseTrade,
+  isClosingId,
+  isLive = false,
+  isConnected = true,
+  activeAccount = 'MARGIN',
+  onOpenBrokerModal,
+  brokerError = null
+}) {
   const [, setNow] = React.useState(Date.now());
   React.useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // When in LIVE mode and the broker is disconnected or connection is lost
+  if (isLive && !isConnected) {
+    const brokerName = activeAccount === 'SPOT' ? 'Binance Spot' : 'MetaTrader 5';
+    const brokerTab = activeAccount === 'SPOT' ? 'BINANCE' : 'MT5';
+    return (
+      <div className="bg-terminal-850/90 border-2 border-amber-500/60 rounded-xl p-8 text-center shadow-2xl relative overflow-hidden">
+        <div className="w-16 h-16 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center mx-auto mb-4 text-amber-400">
+          <ShieldAlert className="w-8 h-8 text-amber-400" />
+        </div>
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-mono font-bold mb-3 uppercase">
+          <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+          Live Broker Disconnected / Connection Lost
+        </div>
+        <h3 className="text-lg font-bold font-mono text-white mb-2">
+          {brokerName} Account Disconnected
+        </h3>
+        <p className="text-sm text-slate-300 max-w-lg mx-auto mb-5 leading-relaxed">
+          {activeAccount === 'SPOT'
+            ? 'Your live Binance Spot API connection was lost or credentials need authorization. Connect your account again to stream your real balance and active trades.'
+            : 'Your live MetaTrader 5 terminal connection was lost or credentials need authorization. Connect your account again to stream your real balance and active trades.'}
+        </p>
+        {brokerError && (
+          <div className="max-w-md mx-auto mb-5 p-3 rounded-lg bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs font-mono text-left">
+            <span className="font-bold">Notice:</span> {brokerError}
+          </div>
+        )}
+        <div className="flex items-center justify-center gap-3">
+          <button
+            onClick={() => onOpenBrokerModal && onOpenBrokerModal(brokerTab)}
+            className={`px-6 py-3 rounded-xl font-bold font-mono text-sm text-white shadow-xl flex items-center gap-2 transition-all hover:scale-105 ${
+              activeAccount === 'SPOT'
+                ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30'
+                : 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/30'
+            }`}
+          >
+            <Key className="w-4 h-4" />
+            <span>Connect Your Account Again</span>
+          </button>
+        </div>
+        <div className="mt-4 text-xs font-mono text-slate-500">
+          Dummy data simulation is disabled in Live mode to protect real portfolio integrity.
+        </div>
+      </div>
+    );
+  }
 
   if (!positions || positions.length === 0) {
     return (

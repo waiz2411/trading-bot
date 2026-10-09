@@ -879,7 +879,10 @@ export default function App() {
               onCloseTrade={handleCloseTrade}
               isClosingId={isClosingId}
               isLive={isLiveMode}
+              isConnected={isBrokerConnected}
               activeAccount={data.activeAccount}
+              onOpenBrokerModal={openBrokerModal}
+              brokerError={isSpot ? (data.brokers?.binance?.error || data.portfolio?.error) : (data.brokers?.mt5?.error || data.portfolio?.error)}
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -909,7 +912,10 @@ export default function App() {
                 onCloseTrade={handleCloseTrade}
                 isClosingId={isClosingId}
                 isLive={isLiveMode}
+                isConnected={isBrokerConnected}
                 activeAccount={data.activeAccount}
+                onOpenBrokerModal={openBrokerModal}
+                brokerError={isSpot ? (data.brokers?.binance?.error || data.portfolio?.error) : (data.brokers?.mt5?.error || data.portfolio?.error)}
               />
               <AgentLogs logs={data.logs} />
             </div>

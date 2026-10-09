@@ -1699,9 +1699,15 @@ export class AutonomousAgentLoop {
           realizedPnL: 0,
           totalPnL: 0,
           totalPnLPct: 0,
+          winRate: 0,
+          winCount: 0,
+          lossCount: 0,
+          breakEvenCount: 0,
+          totalTrades: 0,
           activePositions: [],
           closedTrades: [],
-          statusMessage: 'MetaTrader 5 Margin Account Not Connected. Connect MT5 to view real balance and trade.'
+          error: mt5Status.error || 'MetaTrader 5 connection lost. Please connect your account again.',
+          statusMessage: 'MetaTrader 5 Margin Account Disconnected. Connect your account again to view live balance and active trades.'
         };
       }
     } else {
@@ -1718,8 +1724,7 @@ export class AutonomousAgentLoop {
     // 2. Resolve Spot Portfolio (Binance Spot Only)
     let spotPortfolio;
     if (isLive) {
-      const hasBinanceBalances = Array.isArray(binanceStatus.balances) && binanceStatus.balances.length > 0;
-      if (binanceStatus.connected || hasBinanceBalances) {
+      if (binanceStatus.connected) {
         this.syncLiveSpotPositions(binanceStatus.balances, pricesMap);
 
         const usdtObj = (binanceStatus.balances || []).find(b => b.asset === 'USDT');
@@ -1815,6 +1820,7 @@ export class AutonomousAgentLoop {
           closedTrades: liveTrades
         };
       } else {
+        this.liveSpotPositions = [];
         spotPortfolio = {
           isLive: true,
           isConnected: false,
@@ -1829,9 +1835,15 @@ export class AutonomousAgentLoop {
           realizedPnL: 0,
           totalPnL: 0,
           totalPnLPct: 0,
+          winRate: 0,
+          winCount: 0,
+          lossCount: 0,
+          breakEvenCount: 0,
+          totalTrades: 0,
           activePositions: [],
           closedTrades: [],
-          statusMessage: 'Binance Spot Exchange Not Connected. Connect Binance API to view real balance and trade.'
+          error: binanceStatus.error || 'Binance Spot connection lost. Please connect your account again.',
+          statusMessage: 'Binance Spot Exchange Disconnected. Connect your account again to view live balance and active trades.'
         };
       }
     } else {
@@ -1919,7 +1931,65 @@ export class AutonomousAgentLoop {
       marketScan: isSpot
         ? (this.latestScanResults || []).filter(s => s.category === 'Crypto' && s.isHalal)
         : (this.latestScanResults || []).filter(s => s.category !== 'Crypto' || ['BTC-USD', 'ETH-USD', 'BNB-USD', 'XRP-USD'].includes(s.symbol)),
-      logs: this.agentLogs,
+      logs: (() => {
+        let list = this.agentLogs || [];
+        if (isLive) {
+          if (isSpot) {
+            list = list.filter(l => {
+              const m = l.message || '';
+              return !m.includes('[SPOT DEMO]') &&
+                     !m.includes('[MARGIN DEMO]') &&
+                     !m.includes('[MARGIN LIVE]') &&
+                     !m.includes('[MT5') &&
+                     !m.includes('simulation completed') &&
+                     !m.includes('- default]');
+            });
+            if (!binanceStatus.connected) {
+              list = [
+                {
+                  timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+                  message: '🔌 [BINANCE LIVE] Binance Spot connection lost or credentials need authorization. Connect your account again to stream live telemetry.',
+                  type: 'WARN'
+                },
+                ...list
+              ];
+            }
+          } else {
+            list = list.filter(l => {
+              const m = l.message || '';
+              return !m.includes('[SPOT DEMO]') &&
+                     !m.includes('[MARGIN DEMO]') &&
+                     !m.includes('[SPOT LIVE]') &&
+                     !m.includes('[BINANCE') &&
+                     !m.includes('simulation completed') &&
+                     !m.includes('- default]');
+            });
+            if (!mt5Status.connected) {
+              list = [
+                {
+                  timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+                  message: '🔌 [MT5 LIVE] MetaTrader 5 connection lost. Connect your account again to stream live telemetry.',
+                  type: 'WARN'
+                },
+                ...list
+              ];
+            }
+          }
+        } else {
+          if (isSpot) {
+            list = list.filter(l => {
+              const m = l.message || '';
+              return !m.includes('[MARGIN DEMO]') && !m.includes('[MARGIN LIVE]') && !m.includes('[MT5') && !m.includes('[BINANCE LIVE]');
+            });
+          } else {
+            list = list.filter(l => {
+              const m = l.message || '';
+              return !m.includes('[SPOT DEMO]') && !m.includes('[SPOT LIVE]') && !m.includes('[BINANCE LIVE]');
+            });
+          }
+        }
+        return list;
+      })(),
       serverTime: new Date().toISOString()
     };
   }

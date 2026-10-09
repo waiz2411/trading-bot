@@ -215,9 +215,9 @@ export class MT5Connector {
       latencyMs: this.latencyMs,
       lastChecked: this.lastChecked,
       algoTradingEnabled: this.algoTradingEnabled ?? true,
-      accountInfo: this.accountInfo,
-      openPositions: this.openPositions || [],
-      realizedProfit: this.realizedProfit !== undefined ? this.realizedProfit : 0,
+      accountInfo: this.connected ? this.accountInfo : null,
+      openPositions: this.connected ? (this.openPositions || []) : [],
+      realizedProfit: this.connected ? (this.realizedProfit !== undefined ? this.realizedProfit : 0) : 0,
       closedDeals: this.closedDeals || [],
       marketTicks: this.marketTicks || {},
       activeEaSessions: this.eaSessions.size

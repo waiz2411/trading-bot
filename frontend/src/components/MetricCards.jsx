@@ -140,7 +140,16 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
           </span>
           <Activity className="w-3.5 h-3.5 text-slate-400" />
         </div>
-        {isSpot ? (
+        {isLive && !isConnected ? (
+          <>
+            <div className="text-xl font-bold font-mono text-amber-400 tracking-tight">
+              --
+            </div>
+            <div className="text-[11px] font-mono mt-1 text-amber-400/80">
+              <span>⚠️ Broker Offline</span>
+            </div>
+          </>
+        ) : isSpot ? (
           <>
             <div className={`text-xl font-bold font-mono tracking-tight ${activePositions.length > 0 ? 'text-white' : 'text-slate-400'}`}>
               ${activePositions.length > 0 ? (portfolio.holdingValue || ((portfolio.usedMargin || 0) + unrealizedPnL) || activePositions.reduce((s, p) => s + (p.notional || (p.currentPrice * p.units) || (p.entryPrice * p.units) || 0), 0)).toFixed(2) : '0.00'}
@@ -165,7 +174,7 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
             </div>
           </>
         )}
-        <div className={`absolute bottom-0 left-0 right-0 h-[2px] ${isUnrealizedProfit ? 'bg-emerald-500' : 'bg-rose-500'} opacity-60`} />
+        <div className={`absolute bottom-0 left-0 right-0 h-[2px] ${isLive && !isConnected ? 'bg-amber-500' : isUnrealizedProfit ? 'bg-emerald-500' : 'bg-rose-500'} opacity-60`} />
       </div>
 
       {/* Card 3: Realized PnL & Broker Fees */}
@@ -174,14 +183,28 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
           <span className="font-mono uppercase tracking-wider text-[11px]">Net Realized PnL</span>
           <Target className="w-3.5 h-3.5 text-slate-400" />
         </div>
-        <div className={`text-xl font-bold font-mono tracking-tight ${isRealizedProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
-          {isRealizedProfit ? '+' : '-'}${Math.abs(realizedPnL).toFixed(2)}
-        </div>
-        <div className="text-[11px] font-mono mt-1 text-slate-400 flex items-center justify-between">
-          <span className="text-amber-400/90">Fees: -${(portfolio.totalFeesPaid || 0).toFixed(2)}</span>
-          <span>{totalTrades} closed</span>
-        </div>
-        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-slate-600 opacity-60" />
+        {isLive && !isConnected ? (
+          <>
+            <div className="text-xl font-bold font-mono text-amber-400 tracking-tight">
+              --
+            </div>
+            <div className="text-[11px] font-mono mt-1 text-amber-400/80 flex items-center justify-between">
+              <span>Fees: --</span>
+              <span>Disconnected</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className={`text-xl font-bold font-mono tracking-tight ${isRealizedProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {isRealizedProfit ? '+' : '-'}${Math.abs(realizedPnL).toFixed(2)}
+            </div>
+            <div className="text-[11px] font-mono mt-1 text-slate-400 flex items-center justify-between">
+              <span className="text-amber-400/90">Fees: -${(portfolio.totalFeesPaid || 0).toFixed(2)}</span>
+              <span>{totalTrades} closed</span>
+            </div>
+          </>
+        )}
+        <div className={`absolute bottom-0 left-0 right-0 h-[2px] ${isLive && !isConnected ? 'bg-amber-500' : 'bg-slate-600'} opacity-60`} />
       </div>
 
       {/* Card 4: Win Rate % */}
@@ -190,17 +213,31 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
           <span className="font-mono uppercase tracking-wider text-[11px]">Win Rate</span>
           <Award className="w-3.5 h-3.5 text-amber-400" />
         </div>
-        <div className="text-xl font-bold font-mono text-white tracking-tight flex items-center justify-between">
-          <span>{displayWinRate.toFixed(1)}%</span>
-          <span className="text-xs text-slate-400 font-mono font-normal">({totalTrades} trades)</span>
-        </div>
-        <div className="text-[11px] font-mono mt-1 text-slate-400 flex items-center gap-1.5">
-          <span className="text-emerald-400 font-semibold">{winCount}W</span>
-          <span>/</span>
-          <span className="text-rose-400 font-semibold">{lossCount}L</span>
-          <span>/</span>
-          <span className="text-indigo-300 font-semibold">{breakEvenCount}BE</span>
-        </div>
+        {isLive && !isConnected ? (
+          <>
+            <div className="text-xl font-bold font-mono text-amber-400 tracking-tight flex items-center justify-between">
+              <span>--</span>
+              <span className="text-xs text-amber-400/80 font-mono font-normal">Offline</span>
+            </div>
+            <div className="text-[11px] font-mono mt-1 text-slate-400 flex items-center gap-1.5">
+              <span>Connect broker to stream</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-xl font-bold font-mono text-white tracking-tight flex items-center justify-between">
+              <span>{displayWinRate.toFixed(1)}%</span>
+              <span className="text-xs text-slate-400 font-mono font-normal">({totalTrades} trades)</span>
+            </div>
+            <div className="text-[11px] font-mono mt-1 text-slate-400 flex items-center gap-1.5">
+              <span className="text-emerald-400 font-semibold">{winCount}W</span>
+              <span>/</span>
+              <span className="text-rose-400 font-semibold">{lossCount}L</span>
+              <span>/</span>
+              <span className="text-indigo-300 font-semibold">{breakEvenCount}BE</span>
+            </div>
+          </>
+        )}
         <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-500 opacity-60" />
       </div>
 
