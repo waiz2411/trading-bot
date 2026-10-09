@@ -395,7 +395,8 @@ export default function App() {
     try {
       const res = await fetch('/api/trades/close-all', {
         method: 'POST',
-        headers: getAuthHeaders()
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ account: data.activeAccount })
       });
       const json = await res.json();
       if (json.success) {
@@ -412,7 +413,7 @@ export default function App() {
       const res = await fetch('/api/trades/execute', {
         method: 'POST',
         headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ symbol, side })
+        body: JSON.stringify({ symbol, side, account: data.activeAccount })
       });
       const json = await res.json();
       if (json.success) {
@@ -577,42 +578,59 @@ export default function App() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-6">
         {/* Live Broker Execution Routing Banner (Active when test@gmail.com / LIVE mode) */}
         {user?.mode === 'LIVE' && (
-          <div className="p-4 rounded-xl bg-gradient-to-r from-rose-950/40 via-amber-950/25 to-emerald-950/30 border border-amber-500/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs font-mono shadow-lg">
+          <div className={`p-4 rounded-xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs font-mono shadow-lg ${
+            isSpot
+              ? 'bg-gradient-to-r from-emerald-950/40 via-teal-950/25 to-terminal-950 border-emerald-500/40'
+              : 'bg-gradient-to-r from-amber-950/40 via-indigo-950/25 to-terminal-950 border-amber-500/40'
+          }`}>
             <div className="flex items-center gap-3">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping shrink-0" />
+              <span className={`w-2.5 h-2.5 rounded-full animate-ping shrink-0 ${isSpot ? 'bg-emerald-500' : 'bg-amber-500'}`} />
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-rose-400 uppercase tracking-wider">LIVE BROKER ROUTING ACTIVE:</span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
-                    REAL EXECUTION
+                  <span className={`font-bold uppercase tracking-wider ${isSpot ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {isSpot ? 'LIVE SPOT EXECUTION ACTIVE:' : 'LIVE MARGIN SCALPER ACTIVE:'}
+                  </span>
+                  <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold border ${
+                    isSpot ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                  }`}>
+                    REAL BROKER
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-300 font-sans mt-0.5">
-                  Spot orders route directly to <strong>Binance API</strong>. 500x Margin Scalps dispatch to <strong>MetaTrader 5 (MT5)</strong>.
+                  {isSpot ? (
+                    <span>Spot orders execute directly on <strong>Binance Spot API</strong> (Long Only, 0x Leverage, Halal Crypto).</span>
+                  ) : (
+                    <span>Margin scalps dispatch directly to <strong>MetaTrader 5 (MT5)</strong> (500x Leverage, Bi-directional).</span>
+                  )}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-terminal-950 border border-terminal-border text-[11px]">
-                <span className={`w-2 h-2 rounded-full ${data.brokers?.binance?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-                <span className="text-slate-400">Binance Spot:</span>
-                <span className={data.brokers?.binance?.connected ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
-                  {data.brokers?.binance?.connected ? 'Connected' : 'Offline'}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-terminal-950 border border-terminal-border text-[11px]">
-                <span className={`w-2 h-2 rounded-full ${data.brokers?.mt5?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-                <span className="text-slate-400">MT5 Margin:</span>
-                <span className={data.brokers?.mt5?.connected ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
-                  {data.brokers?.mt5?.connected ? 'Connected' : 'Offline'}
-                </span>
-              </div>
+              {isSpot ? (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-terminal-950 border border-terminal-border text-[11px]">
+                  <span className={`w-2 h-2 rounded-full ${data.brokers?.binance?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                  <span className="text-slate-400">Binance Spot:</span>
+                  <span className={data.brokers?.binance?.connected ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
+                    {data.brokers?.binance?.connected ? 'Connected' : 'Offline'}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-terminal-950 border border-terminal-border text-[11px]">
+                  <span className={`w-2 h-2 rounded-full ${data.brokers?.mt5?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                  <span className="text-slate-400">MT5 Margin:</span>
+                  <span className={data.brokers?.mt5?.connected ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
+                    {data.brokers?.mt5?.connected ? 'Connected' : 'Offline'}
+                  </span>
+                </div>
+              )}
               <button
                 onClick={() => openBrokerModal(isSpot ? 'BINANCE' : 'MT5')}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition-colors shadow-sm"
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-white font-bold text-xs transition-colors shadow-sm ${
+                  isSpot ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-amber-600 hover:bg-amber-500'
+                }`}
               >
                 <Key className="w-3.5 h-3.5" />
-                <span>Configure APIs</span>
+                <span>Configure {isSpot ? 'Binance API' : 'MT5 Broker'}</span>
               </button>
             </div>
           </div>

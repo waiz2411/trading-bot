@@ -727,17 +727,15 @@ def close_order():
     return jsonify({'success': True, 'closed': closed_count})
 
 HOSTINGER_BACKEND = "https://slategrey-reindeer-680249.hostingersite.com"
-RENDER_BACKEND = "https://trading-bot-test-z6bi.onrender.com"
 
-def register_tunnel_with_render(tunnel_url):
+def register_tunnel_with_backend(tunnel_url):
     import os
     import urllib.request
     import json
     backends = [
         "http://localhost:5000",
         os.environ.get("BACKEND_URL"),
-        HOSTINGER_BACKEND,
-        RENDER_BACKEND
+        HOSTINGER_BACKEND
     ]
     registered_any = False
     for base in backends:
@@ -801,14 +799,14 @@ def start_cloudflared_subservice():
                         print("\n" + "=" * 60)
                         print(f"[*] DETECTED CLOUDFLARE PUBLIC TUNNEL: {tunnel_url}")
                         print("=" * 60)
-                        register_tunnel_with_render(tunnel_url)
+                        register_tunnel_with_backend(tunnel_url)
 
-                        # Keep Render synced via periodic heartbeat every 60s
+                        # Keep Backend synced via periodic heartbeat every 60s
                         def heartbeat():
                             import time
                             while True:
                                 time.sleep(60)
-                                register_tunnel_with_render(tunnel_url)
+                                register_tunnel_with_backend(tunnel_url)
                         threading.Thread(target=heartbeat, daemon=True).start()
 
         t = threading.Thread(target=monitor_tunnel, daemon=True)
@@ -833,7 +831,7 @@ if __name__ == '__main__':
 
     if parser_tunnel:
         print(f"[*] Custom tunnel passed: {parser_tunnel}")
-        register_tunnel_with_render(parser_tunnel)
+        register_tunnel_with_backend(parser_tunnel)
     elif not no_cf:
         start_cloudflared_subservice()
 

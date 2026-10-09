@@ -52,7 +52,7 @@ export class PaperTradingEngine {
       }
     } catch (_) {}
 
-    // 2. Central MySQL Database Synchronization (Keeps Hostinger, Render, and custom domains 100% unified)
+    // 2. Central MySQL Database Synchronization (Keeps Hostinger server and custom domains 100% unified)
     this.syncFromDatabase().catch(() => {});
   }
 

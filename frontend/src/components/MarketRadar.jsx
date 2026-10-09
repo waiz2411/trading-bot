@@ -4,25 +4,31 @@ import { formatPrice } from '../utils/formatters.js';
 
 export default function MarketRadar({ marketScan = [], onSelectAsset, onQuickTrade, activeAccount = 'MARGIN' }) {
   const isSpot = activeAccount === 'SPOT';
-  const [selectedCategory, setSelectedCategory] = useState(isSpot ? 'Crypto' : 'ALL');
+  const [selectedCategory, setSelectedCategory] = useState(isSpot ? 'Halal Crypto' : 'ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [highConfidenceOnly, setHighConfidenceOnly] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
   React.useEffect(() => {
-    if (activeAccount === 'SPOT') {
-      setSelectedCategory('Crypto');
-    }
-  }, [activeAccount]);
+    setSelectedCategory(isSpot ? 'Halal Crypto' : 'ALL');
+  }, [activeAccount, isSpot]);
 
-  const categories = isSpot ? ['Crypto', 'ALL'] : ['ALL', 'Crypto', 'Forex', 'Commodities', 'Indices'];
+  const categories = isSpot ? ['Halal Crypto'] : ['ALL', 'Forex', 'Commodities', 'Indices', 'Crypto'];
 
   const filtered = marketScan.filter(item => {
-    const matchesCategory = selectedCategory === 'ALL' || item.category.toLowerCase() === selectedCategory.toLowerCase();
+    if (isSpot) {
+      if (item.category !== 'Crypto' || !item.isHalal) return false;
+    } else {
+      // In Margin mode, exclude Binance-exclusive altcoins not tradable on MT5
+      const MT5_INSTITUTIONAL = new Set(['BTC-USD', 'ETH-USD', 'BNB-USD', 'XRP-USD']);
+      if (item.category === 'Crypto' && !MT5_INSTITUTIONAL.has(item.symbol)) return false;
+      const matchesCategory = selectedCategory === 'ALL' || item.category.toLowerCase() === selectedCategory.toLowerCase();
+      if (!matchesCategory) return false;
+    }
     const matchesSearch = item.symbol.toLowerCase().includes(searchQuery.toLowerCase()) || item.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesConfidence = !highConfidenceOnly || (item.signal && item.signal.confidence >= 70);
-    return matchesCategory && matchesSearch && matchesConfidence;
+    return matchesSearch && matchesConfidence;
   }).sort((a, b) => {
     const confA = a.signal?.confidence || 0;
     const confB = b.signal?.confidence || 0;
@@ -90,10 +96,10 @@ export default function MarketRadar({ marketScan = [], onSelectAsset, onQuickTra
         <div className="flex items-center space-x-2">
           <Compass className="w-4 h-4 text-indigo-400" />
           <h2 className="text-sm font-bold font-mono text-white tracking-wide uppercase">
-            Global Market Radar
+            {isSpot ? 'Halal Spot Crypto Radar' : 'Global Margin Market Radar'}
           </h2>
           <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-terminal-800 text-slate-400 border border-terminal-border">
-            {filtered.length} Assets
+            {filtered.length} {isSpot ? 'Halal Coins' : 'Assets'}
           </span>
         </div>
 
@@ -284,14 +290,25 @@ export default function MarketRadar({ marketScan = [], onSelectAsset, onQuickTra
                           <span>Thesis</span>
                         </button>
                         {item.signal?.action !== 'NEUTRAL' && (
-                          <button
-                            onClick={() => onQuickTrade(item.symbol, item.signal.side)}
-                            className="px-2 py-1 rounded bg-indigo-600/30 hover:bg-indigo-600 border border-indigo-500/50 text-indigo-200 hover:text-white text-xs flex items-center gap-1 transition-colors"
-                            title={`Execute Demo ${item.signal.side}`}
-                          >
-                            <Zap className="w-3 h-3" />
-                            <span>Trade</span>
-                          </button>
+                          isSpot ? (
+                            <button
+                              onClick={() => onQuickTrade(item.symbol, 'LONG')}
+                              className="px-2 py-1 rounded bg-emerald-600/30 hover:bg-emerald-600 border border-emerald-500/50 text-emerald-200 hover:text-white text-xs flex items-center gap-1 transition-colors font-bold"
+                              title="Execute Pure Spot Buy"
+                            >
+                              <Coins className="w-3 h-3 text-emerald-400" />
+                              <span>Spot Buy</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => onQuickTrade(item.symbol, item.signal.side)}
+                              className="px-2 py-1 rounded bg-indigo-600/30 hover:bg-indigo-600 border border-indigo-500/50 text-indigo-200 hover:text-white text-xs flex items-center gap-1 transition-colors"
+                              title={`Execute Demo ${item.signal.side}`}
+                            >
+                              <Zap className="w-3 h-3" />
+                              <span>Trade</span>
+                            </button>
+                          )
                         )}
                       </div>
                     </td>

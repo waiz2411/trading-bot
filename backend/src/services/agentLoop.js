@@ -52,6 +52,7 @@ export class AutonomousAgentLoop {
     if (!this.configs[userKey]) {
       this.configs[userKey] = {
         mode: 'SIMULATED',
+        activeAccount: userKey === 'waiztahseen@gmail.com' ? 'SPOT' : 'MARGIN',
         isAutoTradingEnabled: undefined,
         lastSpotTradeOpenedAt: 0,
         lastMarginTradeOpenedAt: 0,
@@ -229,14 +230,18 @@ export class AutonomousAgentLoop {
       : this.marginRiskManager;
   }
 
-  switchAccount(account) {
+  switchAccount(account, userEmail = null) {
     const target = (account || '').toUpperCase() === 'SPOT' ? 'SPOT' : 'MARGIN';
-    this.activeAccount = target;
-    if (this.currentUser) {
-      authService.setUserActiveAccount(this.currentUser, target);
+    const email = userEmail || this.currentUser;
+    if (email) {
+      this.getConfig(email).activeAccount = target;
+      authService.setUserActiveAccount(email, target).catch(() => {});
     }
-    this.log(`🔄 Switched active view to: [${target}] Account`, 'INFO');
-    return this.getDashboardData();
+    if (!userEmail || userEmail === this.currentUser) {
+      this.activeAccount = target;
+    }
+    this.log(`🔄 Switched active view to: [${target}] Account for [${email || 'default'}]`, 'INFO');
+    return this.getDashboardData(null, target, email);
   }
 
   log(message, type = 'INFO') {
@@ -551,13 +556,17 @@ export class AutonomousAgentLoop {
         const uAutoTrading = uConfig.isAutoTradingEnabled ?? this.isAutoTradingEnabled;
         if (!uAutoTrading) continue;
 
+        const uActiveAccount = (uConfig.activeAccount || (uKey === this.currentUser ? this.activeAccount : 'MARGIN')).toUpperCase();
+        const isSpotUser = uActiveAccount === 'SPOT';
+        const isMarginUser = uActiveAccount === 'MARGIN';
+
         const uSpotEngine = this.getEngine('SPOT', uKey);
         const uMarginEngine = this.getEngine('MARGIN', uKey);
         const uSpotRisk = uConfig.spotRiskManager;
         const uMarginRisk = uConfig.marginRiskManager;
 
-        // 4A. MARGIN SCALPER AUTO-OPEN FOR uKey
-        if (validMarginSignals.length > 0) {
+        // 4A. MARGIN SCALPER AUTO-OPEN FOR uKey (STRICTLY MARGIN ACCOUNTS ONLY)
+        if (isMarginUser && validMarginSignals.length > 0) {
           const portfolioState = uMarginEngine.getPortfolioState();
           const accountType = (mt5Connector.accountInfo?.accountType || (String(mt5Connector.accountInfo?.currency || '').includes('USC') ? 'CENT' : 'STANDARD')).toUpperCase();
           const liveBal = Number(mt5Connector.accountInfo?.balance || portfolioState.balance || 100);
@@ -677,7 +686,9 @@ export class AutonomousAgentLoop {
           }
         }
 
-        // 4B. PURE SPOT CRYPTO AUTO-OPEN FOR uKey
+        // 4B. PURE SPOT CRYPTO AUTO-OPEN FOR uKey (STRICTLY SPOT ACCOUNTS ONLY)
+        if (!isSpotUser) continue;
+
         const uMode = uConfig.mode || (uKey === this.currentUser ? this.currentMode : 'SIMULATED');
         const isUserBinanceOwner = Boolean(binanceConnector.ownerEmail ? binanceConnector.ownerEmail === uKey.toLowerCase() : uKey.toLowerCase() === 'waiztahseen@gmail.com');
         const isUserLive = (uMode === 'LIVE' && binanceConnector.connected && isUserBinanceOwner);
@@ -877,6 +888,8 @@ export class AutonomousAgentLoop {
       // ==========================================
       // A. Margin Engine Trigger Checks (For ALL users' demo engines)
       for (const uKey of Object.keys(this.engines)) {
+        const uActiveAccount = (this.getConfig(uKey).activeAccount || (uKey === this.currentUser ? this.activeAccount : 'MARGIN')).toUpperCase();
+        if (uActiveAccount !== 'MARGIN') continue;
         const uMarginEngine = this.engines[uKey]?.MARGIN;
         if (uMarginEngine) {
           const marginClosed = uMarginEngine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
@@ -904,7 +917,8 @@ export class AutonomousAgentLoop {
 
       // A2. Live MT5 Broker Scalp Watchdog: Active PnL Guardian, Profit Banking & Expiry Watchdog
       // Actively enforces 1.5% balance loss cap, 1:1.3 R:R take profit, break-even locks, trailing stops, and fast scalp exits
-      if (this.currentMode === 'LIVE' && mt5Connector.connected && this.isAutoTradingEnabled) {
+      const currentActiveAccount = (this.getConfig(this.currentUser).activeAccount || this.activeAccount || 'MARGIN').toUpperCase();
+      if (this.currentMode === 'LIVE' && currentActiveAccount === 'MARGIN' && mt5Connector.connected && this.isAutoTradingEnabled) {
         const openPositions = Array.isArray(mt5Connector.openPositions) ? mt5Connector.openPositions : [];
         const handledTickets = new Set();
         const now = Date.now();
@@ -1090,6 +1104,8 @@ export class AutonomousAgentLoop {
 
       // Spot Engine Trigger Checks (For DEMO simulated paper trading ONLY)
       for (const uKey of Object.keys(this.engines)) {
+        const uActiveAccount = (this.getConfig(uKey).activeAccount || (uKey === this.currentUser ? this.activeAccount : 'MARGIN')).toUpperCase();
+        if (uActiveAccount !== 'SPOT') continue;
         const uSpotEngine = this.engines[uKey]?.SPOT;
         if (uSpotEngine) {
           const spotClosed = uSpotEngine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
@@ -1129,7 +1145,7 @@ export class AutonomousAgentLoop {
       }
 
       // A3. Dedicated Live Binance Spot Holdings Guardian (Active PnL, TP, SL, and Hold Duration Watchdog)
-      if (binanceConnector.connected && Array.isArray(this.liveSpotPositions) && this.liveSpotPositions.length > 0) {
+      if (this.currentMode === 'LIVE' && currentActiveAccount === 'SPOT' && binanceConnector.connected && Array.isArray(this.liveSpotPositions) && this.liveSpotPositions.length > 0) {
         const liveActive = [...this.liveSpotPositions];
         for (const pos of liveActive) {
           const rawAsset = (pos.name || pos.symbol.replace(/[-_/]/g, '').replace(/USD$/, '')).toUpperCase();
@@ -1865,8 +1881,28 @@ export class AutonomousAgentLoop {
       mode: currentMode,
       currentUser: targetUser,
       brokers: {
-        binance: binanceStatus,
-        mt5: mt5Status
+        binance: isSpot ? binanceStatus : {
+          connected: false,
+          status: 'DISCONNECTED',
+          isTestnet: true,
+          hasCredentials: false,
+          apiKeyMasked: '',
+          latencyMs: 0,
+          lastChecked: null,
+          balances: [],
+          isRateLimited: false,
+          bannedUntil: null,
+          remainingBanSeconds: 0,
+          rateLimitMessage: null
+        },
+        mt5: !isSpot ? mt5Status : {
+          connected: false,
+          status: 'DISCONNECTED',
+          accountInfo: null,
+          openPositions: [],
+          closedDeals: [],
+          error: null
+        }
       },
       margin: {
         portfolio: marginPortfolio,
@@ -1880,7 +1916,9 @@ export class AutonomousAgentLoop {
       riskSettings: isSpot ? spotRisk : marginRisk,
       isAutoTradingEnabled: userConfig.isAutoTradingEnabled ?? this.isAutoTradingEnabled,
       isScanning: this.isScanning,
-      marketScan: this.latestScanResults,
+      marketScan: isSpot
+        ? (this.latestScanResults || []).filter(s => s.category === 'Crypto' && s.isHalal)
+        : (this.latestScanResults || []).filter(s => s.category !== 'Crypto' || ['BTC-USD', 'ETH-USD', 'BNB-USD', 'XRP-USD'].includes(s.symbol)),
       logs: this.agentLogs,
       serverTime: new Date().toISOString()
     };

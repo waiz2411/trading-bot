@@ -49,14 +49,14 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-terminal-border bg-terminal-900/70 text-[11px] font-mono text-slate-400 uppercase tracking-wider">
-              <th className="py-2.5 px-4">Market / Side / Lev</th>
+              <th className="py-2.5 px-4">{activeAccount === 'SPOT' ? 'Coin / Side' : 'Market / Side / Lev'}</th>
               <th className="py-2.5 px-4 text-right">Entry Price</th>
               <th className="py-2.5 px-4 text-right">Mark Price</th>
               <th className="py-2.5 px-4 text-right">Protection (SL)</th>
               <th className="py-2.5 px-4 text-right">Target (TP)</th>
-              <th className="py-2.5 px-4 text-right">Est. Liq. Price</th>
-              <th className="py-2.5 px-4 text-right">Margin / Size</th>
-              <th className="py-2.5 px-4 text-right">Unrealized PnL (ROE%)</th>
+              {activeAccount !== 'SPOT' && <th className="py-2.5 px-4 text-right">Est. Liq. Price</th>}
+              <th className="py-2.5 px-4 text-right">{activeAccount === 'SPOT' ? 'Holding Value' : 'Margin / Size'}</th>
+              <th className="py-2.5 px-4 text-right">{activeAccount === 'SPOT' ? 'Unrealized Return' : 'Unrealized PnL (ROE%)'}</th>
               <th className="py-2.5 px-4 text-center">Action</th>
             </tr>
           </thead>
@@ -185,22 +185,24 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
                     )}
                   </td>
 
-                  {/* Est. Liquidation Price */}
-                  <td className="py-3 px-4 text-right">
-                    <div className="font-mono text-amber-400 font-semibold">
-                      {isSpot ? 'None' : (pos.liquidationPrice && Number(pos.liquidationPrice) > 0 ? `$${formatPrice(pos.liquidationPrice)}` : '—')}
-                    </div>
-                    <div className="text-[10px] text-slate-500">{isSpot ? 'Pure Spot Holding' : 'Liq. Threshold'}</div>
-                  </td>
+                  {/* Est. Liquidation Price (Margin accounts only) */}
+                  {!isSpot && (
+                    <td className="py-3 px-4 text-right">
+                      <div className="font-mono text-amber-400 font-semibold">
+                        {pos.liquidationPrice && Number(pos.liquidationPrice) > 0 ? `$${formatPrice(pos.liquidationPrice)}` : '—'}
+                      </div>
+                      <div className="text-[10px] text-slate-500">Liq. Threshold</div>
+                    </td>
+                  )}
 
-                  {/* Margin & Size */}
+                  {/* Margin & Size / Spot Holdings */}
                   <td className="py-3 px-4 text-right text-slate-300">
                     <div className="font-bold text-white flex items-center justify-end gap-1">
-                      <span className="text-[10px] text-indigo-400 font-normal">{isSpot ? 'Cash Value:' : 'Margin:'}</span>
+                      <span className="text-[10px] text-emerald-400 font-normal">{isSpot ? 'Value:' : 'Margin:'}</span>
                       <span>${marginVal}</span>
                     </div>
                     <div className="text-[10px] text-slate-400 font-medium">{formatUnits(pos.units, pos.entryPrice)} units (${pos.notional})</div>
-                    <div className="text-[9px] text-amber-400/80 font-mono mt-0.5">{isSpot ? '100% Cash Spot Asset' : `${leverage}x Buying Power`}</div>
+                    <div className="text-[9px] text-emerald-400/80 font-mono mt-0.5">{isSpot ? '100% Cash Spot Asset' : `${leverage}x Buying Power`}</div>
                   </td>
 
                   {/* Live Net PnL & Leveraged ROE% */}
@@ -217,7 +219,7 @@ export default function ActivePositions({ positions = [], onCloseTrade, isClosin
                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                         isProfit ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
                       }`}>
-                        ROE: {roeVal >= 0 ? '+' : ''}{roeVal.toFixed(1)}%
+                        {isSpot ? 'Gain:' : 'ROE:'} {roeVal >= 0 ? '+' : ''}{roeVal.toFixed(1)}%
                       </span>
                     </div>
                   </td>

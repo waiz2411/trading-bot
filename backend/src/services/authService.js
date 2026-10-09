@@ -283,6 +283,18 @@ export class AuthService {
     return cleanMode;
   }
 
+  async setUserActiveAccount(email, accountType) {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const targetType = (accountType || 'MARGIN').toUpperCase() === 'SPOT' ? 'SPOT' : 'MARGIN';
+    await db.query('UPDATE users SET account_type = ? WHERE email = ?', [targetType, cleanEmail]);
+    for (const [token, session] of this.sessions.entries()) {
+      if (session.email && session.email.toLowerCase() === cleanEmail) {
+        session.accountType = targetType;
+      }
+    }
+    return targetType;
+  }
+
   // --- ADMIN MANAGEMENT METHODS ---
   async getAllUsers() {
     const [users] = await db.query(`

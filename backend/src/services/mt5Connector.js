@@ -82,19 +82,6 @@ export class MT5Connector {
     candidates.push('http://127.0.0.1:5001');
     candidates.push('http://localhost:5001');
 
-    // Also check if remote Render backend has an auto-registered tunnel
-    try {
-      const res = await fetch('https://trading-bot-test-z6bi.onrender.com/api/broker/mt5/gateway-url', {
-        signal: AbortSignal.timeout(2500)
-      }).catch(() => null);
-      if (res && res.ok) {
-        const d = await res.json().catch(() => ({}));
-        if (d.gatewayUrl && !candidates.includes(d.gatewayUrl)) {
-          candidates.push(d.gatewayUrl);
-        }
-      }
-    } catch (_) {}
-
     const uniqueCandidates = [...new Set(candidates.filter(Boolean))];
 
     for (const url of uniqueCandidates) {

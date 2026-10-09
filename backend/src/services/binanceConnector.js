@@ -35,23 +35,11 @@ export class BinanceConnector {
   }
 
   async request(endpoint, options = {}) {
-    const isWorkersDev = Boolean(this.proxyUrl && this.proxyUrl.includes('workers.dev'));
-    const europeanGateway = 'https://trading-bot-test-z6bi.onrender.com/api/binance-proxy';
-
     let targetBase = this.baseUrl;
     const headers = { ...(options.headers || {}) };
 
     if (this.apiKey) {
       headers['X-MBX-APIKEY'] = this.apiKey;
-    }
-
-    // When proxyUrl is a Cloudflare Worker (workers.dev) or when European failover is active,
-    // bridge via Frankfurt gateway with X-Binance-Upstream to ensure European Anycast IP routing.
-    if (!this.isTestnet && (isWorkersDev || this.useEuropeanGateway)) {
-      targetBase = europeanGateway;
-      if (this.proxyUrl) {
-        headers['X-Binance-Upstream'] = this.proxyUrl;
-      }
     }
 
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
@@ -176,18 +164,6 @@ export class BinanceConnector {
     try {
       // 1. Test latency with ping
       let pingRes = await this.request('/api/v3/ping', { method: 'GET' });
-      if (!pingRes.ok && pingRes.status === 451 && !this.useEuropeanGateway) {
-        console.log(`[BinanceConnector] Endpoint returned HTTP 451. Retrying via European Frankfurt Gateway...`);
-        this.useEuropeanGateway = true;
-        try {
-          const euPing = await this.request('/api/v3/ping', { method: 'GET' });
-          if (euPing.ok) {
-            pingRes = euPing;
-          }
-        } catch (eFail) {
-          console.warn('[BinanceConnector] European gateway fallback check failed:', eFail.message);
-        }
-      }
 
       if (!pingRes.ok) {
         if (pingRes.status === 451) {
@@ -197,7 +173,7 @@ export class BinanceConnector {
             success: false,
             latencyMs: Date.now() - startTime,
             isGeoBlocked: true,
-            error: 'Binance Global returned HTTP 451 (US Jurisdiction Restriction). The proxy URL reached Binance from a US datacenter. Click "Use Built-in Germany Gateway" below to route through Frankfurt, Germany.'
+            error: 'Binance Global returned HTTP 451 (US Jurisdiction Restriction).'
           };
         }
         throw new Error(`Binance ping failed with HTTP ${pingRes.status}`);

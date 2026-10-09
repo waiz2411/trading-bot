@@ -12,6 +12,12 @@ export default function SettingsModal({
 }) {
   const [selectedTab, setSelectedTab] = useState(activeAccount || 'MARGIN');
 
+  React.useEffect(() => {
+    if (activeAccount) {
+      setSelectedTab(activeAccount.toUpperCase());
+    }
+  }, [activeAccount]);
+
   // Margin Settings State
   const initialMargin = marginSettings || settings || {};
   const [riskPerTradePct, setRiskPerTradePct] = useState(initialMargin.riskPerTradePct || 1.5);

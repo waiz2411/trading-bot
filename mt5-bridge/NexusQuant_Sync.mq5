@@ -1,10 +1,10 @@
 //+------------------------------------------------------------------+
 //|                                            NexusQuant_Sync.mq5  |
 //|                       Copyright 2026, NexusQuant SaaS Automated  |
-//|                                https://trading-bot-lm51.onrender.com |
+//|                https://slategrey-reindeer-680249.hostingersite.com |
 //+------------------------------------------------------------------+
 #property copyright "NexusQuant SaaS Platform"
-#property link      "https://trading-bot-lm51.onrender.com"
+#property link      "https://slategrey-reindeer-680249.hostingersite.com"
 #property version   "2.00"
 #property description "Zero-Cost Automated Cloud Sync EA for NexusQuant Clients"
 #property description "Syncs real-time balance/equity and executes 500x margin scalps"

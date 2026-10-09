@@ -470,15 +470,8 @@ export default function BrokerModal({ user, brokers, onClose, onUpdateBrokers, o
                   />
                   <div className="flex items-center justify-between mt-1 text-[10px]">
                     <span className="text-slate-400">
-                      Free Cloudflare Workers ($0 cost) or built-in European gateway.
+                      Direct Frankfurt connection active. Leave proxy empty for optimal low latency.
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setBinanceProxyUrl('https://trading-bot-test-z6bi.onrender.com/api/binance-proxy')}
-                      className="text-emerald-400 hover:text-emerald-300 hover:underline font-mono font-bold flex items-center gap-1"
-                    >
-                      Use Default Render Proxy
-                    </button>
                   </div>
 
                   <div className="mt-2.5 p-2.5 rounded-lg bg-terminal-950 border border-terminal-border/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">

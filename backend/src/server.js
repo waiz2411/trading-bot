@@ -595,21 +595,26 @@ app.get('/api/dashboard', async (req, res) => {
     
     const userEmail = user ? user.email : 'default';
     const userMode = (user && user.mode) ? user.mode : (userEmail === 'waiztahseen@gmail.com' ? 'LIVE' : 'SIMULATED');
-    const userAccount = (user && (user.accountType || user.account_type)) ? (user.accountType || user.account_type) : agentLoop.activeAccount;
+    const reqAccount = (req.query.account || '').toUpperCase();
+    const isAdmin = user?.role === 'ADMIN';
+    const userAccount = isAdmin && reqAccount 
+      ? reqAccount 
+      : ((user && (user.accountType || user.account_type)) ? (user.accountType || user.account_type) : (agentLoop.getConfig(userEmail).activeAccount || agentLoop.activeAccount));
 
     const uConfig = agentLoop.getConfig(userEmail);
+    uConfig.activeAccount = userAccount;
     if (user && user.isAutoTradingEnabled !== undefined && uConfig.isAutoTradingEnabled === undefined) {
       uConfig.isAutoTradingEnabled = user.isAutoTradingEnabled;
     }
 
-    // Only update and sync balances for this user if this specific user has Binance connected and owns the active connector
+    // Only update and sync balances for this user if in SPOT mode and owns the active connector
     const userBinanceCfg = user?.brokerConnections?.binance;
     const isThisUserBinanceConnected = Boolean(
       userBinanceCfg && userBinanceCfg.connected && userBinanceCfg.apiKey &&
       (binanceConnector.ownerEmail ? binanceConnector.ownerEmail.toLowerCase() === userEmail.toLowerCase() : userEmail.toLowerCase() === 'waiztahseen@gmail.com')
     );
 
-    if (userMode === 'LIVE' && isThisUserBinanceConnected && binanceConnector.connected) {
+    if (userAccount === 'SPOT' && userMode === 'LIVE' && isThisUserBinanceConnected && binanceConnector.connected) {
       const freshBals = await binanceConnector.getBalances(false).catch(() => {});
       if (freshBals && freshBals.length > 0 && userEmail && userEmail !== 'default') {
         authService.updateBrokerConfig(userEmail, 'binance', {
@@ -649,11 +654,18 @@ app.post('/api/account/switch', async (req, res) => {
     const userEmail = user ? user.email : 'default';
 
     const { account } = req.body;
-    if (user && user.email) {
-      await authService.setUserActiveAccount(user.email, account);
+    const targetAccount = (account || '').toUpperCase() === 'SPOT' ? 'SPOT' : 'MARGIN';
+
+    // Non-admin clients are locked to their assigned account type
+    if (user && user.role !== 'ADMIN' && (user.accountType || user.account_type) && (user.accountType || user.account_type) !== targetAccount) {
+      return res.status(403).json({ error: `Your account is strictly allocated to ${(user.accountType || user.account_type)} trading.` });
     }
-    const dashboard = agentLoop.getDashboardData(null, account, userEmail);
-    res.json({ success: true, activeAccount: account, ...dashboard });
+
+    if (user && user.email) {
+      await authService.setUserActiveAccount(user.email, targetAccount);
+    }
+    const dashboard = agentLoop.switchAccount(targetAccount, userEmail);
+    res.json({ success: true, activeAccount: targetAccount, ...dashboard });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1027,7 +1039,12 @@ app.post('/api/trades/close-all', async (req, res) => {
     const token = authHeader.replace(/^Bearer\s+/i, '');
     const user = await authService.validateToken(token);
     const userEmail = user ? user.email : agentLoop.currentUser;
-    const targetEngine = agentLoop.getEngine(agentLoop.activeAccount, userEmail);
+    const userAccount = (user && (user.accountType || user.account_type)) || agentLoop.getConfig(userEmail).activeAccount || agentLoop.activeAccount;
+    const targetAccount = (req.body?.account || userAccount || 'MARGIN').toUpperCase();
+    const isSpot = targetAccount === 'SPOT';
+    const isLive = (user && user.mode) ? user.mode === 'LIVE' : (agentLoop.currentMode === 'LIVE');
+
+    const targetEngine = agentLoop.getEngine(targetAccount, userEmail);
     const active = [...targetEngine.activePositions];
     const closedList = [];
     for (const pos of active) {
@@ -1035,12 +1052,11 @@ app.post('/api/trades/close-all', async (req, res) => {
       if (closed) closedList.push(closed);
     }
 
-    if (agentLoop.currentMode === 'LIVE') {
-      if (mt5Connector.connected) {
+    if (isLive) {
+      if (!isSpot && mt5Connector.connected) {
         await mt5Connector.closeAllPositions().catch(() => {});
         agentLoop.getEngine('MARGIN', userEmail).activePositions = [];
-      }
-      if (binanceConnector.connected) {
+      } else if (isSpot && binanceConnector.connected) {
         const balances = await binanceConnector.getBalances();
         for (const b of balances) {
           if (b.asset !== 'USDT' && b.asset !== 'BNB' && b.free > 0.00001) {
@@ -1058,10 +1074,11 @@ app.post('/api/trades/close-all', async (req, res) => {
           }
         }
         await binanceConnector.getBalances();
+        agentLoop.getEngine('SPOT', userEmail).activePositions = [];
       }
     }
 
-    agentLoop.log(`🧹 Closed all active positions in [${agentLoop.activeAccount}].`, 'INFO');
+    agentLoop.log(`🧹 Closed all active positions in [${targetAccount}].`, 'INFO');
     res.json({ success: true, closedCount: closedList.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1096,8 +1113,12 @@ app.post('/api/trades/execute', async (req, res) => {
       reason: 'Manual execution triggered via Dashboard'
     };
 
+    const userAccount = (user && (user.accountType || user.account_type)) || agentLoop.getConfig(userEmail).activeAccount || agentLoop.activeAccount;
+    const targetAccount = (req.body?.account || userAccount || 'MARGIN').toUpperCase();
+    const isSpotExecution = targetAccount === 'SPOT';
+
     // Handle SPOT execution mode
-    if (agentLoop.activeAccount === 'SPOT') {
+    if (isSpotExecution) {
       if (asset.category !== 'Crypto') {
         return res.status(400).json({ error: 'Pure Spot trading is only supported for Crypto assets.' });
       }
@@ -1347,7 +1368,7 @@ app.post('/api/ledger/clear', async (req, res) => {
   }
 });
 
-// Serve static frontend assets in production (Render single-service deployment)
+// Serve static frontend assets in production
 const distPath = path.resolve(__dirname, '../../frontend/dist');
 app.use(express.static(distPath));
 
@@ -1364,11 +1385,18 @@ try {
   console.error('⚠️ Database init error (will retry on query):', dbErr.message);
 }
 
-if (!process.env.PRIMARY_BACKEND_URL && !process.env.RENDER) {
+if (!process.env.PRIMARY_BACKEND_URL) {
   const startupUser = 'waiztahseen@gmail.com';
+  agentLoop.getConfig(startupUser).activeAccount = 'SPOT';
+  agentLoop.activeAccount = 'SPOT';
   agentLoop.setUserMode(startupUser, 'LIVE').then(async () => {
     try {
       const u = await authService.getUserByEmail(startupUser);
+      if (u && (u.account_type || u.accountType)) {
+        const accType = (u.account_type || u.accountType).toUpperCase();
+        agentLoop.getConfig(startupUser).activeAccount = accType;
+        agentLoop.activeAccount = accType;
+      }
       if (u && u.brokerConnections && u.brokerConnections.binance) {
         const bCfg = u.brokerConnections.binance;
         if (bCfg.apiKey && bCfg.apiSecret) {

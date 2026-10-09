@@ -116,7 +116,7 @@ class DatabaseService {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
 
-      // 5. Central User Portfolios Table (Synchronizes balance & trades across all servers: Hostinger, Render, etc.)
+      // 5. Central User Portfolios Table (Synchronizes balance & trades across servers)
       await conn.query(`
         CREATE TABLE IF NOT EXISTS user_portfolios (
           id INT AUTO_INCREMENT PRIMARY KEY,
