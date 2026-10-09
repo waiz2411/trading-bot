@@ -1397,6 +1397,8 @@ if (!process.env.PRIMARY_BACKEND_URL && !process.env.RENDER) {
   console.log('⏸️ Autonomous trading loop paused on Proxy/Replica server (Master Hostinger executes all live trades).');
 }
 
+  (async () => { try { const user = await authService.getUserByEmail('waiztahseen@gmail.com'); if (user && user.brokerConnections && user.brokerConnections.binance && user.brokerConnections.binance.apiKey) { const binCfg = user.brokerConnections.binance; binanceConnector.configure({ apiKey: binCfg.apiKey, apiSecret: binCfg.apiSecret, isTestnet: !!binCfg.isTestnet, proxyUrl: binCfg.proxyUrl || '', ownerEmail: user.email }); const res = await binanceConnector.testConnection(); console.log('[BOOT] Restored Binance connection for ' + user.email + '. Connected: ' + res.connected); } } catch (e) { console.warn('[BOOT] Failed to auto-restore binance config:', e.message); } })();
+
 // Always listen on TCP port for ultra-reliable local reverse-proxy communication
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`=======================================================`);
