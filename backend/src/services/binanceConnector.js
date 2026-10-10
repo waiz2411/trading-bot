@@ -424,17 +424,42 @@ export class BinanceConnector {
 
   /**
    * Convert leftover small balances (dust) to BNB via Binance SAPI
+   * Automatically queries Binance eligible dust list first to prevent "asset not supported" rejections
    */
-  async convertDustToBnb(assets = []) {
+  async convertDustToBnb(requestedAssets = []) {
     if (!this.connected || !this.apiKey || !this.apiSecret) return null;
     try {
-      const assetList = (Array.isArray(assets) ? assets : [assets])
-        .map(a => a.toUpperCase())
-        .filter(a => a && a !== 'USDT' && a !== 'BNB' && a !== 'USDC' && a !== 'FDUSD');
-      if (assetList.length === 0) return null;
+      // 1. Query eligible dust assets from Binance SAPI (POST /sapi/v1/asset/dust-btc)
+      const q = this.signQuery('');
+      const eligibleRes = await this.request(`/sapi/v1/asset/dust-btc?${q}`, { method: 'POST' });
+      if (!eligibleRes.ok) return null;
+      const eligibleData = await this.parseJsonResponse(eligibleRes);
+
+      if (!eligibleData || !Array.isArray(eligibleData.details) || eligibleData.details.length === 0) {
+        return null;
+      }
+
+      // Filter eligible assets: exclude USDT, USDC, and any large holdings (> 0.00005 BTC or > ~$4.00)
+      const reqSet = requestedAssets && requestedAssets.length > 0
+        ? new Set((Array.isArray(requestedAssets) ? requestedAssets : [requestedAssets]).map(a => a.toUpperCase()))
+        : null;
+
+      const assetsToConvert = eligibleData.details
+        .filter(d => {
+          const a = d.asset.toUpperCase();
+          if (a === 'USDT' || a === 'USDC' || a === 'BNB' || a === 'FDUSD') return false;
+          // Only true dust (value < 0.00005 BTC)
+          if (parseFloat(d.toBTC || 0) > 0.00005) return false;
+          // If specific assets were requested, filter for them if present, or all true dust if none specified
+          if (reqSet && !reqSet.has(a)) return false;
+          return true;
+        })
+        .map(d => d.asset);
+
+      if (assetsToConvert.length === 0) return null;
 
       const params = new URLSearchParams();
-      for (const a of assetList) {
+      for (const a of assetsToConvert) {
         params.append('asset', a);
       }
       const signedQuery = this.signQuery(params.toString());
@@ -442,7 +467,8 @@ export class BinanceConnector {
         method: 'POST'
       });
       const data = await this.parseJsonResponse(res);
-      if (res.ok) {
+      if (res.ok && (data.transferResult || data.totalTransfered)) {
+        console.log(`[BinanceConnector] Successfully converted ${assetsToConvert.length} dust assets to ${data.totalTransfered} BNB!`);
         await this.getBalances(true).catch(() => {});
         return data;
       } else {

@@ -469,8 +469,8 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
   const takeProfitPct = Number((spotRiskSettings.takeProfitPct || 1.60).toFixed(2));
   const stopLossPct = Number((spotRiskSettings.stopLossPct || 1.10).toFixed(2));
 
-  // Limit entry price at discount
-  const entryPrice = Number((rawPrice * (1 - pullbackDiscountPct / 100)).toFixed(precision));
+  // Authentic Market Execution: Fill at genuine market price (no fantasy discounts)
+  const entryPrice = Number(rawPrice.toFixed(precision));
   const stopDist = Number((entryPrice * (stopLossPct / 100)).toFixed(precision));
   const targetDist = Number((entryPrice * (takeProfitPct / 100)).toFixed(precision));
   const stopLoss = Number((entryPrice - stopDist).toFixed(precision));

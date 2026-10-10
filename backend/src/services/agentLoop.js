@@ -1244,7 +1244,7 @@ export class AutonomousAgentLoop {
 
             let orderSuccess = false;
             try {
-              const balances = await binanceConnector.getBalances();
+              const balances = await binanceConnector.getBalances(true);
               const coinBal = (balances || []).find(b => b.asset.toUpperCase() === rawAsset);
               const qtyToSell = coinBal && coinBal.free > 0.00001 ? coinBal.free : 0;
 

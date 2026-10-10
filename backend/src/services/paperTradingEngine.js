@@ -525,18 +525,18 @@ export class PaperTradingEngine {
           const runUp = pos.highestPrice - pos.entryPrice;
           const rawGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;
 
-          // Break-Even Profit Lock (+0.50% move -> Lock in +0.20% Profit)
-          if (!pos.breakEvenLocked && (rawGainPct >= 0.50 || runUp >= pos.entryPrice * 0.0050)) {
-            const proposedStop = Number((pos.entryPrice * 1.0020).toFixed(dec));
+          // Break-Even Profit Lock (Requires genuine >= +0.80% gain to clear roundtrip fees & spread before locking +0.35%)
+          if (!pos.breakEvenLocked && (rawGainPct >= 0.80 || runUp >= pos.entryPrice * 0.0080)) {
+            const proposedStop = Number((pos.entryPrice * 1.0035).toFixed(dec));
             if (proposedStop < livePrice && (!pos.takeProfit || proposedStop < pos.takeProfit) && proposedStop > pos.stopLoss) {
               pos.stopLoss = proposedStop;
               pos.breakEvenLocked = true;
             }
           }
 
-          // Hot-Coin Trailing Stop: Once price gains >= +1.0%, trail stop closely at 0.35% below peak!
-          if (rawGainPct >= 1.00) {
-            const hotTrailStop = Number((pos.highestPrice * (1 - 0.0035)).toFixed(dec));
+          // Hot-Coin Trailing Stop: Once price gains >= +1.20%, trail stop closely at 0.40% below peak
+          if (rawGainPct >= 1.20) {
+            const hotTrailStop = Number((pos.highestPrice * (1 - 0.0040)).toFixed(dec));
             if (hotTrailStop < livePrice && hotTrailStop > pos.stopLoss) {
               pos.stopLoss = hotTrailStop;
               pos.trailingStopActive = true;
