@@ -72,11 +72,11 @@ export class AutonomousAgentLoop {
           maxSlots: 1,
           allocationPct: 100,
           maxTradesPerPair: 1,
-          stopLossPct: 1.10,
-          takeProfitPct: 1.60,
-          trailingTriggerPct: 1.00,
-          trailingDistancePct: 0.35,
-          pullbackDiscountPct: 0.70,
+          stopLossPct: 1.00,
+          takeProfitPct: 2.50,
+          trailingTriggerPct: 1.80,
+          trailingDistancePct: 0.50,
+          pullbackDiscountPct: 0,
           maxHoldMinutes: 120,
           minConfidenceThreshold: 90,
           allowHighVolatility: true,
@@ -1400,9 +1400,9 @@ export class AutonomousAgentLoop {
           isLiveBrokerOrder: true
         };
 
-        // Set 60-minute anti-churn lockout on losses, 10-minute on wins
+        // Set 4-hour anti-churn lockout on losses, 2-hour on wins
         const isLoss = finalPnL < -0.0001 || closedRecord.exitReason === 'STOP_LOSS_TRIGGER';
-        const lockMs = isLoss ? 60 * 60 * 1000 : 10 * 60 * 1000;
+        const lockMs = isLoss ? 4 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000;
         const lockExpiry = Date.now() + lockMs;
 
         const rawAssetUpper = posAsset.toUpperCase();
