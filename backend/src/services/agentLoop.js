@@ -834,13 +834,35 @@ export class AutonomousAgentLoop {
               const scaleLabel = isScaleIn ? ` [SCALE-IN #${coinPositions.length + 1}]` : '';
 
               if (isUserLive) {
+                // Fetch stepSize & minNotional to buy exact clean LOT_SIZE units (prevents un-sellable dust)
+                const lotFilter = await binanceConnector.getSymbolLotSize(candidate.asset.symbol).catch(() => null);
+                const stepSize = lotFilter?.stepSize || 0.0001;
+                const minNotional = lotFilter?.minNotional || 5.0;
+
+                const stepStr = stepSize.toString();
+                const stepDecimals = stepStr.includes('.') ? stepStr.split('.')[1].replace(/0+$/, '').length : 0;
+                let cleanUnits = Math.floor(rawUnits / stepSize + 0.0000001) * stepSize;
+                cleanUnits = Number(cleanUnits.toFixed(stepDecimals));
+                const estCost = cleanUnits * entryPrice;
+
+                // If floored quantity falls below minNotional, check if bumping by 1 stepSize fits within available cash
+                if (estCost < minNotional && (cleanUnits + stepSize) * entryPrice <= availableCash) {
+                  cleanUnits = Number((cleanUnits + stepSize).toFixed(stepDecimals));
+                }
+
+                const actualNotional = Number((cleanUnits * entryPrice).toFixed(2));
+                if (cleanUnits <= 0 || actualNotional < minNotional) {
+                  this.log(`⚠️ [BINANCE LIVE] Skipped ${candidate.asset.symbol}: calculated quantity ${cleanUnits} ($${actualNotional}) does not meet MIN_NOTIONAL ($${minNotional})`, 'WARN');
+                  continue;
+                }
+
                 binanceConnector.placeSpotMarketOrder({
                   symbol: candidate.asset.symbol,
                   side: 'BUY',
-                  quoteOrderQty: notional
+                  quantity: cleanUnits
                 }).then(liveOrder => {
-                  this.log(`🪙 [BINANCE LIVE] Real Auto-Buy executed on Binance! Order ID: ${liveOrder.orderId} (${candidate.asset.symbol} with $${notional} USDT)`, 'SUCCESS');
-                  binanceConnector.getBalances().then(bals => {
+                  this.log(`🪙 [BINANCE LIVE] Real Auto-Buy executed on Binance! Order ID: ${liveOrder.orderId} (${cleanUnits} ${candidate.asset.symbol} for ~$${actualNotional} USDT)`, 'SUCCESS');
+                  binanceConnector.getBalances(true).then(bals => {
                     this.syncLiveSpotPositions(bals, marketDataService.getAllPricesMap());
                   }).catch(() => {});
                 }).catch(err => {
@@ -1259,16 +1281,12 @@ export class AutonomousAgentLoop {
                   orderSuccess = true;
                   this.log(`${exitMsg} Sold ${qtyToSell} ${rawAsset} on Binance! Realized Net: ${currentProfit >= 0 ? '+' : ''}$${currentProfit}`, currentProfit >= 0 ? 'SUCCESS' : 'WARN');
 
-                  // Dust conversion sweep
-                  const postBals = await binanceConnector.getBalances(true);
-                  const remBal = (postBals || []).find(b => b.asset.toUpperCase() === rawAsset);
-                  if (remBal && remBal.free > 0.00001) {
-                    await binanceConnector.convertDustToBnb([rawAsset]).then(res => {
-                      if (res && (res.totalTransfered || res.transferResult?.length)) {
-                        this.log(`✨ [BINANCE LIVE] Leftover dust for ${rawAsset} (${remBal.free}) swept into BNB!`, 'SUCCESS');
-                      }
-                    }).catch(() => {});
-                  }
+                  // Dust conversion sweep: sweep all leftover fractional assets into BNB so wallet stays 100% clean
+                  await binanceConnector.convertDustToBnb().then(res => {
+                    if (res && (res.totalTransfered || res.transferResult?.length)) {
+                      this.log(`✨ [BINANCE LIVE] Leftover fractional coins swept into BNB!`, 'SUCCESS');
+                    }
+                  }).catch(() => {});
                 } else {
                   this.log(`⚠️ [BINANCE LIVE] Sell order for ${rawAsset} not confirmed by Binance.`, 'WARN');
                 }
