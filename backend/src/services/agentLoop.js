@@ -700,8 +700,8 @@ export class AutonomousAgentLoop {
         const liveUsdtFree = usdtObj ? Number(usdtObj.free) : 0;
         const totalCash = isUserLive ? liveUsdtFree : uSpotEngine.balance;
 
-        if (isUserLive && totalCash < 5.0) {
-          // Cannot place any order on Binance below $5.00
+        if (isUserLive && totalCash < 5.15) {
+          // Cannot place any order on Binance below $5.00 MIN_NOTIONAL buffer
           continue;
         }
 
@@ -710,7 +710,8 @@ export class AutonomousAgentLoop {
         const uSpotOpen = isUserLive ? (this.liveSpotPositions || []) : (uSpotEngine.activePositions || []);
         const uTimeSinceLastSpot = Date.now() - (uConfig.lastSpotTradeOpenedAt || 0);
 
-        if (uSpotOpen.length < uSpotSlots && (uTimeSinceLastSpot >= 15000 || !uConfig.lastSpotTradeOpenedAt)) {
+        // Anti-churn frequency filter: at least 30 minutes between spot trades
+        if (uSpotOpen.length < uSpotSlots && (uTimeSinceLastSpot >= 30 * 60 * 1000 || !uConfig.lastSpotTradeOpenedAt)) {
           // Find candidates matching uSpotRisk and uConfig
           const uValidSpotBuys = [];
           for (const asset of markets) {
@@ -741,7 +742,7 @@ export class AutonomousAgentLoop {
             );
             if (spotLockExpiry > Date.now()) continue;
 
-            // Strict anti-churn safeguard: Never re-buy the same coin within 5 minutes of closing
+            // Strict anti-churn safeguard: Never re-buy the same coin within 2 hours of closing
             const recentClosed = isUserLive ? (this.liveSpotClosedTrades || []) : (uSpotEngine.closedTrades || []);
             const lastTradeForCoin = recentClosed.find(t => {
               const tAsset = (t.name || t.symbol || '').replace(/[-_/]/g, '').replace(/USD$/, '').toUpperCase();
@@ -749,7 +750,7 @@ export class AutonomousAgentLoop {
             });
             if (lastTradeForCoin && lastTradeForCoin.exitTime) {
               const msSinceExit = Date.now() - new Date(lastTradeForCoin.exitTime).getTime();
-              if (msSinceExit < 5 * 60 * 1000) continue;
+              if (msSinceExit < 2 * 60 * 60 * 1000) continue; // 2 hours lockout per coin
             }
 
             const allowVolatile = uSpotRisk.allowHighVolatility ?? true;
@@ -1110,9 +1111,9 @@ export class AutonomousAgentLoop {
         if (uSpotEngine) {
           const spotClosed = uSpotEngine.updatePricesAndCheckTriggers(pricesMap, technicalsMap);
           for (const closed of spotClosed) {
-            // Anti-Churn Revenge Trade Protection for Demo
+            // Anti-Churn Revenge Trade Protection for Demo (2h on loss, 1h on win)
             const isLoss = (closed.finalPnL || 0) < -0.0001 || closed.exitReason === 'STOP_LOSS_TRIGGER';
-            const lockMs = isLoss ? 15 * 60 * 1000 : 5 * 60 * 1000;
+            const lockMs = isLoss ? 2 * 60 * 60 * 1000 : 60 * 60 * 1000;
             const lockExpiry = Date.now() + lockMs;
             const cleanName = (closed.name || closed.symbol.replace(/[-_/]/g, '').replace(/USD$/, '')).toUpperCase();
 
@@ -1166,10 +1167,10 @@ export class AutonomousAgentLoop {
           const holdMinutes = (Date.now() - openMs) / 60000;
           const maxHoldMinutes = pos.maxHoldMinutes || this.spotRiskManager.maxHoldMinutes || 45;
 
-          // A. Break-Even Profit Lock (+0.80% move -> Lock in +0.35% Profit to clear fees)
+          // A. Break-Even Profit Lock (+1.25% move -> Lock in +0.35% Profit to clear fees)
           const peakGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;
           const precision = pos.decimals || 4;
-          if (peakGainPct >= 0.80) {
+          if (peakGainPct >= 1.25) {
             const beStop = Number((pos.entryPrice * 1.0035).toFixed(precision));
             if (beStop > (pos.stopLoss || 0)) {
               pos.stopLoss = beStop;
@@ -1177,9 +1178,9 @@ export class AutonomousAgentLoop {
             }
           }
 
-          // B. Hot-Coin Trailing Profit Lock (>= +1.20% gain -> Trail 0.40% behind peak)
-          if (peakGainPct >= 1.20) {
-            const trailStop = Number((pos.highestPrice * (1 - 0.0040)).toFixed(precision));
+          // B. Hot-Coin Trailing Profit Lock (>= +1.80% gain -> Trail 0.50% behind peak)
+          if (peakGainPct >= 1.80) {
+            const trailStop = Number((pos.highestPrice * (1 - 0.0050)).toFixed(precision));
             if (trailStop > (pos.stopLoss || 0)) {
               pos.stopLoss = trailStop;
               pos.trailingStopActive = true;
@@ -1189,7 +1190,7 @@ export class AutonomousAgentLoop {
           let exitReason = null;
           let exitMsg = '';
 
-          // 1. Take Profit Target Hit (+1.60%)
+          // 1. Take Profit Target Hit (+2.50%)
           if (pos.takeProfit && livePrice >= pos.takeProfit) {
             exitReason = 'TAKE_PROFIT_TRIGGER';
             exitMsg = `🎯 [BINANCE LIVE] TP Hit: ${pos.symbol} reached target ($${livePrice} >= $${pos.takeProfit})!`;
@@ -1198,7 +1199,7 @@ export class AutonomousAgentLoop {
           else if (pos.stopLoss && livePrice <= pos.stopLoss) {
             if (pos.breakEvenLocked && !pos.trailingStopActive) {
               exitReason = 'BREAKEVEN_STOP_TRIGGER';
-              exitMsg = `🔒 [BINANCE LIVE] Break-Even Lock: ${pos.symbol} secured +0.20% profit ($${livePrice} <= $${pos.stopLoss})!`;
+              exitMsg = `🔒 [BINANCE LIVE] Break-Even Lock: ${pos.symbol} secured +0.35% profit ($${livePrice} <= $${pos.stopLoss})!`;
             } else if (pos.trailingStopActive) {
               exitReason = 'TRAILING_PROFIT_LOCK';
               exitMsg = `🛡️ [BINANCE LIVE] Trailing Profit Lock: ${pos.symbol} secured +${peakGainPct.toFixed(2)}% peak gain at $${livePrice}!`;
@@ -1212,8 +1213,8 @@ export class AutonomousAgentLoop {
             exitReason = 'TIME_LIMIT_EXIT';
             exitMsg = `⏱️ [BINANCE LIVE] ${maxHoldMinutes}m Hold Expiry: ${pos.symbol} held for ${Math.round(holdMinutes)}m.`;
           }
-          // 4. Intelligent Signal Reversal / Momentum Exhaustion Exit (Identical to Demo Paper Engine)
-          else if (technicalsMap[pos.symbol]) {
+          // 4. Intelligent Signal Reversal / Momentum Exhaustion Exit (Enforcing minimum 5m hold time)
+          else if (technicalsMap[pos.symbol] && holdMinutes >= 5) {
             const exitEval = evaluatePositionExit(pos, technicalsMap[pos.symbol], livePrice);
             if (exitEval && exitEval.shouldExit) {
               exitReason = exitEval.reason || 'INTELLIGENT_REVERSAL_EXIT';
@@ -1313,9 +1314,9 @@ export class AutonomousAgentLoop {
               // Remove from active positions
               this.liveSpotPositions = this.liveSpotPositions.filter(p => (p.name || '').toUpperCase() !== rawAsset);
 
-              // Cooldown protection: 45 minutes on losses, 10 minutes on wins
+              // Cooldown protection: 4 hours on losses, 2 hours on wins
               const isLoss = currentProfit < -0.0001 || exitReason === 'STOP_LOSS_TRIGGER';
-              const lockMs = isLoss ? 45 * 60 * 1000 : 10 * 60 * 1000;
+              const lockMs = isLoss ? 4 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000;
               const lockExpiry = Date.now() + lockMs;
               const rawAssetUpper = rawAsset.toUpperCase();
               const symbolVariants = [
