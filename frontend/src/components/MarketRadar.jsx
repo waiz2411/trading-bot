@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Filter, ArrowUpRight, ArrowDownRight, Compass, ShieldCheck, Zap, Info } from 'lucide-react';
+import { Search, Filter, ArrowUpRight, ArrowDownRight, Compass, ShieldCheck, Zap, Info, Coins } from 'lucide-react';
 import { formatPrice } from '../utils/formatters.js';
 
 export default function MarketRadar({ marketScan = [], onSelectAsset, onQuickTrade, activeAccount = 'MARGIN' }) {
