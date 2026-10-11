@@ -405,18 +405,18 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
   }
 
   // 3. PILLAR 2: Trend & Relative Strength Leader Scanner
-  // Filter out illiquid pairs with wide spread
+  // Filter out illiquid pairs with wide spread (strictly >= $5M 24h volume)
   const quoteVol = Number(asset.quoteVolume || technicals.volume24h || 0);
-  if (asset.category === 'Crypto' && quoteVol > 0 && quoteVol < 3000000) {
+  if (asset.category === 'Crypto' && quoteVol > 0 && quoteVol < 5000000) {
     return {
       action: 'NEUTRAL',
       side: null,
       confidence: 20,
-      reason: 'Liquidity Filter: 24h Volume below $3M (wide spread risk)'
+      reason: 'Liquidity Filter: 24h Volume below $5M (wide spread risk)'
     };
   }
 
-  const leadersList = context.topLeaders || context.topHotLeaders;
+  const leadersList = context.topLeaders;
   if (Array.isArray(leadersList) && leadersList.length > 0) {
     const leaderMatch = leadersList.find(l => l.symbol === asset.symbol || l.asset?.symbol === asset.symbol);
     if (!leaderMatch) {
@@ -501,11 +501,11 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
   const rawPrice = asset.price || technicals.currentPrice;
   const precision = getAssetPrecision(rawPrice, asset.decimals || 4);
 
-  // Calibrated Spot Swing Geometry:
-  // Take Profit: +2.50% (Net +2.30% profit)
-  // Stop Loss: -1.50% (Sufficient buffer to absorb 5m wicks without premature stopouts)
-  const takeProfitPct = Number((spotRiskSettings.takeProfitPct || 2.50).toFixed(2));
-  const stopLossPct = Number((spotRiskSettings.stopLossPct || 1.50).toFixed(2));
+  // Fast Scalp Profit Geometry:
+  // Take Profit: +1.20% (Bank quick profits on small upward slides)
+  // Stop Loss: -1.00% (Tight safeguard to protect capital)
+  const takeProfitPct = Number((spotRiskSettings.takeProfitPct || 1.20).toFixed(2));
+  const stopLossPct = Number((spotRiskSettings.stopLossPct || 1.00).toFixed(2));
 
   const entryPrice = Number(rawPrice.toFixed(precision));
   const stopDist = Number((entryPrice * (stopLossPct / 100)).toFixed(precision));
@@ -517,7 +517,7 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
     'BTC Health Gate: Confirmed Bullish Trend',
     `Relative Strength Leader: ${asset.symbol} outperforming BTC`,
     `Candle Confirmation: Bullish green 5m close above EMA 20`,
-    `Geometry: Target +${takeProfitPct}% | Stop -${stopLossPct}% (Break-Even lock at +1.25%)`
+    `Fast Scalp Geometry: Target +${takeProfitPct}% | Stop -${stopLossPct}% (Break-Even lock at +0.60%)`
   ];
 
   return {
@@ -532,10 +532,10 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
     targetDistance: targetDist,
     takeProfitPct,
     stopLossPct,
-    trailingTriggerPct: 1.80,
-    trailingDistancePct: 0.50,
+    trailingTriggerPct: 0.85,
+    trailingDistancePct: 0.30,
     riskRewardRatio: Number((takeProfitPct / stopLossPct).toFixed(2)),
-    maxHoldMinutes: 120,
+    maxHoldMinutes: 60,
     tradingStyle: 'SPOT_BUY',
     tradeDirection: 'LONG_ONLY',
     exitRule: 'HOT_RETEST_TRAILING_LOCK',
@@ -566,8 +566,8 @@ export function evaluatePositionExit(position, technicals, currentPrice) {
   const ageMs = position.openTime ? (Date.now() - new Date(position.openTime).getTime()) : 0;
   const ageSec = ageMs / 1000;
 
-  // Minimum 5-minute hold time: Never exit prematurely on noise wiggles
-  if (ageSec < 300) {
+  // Minimum 2-minute hold time: Allow fast scalps to bank profit without noise exit
+  if (ageSec < 120) {
     return { shouldExit: false };
   }
 
@@ -578,18 +578,18 @@ export function evaluatePositionExit(position, technicals, currentPrice) {
     const peakPrice = position.highestPrice || entryPrice;
     const peakGainPct = ((peakPrice - entryPrice) / entryPrice) * 100;
 
-    // A. Break-Even Lock at +1.25% move -> Ratchet stop to +0.35% net profit above entry
-    if (peakGainPct >= 1.25) {
-      const beStop = entryPrice * 1.0035;
+    // A. Break-Even Lock at +0.60% move -> Ratchet stop to +0.20% net profit above entry (covers fees)
+    if (peakGainPct >= 0.60) {
+      const beStop = entryPrice * 1.0020;
       if (beStop > (position.stopLoss || 0)) {
         position.stopLoss = beStop;
         position.breakEvenLocked = true;
       }
     }
 
-    // B. Trailing Profit Lock at >= +1.80% gain -> Trail 0.50% behind peak
-    if (peakGainPct >= 1.80) {
-      const lockStop = peakPrice * (1 - 0.0050);
+    // B. Trailing Profit Lock at >= +0.85% gain -> Trail 0.30% behind peak
+    if (peakGainPct >= 0.85) {
+      const lockStop = peakPrice * (1 - 0.0030);
       if (lockStop > (position.stopLoss || 0)) {
         position.stopLoss = lockStop;
         position.trailingStopActive = true;

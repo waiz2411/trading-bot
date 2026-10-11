@@ -431,12 +431,9 @@ export class AutonomousAgentLoop {
         this.syncLiveSpotPositions(binanceConnector.cachedBalances, pricesMap);
       }
 
-      // Institutional 74.5% Win-Rate Engine: BTC Health Gate & Top Hot Gainer Leaders
-      const btcAsset = markets.find(m => m.symbol === 'BTC-USD' || m.symbol === 'BTCUSDT' || m.symbol === 'BTC/USDT');
-      const btcHealth = evaluateBtcHealth(btcAsset?.candles);
-      const topHotLeaders = scanHotGainerLeaders(markets, 2);
-      const topLeaders = topHotLeaders.length > 0 ? topHotLeaders : scanRelativeStrengthLeaders(markets, btcAsset?.candles, 3);
-      const spotContext = { btcHealth, topHotLeaders, topLeaders };
+      // Institutional Momentum & Relative Strength: Strictly track coins outperforming BTC with genuine strength, NOT 24h pump-and-dump spikes
+      const topLeaders = scanRelativeStrengthLeaders(markets, btcAsset?.candles, 5);
+      const spotContext = { btcHealth, topLeaders };
 
       // 3. Pre-calculate technicals map for position auto-exit evaluation
       const technicalsMap = {};
@@ -871,6 +868,34 @@ export class AutonomousAgentLoop {
                 }).catch(err => {
                   this.log(`⚠️ [BINANCE LIVE] Auto-order notice: ${err.message}`, 'WARN');
                 });
+
+                // Mirror to Demo paper trading engine so simulated performance is always available
+                try {
+                  uSpotEngine.openPosition({
+                    symbol: candidate.asset.symbol,
+                    name: candidate.asset.name,
+                    category: 'Crypto',
+                    decimals: precision,
+                    side: 'LONG',
+                    entryPrice,
+                    stopLoss,
+                    takeProfit,
+                    stopDistance: stopDist,
+                    targetDistance: targetDist,
+                    units,
+                    notional,
+                    confidence: candidate.signal.confidence,
+                    reason: `[DEMO MIRROR] Spot Scalp (${candidate.signal.reason})`,
+                    riskRewardRatio: Number((uSpotRisk.takeProfitPct / uSpotRisk.stopLossPct).toFixed(1)),
+                    maxHoldMinutes: candidate.signal.maxHoldMinutes || uSpotRisk.maxHoldMinutes || 45,
+                    tradingStyle: 'SPOT_BUY',
+                    feeRate: 0.00075,
+                    leverage: 1,
+                    margin: notional,
+                    liquidationPrice: 0
+                  });
+                } catch (_) {}
+
                 this.lastSpotTradeOpenedAt = Date.now();
                 uConfig.lastSpotTradeOpenedAt = Date.now();
               } else {
@@ -1194,20 +1219,20 @@ export class AutonomousAgentLoop {
           const holdMinutes = (Date.now() - openMs) / 60000;
           const maxHoldMinutes = pos.maxHoldMinutes || this.spotRiskManager.maxHoldMinutes || 45;
 
-          // A. Break-Even Profit Lock (+1.25% move -> Lock in +0.35% Profit to clear fees)
+          // A. Break-Even Profit Lock (+0.60% move -> Lock in +0.20% Profit to clear fees)
           const peakGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;
           const precision = pos.decimals || 4;
-          if (peakGainPct >= 1.25) {
-            const beStop = Number((pos.entryPrice * 1.0035).toFixed(precision));
+          if (peakGainPct >= 0.60) {
+            const beStop = Number((pos.entryPrice * 1.0020).toFixed(precision));
             if (beStop > (pos.stopLoss || 0)) {
               pos.stopLoss = beStop;
               pos.breakEvenLocked = true;
             }
           }
 
-          // B. Hot-Coin Trailing Profit Lock (>= +1.80% gain -> Trail 0.50% behind peak)
-          if (peakGainPct >= 1.80) {
-            const trailStop = Number((pos.highestPrice * (1 - 0.0050)).toFixed(precision));
+          // B. Hot-Coin Trailing Profit Lock (>= +0.85% gain -> Trail 0.30% behind peak)
+          if (peakGainPct >= 0.85) {
+            const trailStop = Number((pos.highestPrice * (1 - 0.0030)).toFixed(precision));
             if (trailStop > (pos.stopLoss || 0)) {
               pos.stopLoss = trailStop;
               pos.trailingStopActive = true;
