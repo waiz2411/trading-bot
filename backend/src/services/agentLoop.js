@@ -72,7 +72,7 @@ export class AutonomousAgentLoop {
           maxSlots: 1,
           allocationPct: 100,
           maxTradesPerPair: 1,
-          stopLossPct: 1.00,
+          stopLossPct: 1.50,
           takeProfitPct: 2.50,
           trailingTriggerPct: 1.80,
           trailingDistancePct: 0.50,
@@ -708,10 +708,13 @@ export class AutonomousAgentLoop {
         const dynamicSlots = (totalCash < 20 || !uSpotRisk.maxSlots) ? 1 : uSpotRisk.maxSlots;
         const uSpotSlots = dynamicSlots;
         const uSpotOpen = isUserLive ? (this.liveSpotPositions || []) : (uSpotEngine.activePositions || []);
+        const globalTimeSinceLastSpot = Date.now() - (this.lastSpotTradeOpenedAt || 0);
         const uTimeSinceLastSpot = Date.now() - (uConfig.lastSpotTradeOpenedAt || 0);
+        const timeSinceLastSpot = Math.min(globalTimeSinceLastSpot, uTimeSinceLastSpot);
 
-        // Anti-churn frequency filter: at least 30 minutes between spot trades
-        if (uSpotOpen.length < uSpotSlots && (uTimeSinceLastSpot >= 30 * 60 * 1000 || !uConfig.lastSpotTradeOpenedAt)) {
+        // Anti-churn frequency filter: strictly at least 30 minutes between spot trades
+        const hasNoPriorTrade = !this.lastSpotTradeOpenedAt && !uConfig.lastSpotTradeOpenedAt;
+        if (uSpotOpen.length < uSpotSlots && (timeSinceLastSpot >= 30 * 60 * 1000 || hasNoPriorTrade)) {
           // Find candidates matching uSpotRisk and uConfig
           const uValidSpotBuys = [];
           for (const asset of markets) {
@@ -868,6 +871,7 @@ export class AutonomousAgentLoop {
                 }).catch(err => {
                   this.log(`⚠️ [BINANCE LIVE] Auto-order notice: ${err.message}`, 'WARN');
                 });
+                this.lastSpotTradeOpenedAt = Date.now();
                 uConfig.lastSpotTradeOpenedAt = Date.now();
               } else {
                 const spotPos = uSpotEngine.openPosition({
@@ -899,6 +903,7 @@ export class AutonomousAgentLoop {
                   `🪙 [SPOT - ${uKey}] SCALP OPEN${scaleLabel}: Bought ${candidate.asset.symbol} with $${notional} (Portion ${uSpotEngine.activePositions.length}/${uSpotSlots}) @ $${formatAssetPrice(entryPrice, precision)} (Win Prob: ${candidate.signal.winProbability || 74.5}%, Fee: -$${spotPos?.entryFee || 0}). Target: +${candidate.signal.takeProfitPct || uSpotRisk.takeProfitPct}% ($${formatAssetPrice(takeProfit, precision)}) | Stop: -${candidate.signal.stopLossPct || uSpotRisk.stopLossPct}% ($${formatAssetPrice(stopLoss, precision)}) | Trailing Lock @ +1.0%`,
                   'SUCCESS'
                 );
+                this.lastSpotTradeOpenedAt = Date.now();
                 uConfig.lastSpotTradeOpenedAt = Date.now();
               }
             }
@@ -1226,6 +1231,11 @@ export class AutonomousAgentLoop {
               exitReason = 'TRAILING_PROFIT_LOCK';
               exitMsg = `🛡️ [BINANCE LIVE] Trailing Profit Lock: ${pos.symbol} secured +${peakGainPct.toFixed(2)}% peak gain at $${livePrice}!`;
             } else {
+              // Initial Noise Guard: Do NOT panic-dump the coin on normal wicks during first 90 seconds
+              const lossPct = ((livePrice - pos.entryPrice) / pos.entryPrice) * 100;
+              if (holdMinutes < 1.5 && lossPct > -3.0) {
+                continue;
+              }
               exitReason = 'STOP_LOSS_TRIGGER';
               exitMsg = `🛑 [BINANCE LIVE] Stop Loss Hit: ${pos.symbol} ($${livePrice} <= $${pos.stopLoss})!`;
             }
@@ -1482,6 +1492,20 @@ export class AutonomousAgentLoop {
       const precision = getAssetPrecision(livePrice || 1, 4);
 
       if (!trackedPos) {
+        // Anti-Phantom Safeguard: If this coin was closed/sold in the last 2 minutes,
+        // it is merely an in-flight balance update on Binance. Do NOT resurrect as a phantom holding!
+        const recentClosed = this.liveSpotClosedTrades || [];
+        const wasJustClosed = recentClosed.some(t => {
+          const tName = (t.name || t.symbol || '').replace(/[-_/]/g, '').replace(/USD$/, '').toUpperCase();
+          if (tName === assetUpper && t.exitTime) {
+            return (Date.now() - new Date(t.exitTime).getTime()) < 120000;
+          }
+          return false;
+        });
+        if (wasJustClosed) {
+          continue;
+        }
+
         const stopDist = entryPrice * (this.spotRiskManager.stopLossPct / 100);
         const targetDist = entryPrice * (this.spotRiskManager.takeProfitPct / 100);
         const stopLoss = Number((entryPrice - stopDist).toFixed(precision));
