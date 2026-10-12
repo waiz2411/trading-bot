@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { marketDataService } from './marketData.js';
 import { calculateTechnicalMetrics } from './technicalAnalysis.js';
-import { evaluateStrategyConfluence, evaluateSpotConfluence, evaluateBtcHealth, scanRelativeStrengthLeaders, scanHotGainerLeaders, evaluatePositionExit } from './strategyEngine.js';
+import { evaluateStrategyConfluence, evaluateSpotConfluence, evaluateBtcHealth, scanRelativeStrengthLeaders, scanPumpingHalalCoins, evaluatePositionExit } from './strategyEngine.js';
 import { RiskManager } from './riskManager.js';
 import { PaperTradingEngine } from './paperTradingEngine.js';
 import { binanceConnector } from './binanceConnector.js';
@@ -431,9 +431,12 @@ export class AutonomousAgentLoop {
         this.syncLiveSpotPositions(binanceConnector.cachedBalances, pricesMap);
       }
 
-      // Institutional Momentum & Relative Strength: Strictly track coins outperforming BTC with genuine strength, NOT 24h pump-and-dump spikes
-      const topLeaders = scanRelativeStrengthLeaders(markets, btcAsset?.candles, 5);
-      const spotContext = { btcHealth, topLeaders };
+      // Real-Time Pumping Halal Coins Engine: Continuously scans and isolates coins pumping in real time
+      const btcAsset = markets.find(m => m.symbol === 'BTC-USD' || m.symbol === 'BTCUSDT' || m.symbol === 'BTC/USDT');
+      const btcHealth = evaluateBtcHealth(btcAsset?.candles);
+      const pumpingLeaders = scanPumpingHalalCoins(markets, 6);
+      const topLeaders = pumpingLeaders.length > 0 ? pumpingLeaders : scanRelativeStrengthLeaders(markets, btcAsset?.candles, 5);
+      const spotContext = { btcHealth, pumpingLeaders, topLeaders };
 
       // 3. Pre-calculate technicals map for position auto-exit evaluation
       const technicalsMap = {};
@@ -1219,20 +1222,20 @@ export class AutonomousAgentLoop {
           const holdMinutes = (Date.now() - openMs) / 60000;
           const maxHoldMinutes = pos.maxHoldMinutes || this.spotRiskManager.maxHoldMinutes || 45;
 
-          // A. Break-Even Profit Lock (+0.60% move -> Lock in +0.20% Profit to clear fees)
+          // A. Break-Even Profit Lock (+0.70% move -> Lock in +0.25% Profit to clear fees)
           const peakGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;
           const precision = pos.decimals || 4;
-          if (peakGainPct >= 0.60) {
-            const beStop = Number((pos.entryPrice * 1.0020).toFixed(precision));
+          if (peakGainPct >= 0.70) {
+            const beStop = Number((pos.entryPrice * 1.0025).toFixed(precision));
             if (beStop > (pos.stopLoss || 0)) {
               pos.stopLoss = beStop;
               pos.breakEvenLocked = true;
             }
           }
 
-          // B. Hot-Coin Trailing Profit Lock (>= +0.85% gain -> Trail 0.30% behind peak)
-          if (peakGainPct >= 0.85) {
-            const trailStop = Number((pos.highestPrice * (1 - 0.0030)).toFixed(precision));
+          // B. Real-Time Pump Trailing Profit Lock (>= +0.95% gain -> Trail 0.25% behind peak)
+          if (peakGainPct >= 0.95) {
+            const trailStop = Number((pos.highestPrice * (1 - 0.0025)).toFixed(precision));
             if (trailStop > (pos.stopLoss || 0)) {
               pos.stopLoss = trailStop;
               pos.trailingStopActive = true;
