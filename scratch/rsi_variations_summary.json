@@ -1,0 +1,92 @@
+[
+  {
+    "Strategy": "[1m] V1: Pure Dip < 30 -> Exit 50 (SL -1.0%)",
+    "TotalTrades": 91,
+    "WinRate": "48.4%",
+    "CombinedNetReturn": "-10.41%"
+  },
+  {
+    "Strategy": "[1m] V2: Deep Dip < 25 -> Exit 50 (SL -1.0%)",
+    "TotalTrades": 44,
+    "WinRate": "56.8%",
+    "CombinedNetReturn": "0.97%"
+  },
+  {
+    "Strategy": "[1m] V3: Dip < 30 + Price > EMA200 (SL -1.0%)",
+    "TotalTrades": 11,
+    "WinRate": "27.3%",
+    "CombinedNetReturn": "-2.04%"
+  },
+  {
+    "Strategy": "[1m] V4: Dip < 30 -> Exit 60 (SL -1.0%)",
+    "TotalTrades": 80,
+    "WinRate": "51.2%",
+    "CombinedNetReturn": "-7.06%"
+  },
+  {
+    "Strategy": "[1m] V5: Dip < 30 -> Fixed +1.0% TP, -0.65% SL",
+    "TotalTrades": 90,
+    "WinRate": "41.1%",
+    "CombinedNetReturn": "-16.39%"
+  },
+  {
+    "Strategy": "[5m] V1: Pure Dip < 30 -> Exit 50 (SL -1.0%)",
+    "TotalTrades": 125,
+    "WinRate": "35.2%",
+    "CombinedNetReturn": "-61.74%"
+  },
+  {
+    "Strategy": "[5m] V2: Deep Dip < 25 -> Exit 50 (SL -1.0%)",
+    "TotalTrades": 57,
+    "WinRate": "31.6%",
+    "CombinedNetReturn": "-27.86%"
+  },
+  {
+    "Strategy": "[5m] V3: Dip < 30 + Price > EMA200 (SL -1.0%)",
+    "TotalTrades": 3,
+    "WinRate": "0.0%",
+    "CombinedNetReturn": "-2.44%"
+  },
+  {
+    "Strategy": "[5m] V4: Dip < 30 -> Exit 60 (SL -1.0%)",
+    "TotalTrades": 124,
+    "WinRate": "36.3%",
+    "CombinedNetReturn": "-44.44%"
+  },
+  {
+    "Strategy": "[5m] V5: Dip < 30 -> Fixed +1.0% TP, -0.65% SL",
+    "TotalTrades": 131,
+    "WinRate": "32.1%",
+    "CombinedNetReturn": "-41.71%"
+  },
+  {
+    "Strategy": "[15m] V1: Pure Dip < 30 -> Exit 50 (SL -1.0%)",
+    "TotalTrades": 96,
+    "WinRate": "45.8%",
+    "CombinedNetReturn": "-0.93%"
+  },
+  {
+    "Strategy": "[15m] V2: Deep Dip < 25 -> Exit 50 (SL -1.0%)",
+    "TotalTrades": 48,
+    "WinRate": "43.8%",
+    "CombinedNetReturn": "3.19%"
+  },
+  {
+    "Strategy": "[15m] V3: Dip < 30 + Price > EMA200 (SL -1.0%)",
+    "TotalTrades": 7,
+    "WinRate": "28.6%",
+    "CombinedNetReturn": "-2.41%"
+  },
+  {
+    "Strategy": "[15m] V4: Dip < 30 -> Exit 60 (SL -1.0%)",
+    "TotalTrades": 94,
+    "WinRate": "35.1%",
+    "CombinedNetReturn": "3.06%"
+  },
+  {
+    "Strategy": "[15m] V5: Dip < 30 -> Fixed +1.0% TP, -0.65% SL",
+    "TotalTrades": 101,
+    "WinRate": "39.6%",
+    "CombinedNetReturn": "-19.85%"
+  }
+]

@@ -525,18 +525,23 @@ export class PaperTradingEngine {
           const runUp = pos.highestPrice - pos.entryPrice;
           const rawGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;
 
-          // Break-Even Profit Lock (Requires genuine >= +1.25% gain to clear roundtrip fees & spread before locking +0.35%)
-          if (!pos.breakEvenLocked && rawGainPct >= 1.25) {
-            const proposedStop = Number((pos.entryPrice * 1.0035).toFixed(dec));
+          const beTrigger = pos.breakEvenTriggerPct !== undefined ? pos.breakEvenTriggerPct : 0.25;
+          const beLock = pos.breakEvenLockPct !== undefined ? pos.breakEvenLockPct : 0.22;
+          const trailTrigger = pos.trailingTriggerPct !== undefined ? pos.trailingTriggerPct : 0.50;
+          const trailDist = pos.trailingDistancePct !== undefined ? pos.trailingDistancePct : 0.10;
+
+          // Break-Even Profit Lock (engages at +0.25% gain -> locks +0.22% net profit to clear fees)
+          if (!pos.breakEvenLocked && rawGainPct >= beTrigger) {
+            const proposedStop = Number((pos.entryPrice * (1 + beLock / 100)).toFixed(dec));
             if (proposedStop < livePrice && (!pos.takeProfit || proposedStop < pos.takeProfit) && proposedStop > pos.stopLoss) {
               pos.stopLoss = proposedStop;
               pos.breakEvenLocked = true;
             }
           }
 
-          // Hot-Coin Trailing Stop: Once price gains >= +1.80%, trail stop closely at 0.50% below peak
-          if (rawGainPct >= 1.80) {
-            const hotTrailStop = Number((pos.highestPrice * (1 - 0.0050)).toFixed(dec));
+          // Real-Time Pump Trailing Stop: Once price gains >= trailTrigger, trail stop closely behind peak
+          if (rawGainPct >= trailTrigger) {
+            const hotTrailStop = Number((pos.highestPrice * (1 - trailDist / 100)).toFixed(dec));
             if (hotTrailStop < livePrice && hotTrailStop > pos.stopLoss) {
               pos.stopLoss = hotTrailStop;
               pos.trailingStopActive = true;

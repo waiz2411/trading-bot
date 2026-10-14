@@ -1,0 +1,106 @@
+{
+  "results": [
+    {
+      "Strategy": "Strategy 1: Momentum Volume Breakout",
+      "TotalTrades": 1801,
+      "WinRate": "42.3%",
+      "CombinedNetReturn": "+26.50%",
+      "AvgWin": "+0.83%",
+      "AvgLoss": "-0.58%",
+      "ProfitFactor": "1.04",
+      "AvgDuration": "21.2 mins"
+    },
+    {
+      "Strategy": "Strategy 2: 9/21 EMA Trend Pullback",
+      "TotalTrades": 4368,
+      "WinRate": "38.7%",
+      "CombinedNetReturn": "-357.21%",
+      "AvgWin": "+0.62%",
+      "AvgLoss": "-0.53%",
+      "ProfitFactor": "0.75",
+      "AvgDuration": "31.8 mins"
+    },
+    {
+      "Strategy": "Strategy 3: RSI Momentum Surge (55-Cross)",
+      "TotalTrades": 2257,
+      "WinRate": "36.1%",
+      "CombinedNetReturn": "-271.67%",
+      "AvgWin": "+0.57%",
+      "AvgLoss": "-0.51%",
+      "ProfitFactor": "0.63",
+      "AvgDuration": "33.8 mins"
+    },
+    {
+      "Strategy": "Strategy 4: 20-Bar Resistance Breakout",
+      "TotalTrades": 2589,
+      "WinRate": "41.5%",
+      "CombinedNetReturn": "+79.53%",
+      "AvgWin": "+0.84%",
+      "AvgLoss": "-0.55%",
+      "ProfitFactor": "1.10",
+      "AvgDuration": "26.6 mins"
+    },
+    {
+      "Strategy": "Strategy 5: Precision 3-Pillar Confluence",
+      "TotalTrades": 1155,
+      "WinRate": "37.1%",
+      "CombinedNetReturn": "-139.32%",
+      "AvgWin": "+0.57%",
+      "AvgLoss": "-0.52%",
+      "ProfitFactor": "0.63",
+      "AvgDuration": "32.6 mins"
+    }
+  ],
+  "optResults": [
+    {
+      "Strategy": "Opt 1: TP +0.90%, SL -0.60%, BE at +0.45% (Lock +0.20%)",
+      "TotalTrades": 1153,
+      "WinRate": "42.2%",
+      "CombinedNetReturn": "-103.09%",
+      "AvgWin": "+0.55%",
+      "AvgLoss": "-0.56%",
+      "ProfitFactor": "0.72",
+      "AvgDuration": "32.6 mins"
+    },
+    {
+      "Strategy": "Opt 2: TP +1.00%, SL -0.50%, BE at +0.45% (Lock +0.20%)",
+      "TotalTrades": 1159,
+      "WinRate": "38.1%",
+      "CombinedNetReturn": "-123.22%",
+      "AvgWin": "+0.54%",
+      "AvgLoss": "-0.50%",
+      "ProfitFactor": "0.66",
+      "AvgDuration": "29.9 mins"
+    },
+    {
+      "Strategy": "Opt 3: TP +0.80%, SL -0.50%, BE at +0.40% (Lock +0.18%)",
+      "TotalTrades": 1161,
+      "WinRate": "27.9%",
+      "CombinedNetReturn": "-85.73%",
+      "AvgWin": "+0.81%",
+      "AvgLoss": "-0.42%",
+      "ProfitFactor": "0.75",
+      "AvgDuration": "28.2 mins"
+    },
+    {
+      "Strategy": "Opt 4: TP +1.20%, SL -0.55%, BE at +0.50% (Lock +0.22%)",
+      "TotalTrades": 1155,
+      "WinRate": "52.1%",
+      "CombinedNetReturn": "-160.86%",
+      "AvgWin": "+0.37%",
+      "AvgLoss": "-0.69%",
+      "ProfitFactor": "0.58",
+      "AvgDuration": "32.5 mins"
+    },
+    {
+      "Strategy": "Opt 5: Ultra-Quick Pip: TP +0.70%, SL -0.45%, BE at +0.35% (Lock +0.15%)",
+      "TotalTrades": 1165,
+      "WinRate": "31.8%",
+      "CombinedNetReturn": "-60.26%",
+      "AvgWin": "+0.72%",
+      "AvgLoss": "-0.41%",
+      "ProfitFactor": "0.82",
+      "AvgDuration": "25.5 mins"
+    }
+  ]
+}

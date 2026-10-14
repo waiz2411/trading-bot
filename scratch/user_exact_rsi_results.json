@@ -1,0 +1,496 @@
+{
+  "allCoinReports": {
+    "RENDERUSDT": [
+      {
+        "config": "1. Exact User Rule (Dip < 35 -> Exit RSI 50, No SL)",
+        "trades": 51,
+        "winRate": "56.9%",
+        "totalNetPct": "-3.41%",
+        "avgWin": "+0.33%",
+        "avgLoss": "-0.59%",
+        "avgDuration": "15.0m"
+      },
+      {
+        "config": "2. User Rule + Tight SL -0.50% (Exit RSI 50)",
+        "trades": 74,
+        "winRate": "47.3%",
+        "totalNetPct": "-9.55%",
+        "avgWin": "+0.33%",
+        "avgLoss": "-0.54%",
+        "avgDuration": "7.3m"
+      },
+      {
+        "config": "3. User Rule + Balanced SL -0.80% (Exit RSI 50)",
+        "trades": 68,
+        "winRate": "57.4%",
+        "totalNetPct": "-6.94%",
+        "avgWin": "+0.33%",
+        "avgLoss": "-0.69%",
+        "avgDuration": "9.2m"
+      },
+      {
+        "config": "4. User Rule + Wide SL -1.20% (Exit RSI 50)",
+        "trades": 63,
+        "winRate": "58.7%",
+        "totalNetPct": "-7.14%",
+        "avgWin": "+0.34%",
+        "avgLoss": "-0.75%",
+        "avgDuration": "10.5m"
+      },
+      {
+        "config": "5. Dip < 35 -> Exit at Upper Band (RSI 75, SL -0.8%)",
+        "trades": 42,
+        "winRate": "23.8%",
+        "totalNetPct": "-8.57%",
+        "avgWin": "+2.34%",
+        "avgLoss": "-1.00%",
+        "avgDuration": "59.3m"
+      },
+      {
+        "config": "6. RSI Crosses Yellow MA from < 35 -> Exit RSI 50 (SL -0.8%)",
+        "trades": 62,
+        "winRate": "50.0%",
+        "totalNetPct": "-11.26%",
+        "avgWin": "+0.30%",
+        "avgLoss": "-0.67%",
+        "avgDuration": "8.0m"
+      }
+    ],
+    "NEARUSDT": [
+      {
+        "config": "1. Exact User Rule (Dip < 35 -> Exit RSI 50, No SL)",
+        "trades": 54,
+        "winRate": "55.6%",
+        "totalNetPct": "-2.00%",
+        "avgWin": "+0.22%",
+        "avgLoss": "-0.36%",
+        "avgDuration": "13.9m"
+      },
+      {
+        "config": "2. User Rule + Tight SL -0.50% (Exit RSI 50)",
+        "trades": 77,
+        "winRate": "46.8%",
+        "totalNetPct": "-13.51%",
+        "avgWin": "+0.26%",
+        "avgLoss": "-0.56%",
+        "avgDuration": "7.6m"
+      },
+      {
+        "config": "3. User Rule + Balanced SL -0.80% (Exit RSI 50)",
+        "trades": 67,
+        "winRate": "56.7%",
+        "totalNetPct": "-6.10%",
+        "avgWin": "+0.28%",
+        "avgLoss": "-0.58%",
+        "avgDuration": "10.2m"
+      },
+      {
+        "config": "4. User Rule + Wide SL -1.20% (Exit RSI 50)",
+        "trades": 63,
+        "winRate": "58.7%",
+        "totalNetPct": "-5.76%",
+        "avgWin": "+0.27%",
+        "avgLoss": "-0.61%",
+        "avgDuration": "11.4m"
+      },
+      {
+        "config": "5. Dip < 35 -> Exit at Upper Band (RSI 75, SL -0.8%)",
+        "trades": 39,
+        "winRate": "28.2%",
+        "totalNetPct": "-11.72%",
+        "avgWin": "+1.48%",
+        "avgLoss": "-1.00%",
+        "avgDuration": "68.1m"
+      },
+      {
+        "config": "6. RSI Crosses Yellow MA from < 35 -> Exit RSI 50 (SL -0.8%)",
+        "trades": 63,
+        "winRate": "44.4%",
+        "totalNetPct": "-5.18%",
+        "avgWin": "+0.30%",
+        "avgLoss": "-0.39%",
+        "avgDuration": "8.9m"
+      }
+    ],
+    "SOLUSDT": [
+      {
+        "config": "1. Exact User Rule (Dip < 35 -> Exit RSI 50, No SL)",
+        "trades": 50,
+        "winRate": "16.0%",
+        "totalNetPct": "-12.06%",
+        "avgWin": "+0.09%",
+        "avgLoss": "-0.30%",
+        "avgDuration": "17.9m"
+      },
+      {
+        "config": "2. User Rule + Tight SL -0.50% (Exit RSI 50)",
+        "trades": 61,
+        "winRate": "16.4%",
+        "totalNetPct": "-14.06%",
+        "avgWin": "+0.10%",
+        "avgLoss": "-0.30%",
+        "avgDuration": "12.5m"
+      },
+      {
+        "config": "3. User Rule + Balanced SL -0.80% (Exit RSI 50)",
+        "trades": 56,
+        "winRate": "16.1%",
+        "totalNetPct": "-14.18%",
+        "avgWin": "+0.11%",
+        "avgLoss": "-0.32%",
+        "avgDuration": "15.1m"
+      },
+      {
+        "config": "4. User Rule + Wide SL -1.20% (Exit RSI 50)",
+        "trades": 53,
+        "winRate": "17.0%",
+        "totalNetPct": "-12.87%",
+        "avgWin": "+0.09%",
+        "avgLoss": "-0.31%",
+        "avgDuration": "16.6m"
+      },
+      {
+        "config": "5. Dip < 35 -> Exit at Upper Band (RSI 75, SL -0.8%)",
+        "trades": 29,
+        "winRate": "31.0%",
+        "totalNetPct": "-11.41%",
+        "avgWin": "+0.81%",
+        "avgLoss": "-0.93%",
+        "avgDuration": "90.8m"
+      },
+      {
+        "config": "6. RSI Crosses Yellow MA from < 35 -> Exit RSI 50 (SL -0.8%)",
+        "trades": 56,
+        "winRate": "19.6%",
+        "totalNetPct": "-13.65%",
+        "avgWin": "+0.10%",
+        "avgLoss": "-0.33%",
+        "avgDuration": "12.9m"
+      }
+    ],
+    "SUIUSDT": [
+      {
+        "config": "1. Exact User Rule (Dip < 35 -> Exit RSI 50, No SL)",
+        "trades": 46,
+        "winRate": "26.1%",
+        "totalNetPct": "-9.83%",
+        "avgWin": "+0.15%",
+        "avgLoss": "-0.34%",
+        "avgDuration": "17.0m"
+      },
+      {
+        "config": "2. User Rule + Tight SL -0.50% (Exit RSI 50)",
+        "trades": 62,
+        "winRate": "32.3%",
+        "totalNetPct": "-13.89%",
+        "avgWin": "+0.19%",
+        "avgLoss": "-0.42%",
+        "avgDuration": "10.4m"
+      },
+      {
+        "config": "3. User Rule + Balanced SL -0.80% (Exit RSI 50)",
+        "trades": 54,
+        "winRate": "29.6%",
+        "totalNetPct": "-11.16%",
+        "avgWin": "+0.19%",
+        "avgLoss": "-0.37%",
+        "avgDuration": "13.5m"
+      },
+      {
+        "config": "4. User Rule + Wide SL -1.20% (Exit RSI 50)",
+        "trades": 52,
+        "winRate": "26.9%",
+        "totalNetPct": "-13.47%",
+        "avgWin": "+0.15%",
+        "avgLoss": "-0.41%",
+        "avgDuration": "14.4m"
+      },
+      {
+        "config": "5. Dip < 35 -> Exit at Upper Band (RSI 75, SL -0.8%)",
+        "trades": 38,
+        "winRate": "28.9%",
+        "totalNetPct": "-13.46%",
+        "avgWin": "+1.17%",
+        "avgLoss": "-0.98%",
+        "avgDuration": "75.5m"
+      },
+      {
+        "config": "6. RSI Crosses Yellow MA from < 35 -> Exit RSI 50 (SL -0.8%)",
+        "trades": 51,
+        "winRate": "29.4%",
+        "totalNetPct": "-7.26%",
+        "avgWin": "+0.23%",
+        "avgLoss": "-0.30%",
+        "avgDuration": "12.4m"
+      }
+    ],
+    "FETUSDT": [
+      {
+        "config": "1. Exact User Rule (Dip < 35 -> Exit RSI 50, No SL)",
+        "trades": 49,
+        "winRate": "26.5%",
+        "totalNetPct": "-7.67%",
+        "avgWin": "+0.17%",
+        "avgLoss": "-0.27%",
+        "avgDuration": "16.0m"
+      },
+      {
+        "config": "2. User Rule + Tight SL -0.50% (Exit RSI 50)",
+        "trades": 73,
+        "winRate": "37.0%",
+        "totalNetPct": "-16.73%",
+        "avgWin": "+0.24%",
+        "avgLoss": "-0.50%",
+        "avgDuration": "7.9m"
+      },
+      {
+        "config": "3. User Rule + Balanced SL -0.80% (Exit RSI 50)",
+        "trades": 61,
+        "winRate": "34.4%",
+        "totalNetPct": "-12.28%",
+        "avgWin": "+0.24%",
+        "avgLoss": "-0.43%",
+        "avgDuration": "11.5m"
+      },
+      {
+        "config": "4. User Rule + Wide SL -1.20% (Exit RSI 50)",
+        "trades": 55,
+        "winRate": "30.9%",
+        "totalNetPct": "-10.73%",
+        "avgWin": "+0.27%",
+        "avgLoss": "-0.40%",
+        "avgDuration": "13.7m"
+      },
+      {
+        "config": "5. Dip < 35 -> Exit at Upper Band (RSI 75, SL -0.8%)",
+        "trades": 40,
+        "winRate": "27.5%",
+        "totalNetPct": "-11.89%",
+        "avgWin": "+1.56%",
+        "avgLoss": "-1.00%",
+        "avgDuration": "67.1m"
+      },
+      {
+        "config": "6. RSI Crosses Yellow MA from < 35 -> Exit RSI 50 (SL -0.8%)",
+        "trades": 56,
+        "winRate": "41.1%",
+        "totalNetPct": "-8.00%",
+        "avgWin": "+0.23%",
+        "avgLoss": "-0.40%",
+        "avgDuration": "9.8m"
+      }
+    ],
+    "AVAXUSDT": [
+      {
+        "config": "1. Exact User Rule (Dip < 35 -> Exit RSI 50, No SL)",
+        "trades": 54,
+        "winRate": "33.3%",
+        "totalNetPct": "-8.50%",
+        "avgWin": "+0.12%",
+        "avgLoss": "-0.30%",
+        "avgDuration": "14.3m"
+      },
+      {
+        "config": "2. User Rule + Tight SL -0.50% (Exit RSI 50)",
+        "trades": 69,
+        "winRate": "31.9%",
+        "totalNetPct": "-14.49%",
+        "avgWin": "+0.12%",
+        "avgLoss": "-0.37%",
+        "avgDuration": "9.3m"
+      },
+      {
+        "config": "3. User Rule + Balanced SL -0.80% (Exit RSI 50)",
+        "trades": 62,
+        "winRate": "32.3%",
+        "totalNetPct": "-9.50%",
+        "avgWin": "+0.14%",
+        "avgLoss": "-0.29%",
+        "avgDuration": "11.6m"
+      },
+      {
+        "config": "4. User Rule + Wide SL -1.20% (Exit RSI 50)",
+        "trades": 58,
+        "winRate": "31.0%",
+        "totalNetPct": "-9.58%",
+        "avgWin": "+0.12%",
+        "avgLoss": "-0.30%",
+        "avgDuration": "12.8m"
+      },
+      {
+        "config": "5. Dip < 35 -> Exit at Upper Band (RSI 75, SL -0.8%)",
+        "trades": 32,
+        "winRate": "34.4%",
+        "totalNetPct": "-10.83%",
+        "avgWin": "+0.80%",
+        "avgLoss": "-0.94%",
+        "avgDuration": "88.3m"
+      },
+      {
+        "config": "6. RSI Crosses Yellow MA from < 35 -> Exit RSI 50 (SL -0.8%)",
+        "trades": 61,
+        "winRate": "27.9%",
+        "totalNetPct": "-8.74%",
+        "avgWin": "+0.18%",
+        "avgLoss": "-0.27%",
+        "avgDuration": "10.0m"
+      }
+    ],
+    "APTUSDT": [
+      {
+        "config": "1. Exact User Rule (Dip < 35 -> Exit RSI 50, No SL)",
+        "trades": 54,
+        "winRate": "35.2%",
+        "totalNetPct": "-8.32%",
+        "avgWin": "+0.16%",
+        "avgLoss": "-0.32%",
+        "avgDuration": "15.8m"
+      },
+      {
+        "config": "2. User Rule + Tight SL -0.50% (Exit RSI 50)",
+        "trades": 77,
+        "winRate": "42.9%",
+        "totalNetPct": "-17.97%",
+        "avgWin": "+0.16%",
+        "avgLoss": "-0.53%",
+        "avgDuration": "8.9m"
+      },
+      {
+        "config": "3. User Rule + Balanced SL -0.80% (Exit RSI 50)",
+        "trades": 63,
+        "winRate": "39.7%",
+        "totalNetPct": "-11.77%",
+        "avgWin": "+0.17%",
+        "avgLoss": "-0.42%",
+        "avgDuration": "12.0m"
+      },
+      {
+        "config": "4. User Rule + Wide SL -1.20% (Exit RSI 50)",
+        "trades": 59,
+        "winRate": "39.0%",
+        "totalNetPct": "-12.20%",
+        "avgWin": "+0.17%",
+        "avgLoss": "-0.44%",
+        "avgDuration": "13.7m"
+      },
+      {
+        "config": "5. Dip < 35 -> Exit at Upper Band (RSI 75, SL -0.8%)",
+        "trades": 45,
+        "winRate": "20.0%",
+        "totalNetPct": "-17.73%",
+        "avgWin": "+2.03%",
+        "avgLoss": "-1.00%",
+        "avgDuration": "56.6m"
+      },
+      {
+        "config": "6. RSI Crosses Yellow MA from < 35 -> Exit RSI 50 (SL -0.8%)",
+        "trades": 63,
+        "winRate": "31.7%",
+        "totalNetPct": "-13.11%",
+        "avgWin": "+0.24%",
+        "avgLoss": "-0.42%",
+        "avgDuration": "10.3m"
+      }
+    ],
+    "SEIUSDT": [
+      {
+        "config": "1. Exact User Rule (Dip < 35 -> Exit RSI 50, No SL)",
+        "trades": 45,
+        "winRate": "35.6%",
+        "totalNetPct": "-13.94%",
+        "avgWin": "+0.11%",
+        "avgLoss": "-0.54%",
+        "avgDuration": "18.2m"
+      },
+      {
+        "config": "2. User Rule + Tight SL -0.50% (Exit RSI 50)",
+        "trades": 66,
+        "winRate": "31.8%",
+        "totalNetPct": "-14.56%",
+        "avgWin": "+0.12%",
+        "avgLoss": "-0.38%",
+        "avgDuration": "9.4m"
+      },
+      {
+        "config": "3. User Rule + Balanced SL -0.80% (Exit RSI 50)",
+        "trades": 57,
+        "winRate": "31.6%",
+        "totalNetPct": "-15.78%",
+        "avgWin": "+0.12%",
+        "avgLoss": "-0.46%",
+        "avgDuration": "12.5m"
+      },
+      {
+        "config": "4. User Rule + Wide SL -1.20% (Exit RSI 50)",
+        "trades": 52,
+        "winRate": "36.5%",
+        "totalNetPct": "-13.58%",
+        "avgWin": "+0.11%",
+        "avgLoss": "-0.47%",
+        "avgDuration": "14.2m"
+      },
+      {
+        "config": "5. Dip < 35 -> Exit at Upper Band (RSI 75, SL -0.8%)",
+        "trades": 38,
+        "winRate": "28.9%",
+        "totalNetPct": "-16.01%",
+        "avgWin": "+0.94%",
+        "avgLoss": "-0.97%",
+        "avgDuration": "70.2m"
+      },
+      {
+        "config": "6. RSI Crosses Yellow MA from < 35 -> Exit RSI 50 (SL -0.8%)",
+        "trades": 56,
+        "winRate": "21.4%",
+        "totalNetPct": "-12.49%",
+        "avgWin": "+0.30%",
+        "avgLoss": "-0.36%",
+        "avgDuration": "11.5m"
+      }
+    ]
+  },
+  "summaryTable": [
+    {
+      "Configuration": "1. Exact User Rule (Dip < 35 -> Exit RSI 50, No SL)",
+      "TotalTrades": 403,
+      "WinRate": "36.0%",
+      "CombinedNetReturn": "-65.73%",
+      "AvgTradeDuration": "15.9 mins"
+    },
+    {
+      "Configuration": "2. User Rule + Tight SL -0.50% (Exit RSI 50)",
+      "TotalTrades": 559,
+      "WinRate": "36.5%",
+      "CombinedNetReturn": "-114.76%",
+      "AvgTradeDuration": "9.0 mins"
+    },
+    {
+      "Configuration": "3. User Rule + Balanced SL -0.80% (Exit RSI 50)",
+      "TotalTrades": 488,
+      "WinRate": "38.1%",
+      "CombinedNetReturn": "-87.71%",
+      "AvgTradeDuration": "11.8 mins"
+    },
+    {
+      "Configuration": "4. User Rule + Wide SL -1.20% (Exit RSI 50)",
+      "TotalTrades": 455,
+      "WinRate": "38.2%",
+      "CombinedNetReturn": "-85.33%",
+      "AvgTradeDuration": "13.3 mins"
+    },
+    {
+      "Configuration": "5. Dip < 35 -> Exit at Upper Band (RSI 75, SL -0.8%)",
+      "TotalTrades": 303,
+      "WinRate": "27.4%",
+      "CombinedNetReturn": "-101.62%",
+      "AvgTradeDuration": "70.5 mins"
+    },
+    {
+      "Configuration": "6. RSI Crosses Yellow MA from < 35 -> Exit RSI 50 (SL -0.8%)",
+      "TotalTrades": 468,
+      "WinRate": "33.5%",
+      "CombinedNetReturn": "-79.69%",
+      "AvgTradeDuration": "10.4 mins"
+    }
+  ]
+}

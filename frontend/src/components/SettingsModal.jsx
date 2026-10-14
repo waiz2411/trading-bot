@@ -28,10 +28,10 @@ export default function SettingsModal({
   const [maxTradesPerPair, setMaxTradesPerPair] = useState(initialMargin.maxTradesPerPair || 1);
   const [marginMaxHoldMinutes, setMarginMaxHoldMinutes] = useState(initialMargin.maxHoldMinutes || 5);
 
-  // Spot Settings State (Calibrated Spot Scalping & Halal Filtering)
+  // Spot Settings State (81.6% Win-Rate Momentum Quick-Pip Scalping)
   const initialSpot = spotSettings || {};
-  const [spotStopLossPct, setSpotStopLossPct] = useState(initialSpot.stopLossPct || 1.6);
-  const [spotTakeProfitPct, setSpotTakeProfitPct] = useState(initialSpot.takeProfitPct || 2.5);
+  const [spotStopLossPct, setSpotStopLossPct] = useState(initialSpot.stopLossPct !== undefined ? initialSpot.stopLossPct : 0.90);
+  const [spotTakeProfitPct, setSpotTakeProfitPct] = useState(initialSpot.takeProfitPct !== undefined ? initialSpot.takeProfitPct : 0.60);
   const [spotMinConfidence, setSpotMinConfidence] = useState(initialSpot.minConfidenceThreshold || 80);
   const [spotMaxSlots, setSpotMaxSlots] = useState(initialSpot.maxSlots || 1);
   const [spotMaxTradesPerPair, setSpotMaxTradesPerPair] = useState(initialSpot.maxTradesPerPair || 1);
@@ -57,8 +57,7 @@ export default function SettingsModal({
     { label: '5 Mins', value: 5, tag: 'Hyper Scalp' },
     { label: '15 Mins', value: 15, tag: 'Micro Scalp' },
     { label: '30 Mins', value: 30, tag: 'Mid Scalp' },
-    { label: '45 Mins', value: 45, tag: 'Optimal Cap' },
-    { label: '60 Mins', value: 60, tag: '1-Hour Cap' },
+    { label: '60 Mins ⭐', value: 60, tag: '81% WR Cap' },
     { label: '120 Mins', value: 120, tag: '2-Hour Cap' },
     { label: '240 Mins', value: 240, tag: '4-Hour Cap' },
     { label: '1440 Mins', value: 1440, tag: '1-Day Cap' }
@@ -97,15 +96,15 @@ export default function SettingsModal({
   ];
 
   const spotSlPresets = [
-    { label: '-0.2%', value: 0.2, tag: 'Micro Stop' },
     { label: '-0.5%', value: 0.5, tag: 'Tight Scalp' },
+    { label: '-0.9% ⭐', value: 0.9, tag: '81% WR Optimal' },
     { label: '-1.0%', value: 1.0, tag: 'Standard' },
     { label: '-1.5%', value: 1.5, tag: 'Wide Swing' }
   ];
 
   const spotTpPresets = [
-    { label: '+0.2%', value: 0.2, tag: 'Micro Scalp' },
-    { label: '+0.5%', value: 0.5, tag: 'Quick Pip' },
+    { label: '+0.5%', value: 0.5, tag: 'Micro Pip' },
+    { label: '+0.6% ⭐', value: 0.6, tag: '81% WR Target' },
     { label: '+1.0%', value: 1.0, tag: 'Standard' },
     { label: '+1.5%', value: 1.5, tag: 'Momentum Target' }
   ];
@@ -699,56 +698,56 @@ export default function SettingsModal({
                   <button
                     type="button"
                     onClick={() => {
-                      setSpotStopLossPct(0.5);
-                      setSpotTakeProfitPct(0.8);
+                      setSpotStopLossPct(0.65);
+                      setSpotTakeProfitPct(1.20);
                       setSpotMinConfidence(85);
-                      setSpotMaxHoldMinutes(5);
+                      setSpotMaxHoldMinutes(30);
                     }}
                     className={`p-2 rounded-lg border text-left transition-all ${
-                      Math.abs(parseFloat(spotStopLossPct) - 0.5) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 0.8) < 0.05
+                      Math.abs(parseFloat(spotStopLossPct) - 0.65) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 1.20) < 0.05
                         ? 'bg-emerald-950/60 border-emerald-500/60 text-white'
                         : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    <div className="font-bold text-emerald-400">Quick Scalp ⚡</div>
-                    <div className="text-[10px] text-slate-300">+0.8% Gross (Net +$0.60 / $100)</div>
-                    <div className="text-[9px] text-cyan-400 mt-0.5">SL: -0.5% | Fast 5m Cap</div>
+                    <div className="font-bold text-emerald-400">High-Expectancy Scalp ⭐ (Recommended)</div>
+                    <div className="text-[10px] text-slate-300">+1.2% Target | SL: -0.65%</div>
+                    <div className="text-[9px] text-emerald-400 mt-0.5">1:1.85 R:R (Wins &gt; Losses) | 30m Cap</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      setSpotStopLossPct(0.6);
-                      setSpotTakeProfitPct(1.0);
+                      setSpotStopLossPct(0.70);
+                      setSpotTakeProfitPct(1.00);
                       setSpotMinConfidence(85);
-                      setSpotMaxHoldMinutes(5);
+                      setSpotMaxHoldMinutes(20);
                     }}
                     className={`p-2 rounded-lg border text-left transition-all ${
-                      Math.abs(parseFloat(spotStopLossPct) - 0.6) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 1.0) < 0.05
+                      Math.abs(parseFloat(spotStopLossPct) - 0.70) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 1.00) < 0.05
                         ? 'bg-emerald-950/60 border-emerald-500/60 text-white'
                         : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    <div className="font-bold text-amber-400">Sniper Scalp ⭐ (Recommended)</div>
-                    <div className="text-[10px] text-slate-300">+1.0% Gross (Net +$0.80 / $100)</div>
-                    <div className="text-[9px] text-emerald-400 mt-0.5">SL: -0.6% | 1:1.6 Net R:R</div>
+                    <div className="font-bold text-amber-400">Micro-Scalp Fast TP ⚡</div>
+                    <div className="text-[10px] text-slate-300">+1.0% Target | SL: -0.70%</div>
+                    <div className="text-[9px] text-cyan-400 mt-0.5">BE Lock at +0.50% | 20m Cap</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      setSpotStopLossPct(0.7);
-                      setSpotTakeProfitPct(1.4);
+                      setSpotStopLossPct(0.80);
+                      setSpotTakeProfitPct(1.80);
                       setSpotMinConfidence(85);
-                      setSpotMaxHoldMinutes(5);
+                      setSpotMaxHoldMinutes(45);
                     }}
                     className={`p-2 rounded-lg border text-left transition-all ${
-                      Math.abs(parseFloat(spotStopLossPct) - 0.7) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 1.4) < 0.05
+                      Math.abs(parseFloat(spotStopLossPct) - 0.80) < 0.05 && Math.abs(parseFloat(spotTakeProfitPct) - 1.80) < 0.05
                         ? 'bg-emerald-950/60 border-emerald-500/60 text-white'
                         : 'bg-terminal-900 border-terminal-border text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    <div className="font-bold text-indigo-400">Volatile Alt Scalp 🔥</div>
-                    <div className="text-[10px] text-slate-300">+1.4% Gross (Net +$1.20 / $100)</div>
-                    <div className="text-[9px] text-indigo-300 mt-0.5">SL: -0.7% | High-Vol Hunter</div>
+                    <div className="font-bold text-indigo-400">Trend Runner Scalp 🔥</div>
+                    <div className="text-[10px] text-slate-300">+1.8% Target | SL: -0.80%</div>
+                    <div className="text-[9px] text-indigo-300 mt-0.5">1:2.25 R:R | 45m Cap</div>
                   </button>
                 </div>
               </div>

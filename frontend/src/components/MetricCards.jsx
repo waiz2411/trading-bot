@@ -255,8 +255,8 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
             </span>
           </div>
           <div className="text-[11px] font-mono mt-1 text-emerald-400 font-semibold flex items-center justify-between">
-            <span>1:{riskSettings?.targetRiskRewardRatio || '1.3'} R:R</span>
-            <span className="text-slate-400 font-normal">SL -{riskSettings?.stopLossPct || '0.6'}% | TP +{riskSettings?.takeProfitPct || '0.78'}%</span>
+            <span>1:{riskSettings?.targetRiskRewardRatio || '1.85'} R:R</span>
+            <span className="text-slate-400 font-normal">SL -{riskSettings?.stopLossPct || '0.65'}% | TP +{riskSettings?.takeProfitPct || '1.2'}%</span>
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-emerald-500 opacity-60" />
         </div>

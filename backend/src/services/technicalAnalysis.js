@@ -141,6 +141,20 @@ export function calculateBollingerBands(closes, period = 20, stdDev = 2) {
   };
 }
 
+export function calculateVWAP(candles, period = 48) {
+  if (!candles || candles.length === 0) return null;
+  const slice = candles.slice(-Math.min(candles.length, period));
+  let cumTypicalVol = 0;
+  let cumVol = 0;
+  for (const c of slice) {
+    const typicalPrice = (c.high + c.low + c.close) / 3;
+    const vol = Number(c.volume) || 1;
+    cumTypicalVol += typicalPrice * vol;
+    cumVol += vol;
+  }
+  return cumVol > 0 ? Number((cumTypicalVol / cumVol).toFixed(6)) : slice[slice.length - 1].close;
+}
+
 export function calculateTechnicalMetrics(candles) {
   if (!candles || candles.length < 30) {
     return null;
@@ -160,37 +174,56 @@ export function calculateTechnicalMetrics(candles) {
 
   const ema9 = ema9Series[ema9Series.length - 1];
   const ema21 = ema21Series[ema21Series.length - 1];
+  const prevEma9 = ema9Series[ema9Series.length - 2] ?? ema9;
+  const prevEma21 = ema21Series[ema21Series.length - 2] ?? ema21;
   const ema50 = ema50Series[ema50Series.length - 1];
   const ema200 = ema200Series[ema200Series.length - 1];
+
+  // 9 EMA Crossing above 21 EMA Momentum Trigger
+  const ema9CrossAbove21 = (prevEma9 <= prevEma21) && (ema9 > ema21);
+  const isEmaUptrend = ema9 > ema21;
 
   const volSma20Series = calculateSMA(volumes, 20);
   const volSma20 = volSma20Series[volSma20Series.length - 1];
   const currentVolume = volumes[volumes.length - 1];
+  const rvol = (volSma20 && volSma20 > 0) ? Number((currentVolume / volSma20).toFixed(2)) : 1;
 
   const rsi = calculateRSI(closes, 14);
   const macd = calculateMACD(closes, 12, 26, 9);
   const atr = calculateATR(highs, lows, closes, 14) || (currentPrice * 0.015);
   const bb = calculateBollingerBands(closes, 20, 2);
+  const vwap = calculateVWAP(candles, 48);
 
-  // Support and Resistance based on recent 20-candle swings
-  const recentHighs = highs.slice(-20);
-  const recentLows = lows.slice(-20);
-  const resistance = Math.max(...recentHighs);
-  const support = Math.min(...recentLows);
+  // Support and Resistance based on recent 24-candle swings
+  const lookbackSwings = candles.slice(-24);
+  const recentHighs = lookbackSwings.map(c => c.high);
+  const recentLows = lookbackSwings.map(c => c.low);
+  const resistance = Math.max(...recentHighs.slice(0, -1)); // Resistance excluding current bar
+  const support = Math.min(...recentLows.slice(0, -1));
+
+  // Count how many times resistance was tested within 0.4% without breaking
+  const resistanceTests = lookbackSwings.filter(c => Math.abs(c.high - resistance) / resistance <= 0.004).length;
 
   return {
     currentPrice,
     currentVolume: Number(currentVolume) || 0,
     volSma20: volSma20 !== null && volSma20 !== undefined ? Number(volSma20) : 0,
+    rvol,
     ema9: ema9 !== null && ema9 !== undefined ? Number(ema9) : currentPrice,
     ema21: ema21 !== null && ema21 !== undefined ? Number(ema21) : currentPrice,
+    prevEma9,
+    prevEma21,
+    ema9CrossAbove21,
+    isEmaUptrend,
     ema50: ema50 !== null && ema50 !== undefined ? Number(ema50) : null,
     ema200: ema200 !== null && ema200 !== undefined ? Number(ema200) : null,
+    vwap: vwap || currentPrice,
     rsi,
     macd,
     atr,
     bb,
     resistance: Number(resistance),
+    resistanceTests,
     support: Number(support),
     candleCount: candles.length
   };

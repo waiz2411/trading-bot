@@ -1133,12 +1133,6 @@ app.post('/api/trades/execute', async (req, res) => {
         const usdtObj = balances.find(b => b.asset === 'USDT');
         spotCash = usdtObj ? Number(usdtObj.free) : 0;
 
-        // Dynamic slot sizing: on micro-balance Spot accounts (< $20), collapse to 1 slot
-        // so that orders meet Binance's minNotional requirement ($5.00 USDT per trade)
-        if (spotCash < 20) {
-          maxSlots = 1;
-        }
-
         if (spotCash < 5.0) {
           return res.status(400).json({ error: `Insufficient Spot USDT balance ($${spotCash.toFixed(2)}). Binance requires at least $5.00 USDT per trade.` });
         }
@@ -1149,9 +1143,6 @@ app.post('/api/trades/execute', async (req, res) => {
           return res.status(400).json({ error: `Spot Account allows ${maxSlots} active coin position(s) at ${(100 / maxSlots).toFixed(0)}% allocation. Close current position first.` });
         }
       } else {
-        if (spotCash < 20) {
-          maxSlots = 1;
-        }
         if (agentLoop.getEngine('SPOT', userEmail).activePositions.length >= maxSlots) {
           return res.status(400).json({ error: `Spot Account allows ${maxSlots} active coin position(s) at ${(100 / maxSlots).toFixed(0)}% allocation. Close current position first.` });
         }
@@ -1427,14 +1418,6 @@ if (!process.env.PRIMARY_BACKEND_URL) {
 
   (async () => { try { const user = await authService.getUserByEmail('waiztahseen@gmail.com'); if (user && user.brokerConnections && user.brokerConnections.binance && user.brokerConnections.binance.apiKey) { const binCfg = user.brokerConnections.binance; binanceConnector.configure({ apiKey: binCfg.apiKey, apiSecret: binCfg.apiSecret, isTestnet: !!binCfg.isTestnet, proxyUrl: binCfg.proxyUrl || '', ownerEmail: user.email }); const res = await binanceConnector.testConnection(); console.log('[BOOT] Restored Binance connection for ' + user.email + '. Connected: ' + res.connected); } } catch (e) { console.warn('[BOOT] Failed to auto-restore binance config:', e.message); } })();
 
-// Always listen on TCP port for ultra-reliable local reverse-proxy communication
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`=======================================================`);
-  console.log(`🚀 Scalping Agent Backend running on port ${PORT}`);
-  console.log(`📡 Autonomous Scalp Loop active: 27 Global Markets | 500x Lev | 1:1.3 R:R`);
-  console.log(`=======================================================`);
-});
-
 const SOCKET_PATH = process.env.SOCKET_PATH;
 if (SOCKET_PATH) {
   try {
@@ -1445,14 +1428,33 @@ if (SOCKET_PATH) {
 
   try {
     const socketServer = http.createServer(app);
+    socketServer.on('error', (sockErr) => {
+      console.error('❌ Unix socket server error:', sockErr.message);
+    });
     socketServer.listen(SOCKET_PATH, () => {
       try { fs.chmodSync(SOCKET_PATH, '777'); } catch (_) {}
-      console.log(`🚀 Scalping Agent Backend also listening on Unix Socket: ${SOCKET_PATH}`);
+      console.log(`=======================================================`);
+      console.log(`🚀 Scalping Agent Backend active on Unix Socket: ${SOCKET_PATH}`);
+      console.log(`📡 Autonomous Scalp Loop active: 27 Global Markets | 500x Lev | 1:1.3 R:R`);
+      console.log(`=======================================================`);
     });
   } catch (sockErr) {
     console.warn('⚠️ Unix socket setup notice:', sockErr.message);
   }
 }
+
+// TCP Port Listener with graceful fallback for shared hosting
+const tcpPort = PORT || 5000;
+const tcpServer = app.listen(tcpPort, '127.0.0.1', () => {
+  console.log(`🚀 Scalping Agent Backend listening on TCP 127.0.0.1:${tcpPort}`);
+});
+tcpServer.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.warn(`⚠️ TCP Port ${tcpPort} is occupied on shared host; running smoothly on Unix Socket.`);
+  } else {
+    console.warn('⚠️ TCP listener notice:', err.message);
+  }
+});
 
 
 

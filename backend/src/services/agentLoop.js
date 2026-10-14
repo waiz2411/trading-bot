@@ -72,13 +72,15 @@ export class AutonomousAgentLoop {
           maxSlots: 1,
           allocationPct: 100,
           maxTradesPerPair: 1,
-          stopLossPct: 1.50,
-          takeProfitPct: 2.50,
-          trailingTriggerPct: 1.80,
-          trailingDistancePct: 0.50,
+          stopLossPct: 0.90,
+          takeProfitPct: 0.60,
+          breakEvenTriggerPct: 0.25,
+          breakEvenLockPct: 0.22,
+          trailingTriggerPct: 0.50,
+          trailingDistancePct: 0.10,
           pullbackDiscountPct: 0,
-          maxHoldMinutes: 120,
-          minConfidenceThreshold: 90,
+          maxHoldMinutes: 60,
+          minConfidenceThreshold: 80,
           allowHighVolatility: true,
           volatilityMode: 'HIGH_VOLATILITY_HALAL',
           useBnbFeeDiscount: true,
@@ -705,16 +707,16 @@ export class AutonomousAgentLoop {
           continue;
         }
 
-        const dynamicSlots = (totalCash < 20 || !uSpotRisk.maxSlots) ? 1 : uSpotRisk.maxSlots;
+        const dynamicSlots = uSpotRisk.maxSlots || 1;
         const uSpotSlots = dynamicSlots;
         const uSpotOpen = isUserLive ? (this.liveSpotPositions || []) : (uSpotEngine.activePositions || []);
         const globalTimeSinceLastSpot = Date.now() - (this.lastSpotTradeOpenedAt || 0);
         const uTimeSinceLastSpot = Date.now() - (uConfig.lastSpotTradeOpenedAt || 0);
         const timeSinceLastSpot = Math.min(globalTimeSinceLastSpot, uTimeSinceLastSpot);
 
-        // Anti-churn frequency filter: strictly at least 30 minutes between spot trades
+        // Anti-churn frequency filter: 30s inter-trade pacing delay between consecutive entries
         const hasNoPriorTrade = !this.lastSpotTradeOpenedAt && !uConfig.lastSpotTradeOpenedAt;
-        if (uSpotOpen.length < uSpotSlots && (timeSinceLastSpot >= 30 * 60 * 1000 || hasNoPriorTrade)) {
+        if (uSpotOpen.length < uSpotSlots && (timeSinceLastSpot >= 30 * 1000 || hasNoPriorTrade)) {
           // Find candidates matching uSpotRisk and uConfig
           const uValidSpotBuys = [];
           for (const asset of markets) {
@@ -890,7 +892,11 @@ export class AutonomousAgentLoop {
                     confidence: candidate.signal.confidence,
                     reason: `[DEMO MIRROR] Spot Scalp (${candidate.signal.reason})`,
                     riskRewardRatio: Number((uSpotRisk.takeProfitPct / uSpotRisk.stopLossPct).toFixed(1)),
-                    maxHoldMinutes: candidate.signal.maxHoldMinutes || uSpotRisk.maxHoldMinutes || 45,
+                    maxHoldMinutes: candidate.signal.maxHoldMinutes || uSpotRisk.maxHoldMinutes || 60,
+                    breakEvenTriggerPct: candidate.signal.breakEvenTriggerPct || uSpotRisk.breakEvenTriggerPct || 0.25,
+                    breakEvenLockPct: candidate.signal.breakEvenLockPct || uSpotRisk.breakEvenLockPct || 0.22,
+                    trailingTriggerPct: candidate.signal.trailingTriggerPct || uSpotRisk.trailingTriggerPct || 0.50,
+                    trailingDistancePct: candidate.signal.trailingDistancePct || uSpotRisk.trailingDistancePct || 0.10,
                     tradingStyle: 'SPOT_BUY',
                     feeRate: 0.00075,
                     leverage: 1,
@@ -918,7 +924,11 @@ export class AutonomousAgentLoop {
                   confidence: candidate.signal.confidence,
                   reason: `Spot Scalp Slot ${uSpotEngine.activePositions.length + 1}/${uSpotSlots}${scaleLabel} (${candidate.signal.reason})`,
                   riskRewardRatio: Number((uSpotRisk.takeProfitPct / uSpotRisk.stopLossPct).toFixed(1)),
-                  maxHoldMinutes: candidate.signal.maxHoldMinutes || uSpotRisk.maxHoldMinutes || 45,
+                  maxHoldMinutes: candidate.signal.maxHoldMinutes || uSpotRisk.maxHoldMinutes || 60,
+                  breakEvenTriggerPct: candidate.signal.breakEvenTriggerPct || uSpotRisk.breakEvenTriggerPct || 0.25,
+                  breakEvenLockPct: candidate.signal.breakEvenLockPct || uSpotRisk.breakEvenLockPct || 0.22,
+                  trailingTriggerPct: candidate.signal.trailingTriggerPct || uSpotRisk.trailingTriggerPct || 0.50,
+                  trailingDistancePct: candidate.signal.trailingDistancePct || uSpotRisk.trailingDistancePct || 0.10,
                   tradingStyle: 'SPOT_BUY',
                   exitRule: candidate.signal.exitRule || 'HOT_RETEST_TRAILING_LOCK',
                   feeRate: uSpotRisk.feeRate || (uSpotRisk.useBnbFeeDiscount ? 0.00075 : 0.0010),
@@ -1222,20 +1232,24 @@ export class AutonomousAgentLoop {
           const holdMinutes = (Date.now() - openMs) / 60000;
           const maxHoldMinutes = pos.maxHoldMinutes || this.spotRiskManager.maxHoldMinutes || 45;
 
-          // A. Break-Even Profit Lock (+0.70% move -> Lock in +0.25% Profit to clear fees)
+          // A. Break-Even Profit Lock (+0.25% move -> Lock in +0.22% Net Profit to clear Binance fees)
           const peakGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;
           const precision = pos.decimals || 4;
-          if (peakGainPct >= 0.70) {
-            const beStop = Number((pos.entryPrice * 1.0025).toFixed(precision));
+          const beTrigger = pos.breakEvenTriggerPct || this.spotRiskManager?.breakEvenTriggerPct || 0.25;
+          const beLock = pos.breakEvenLockPct || this.spotRiskManager?.breakEvenLockPct || 0.22;
+          if (peakGainPct >= beTrigger) {
+            const beStop = Number((pos.entryPrice * (1 + beLock / 100)).toFixed(precision));
             if (beStop > (pos.stopLoss || 0)) {
               pos.stopLoss = beStop;
               pos.breakEvenLocked = true;
             }
           }
 
-          // B. Real-Time Pump Trailing Profit Lock (>= +0.95% gain -> Trail 0.25% behind peak)
-          if (peakGainPct >= 0.95) {
-            const trailStop = Number((pos.highestPrice * (1 - 0.0025)).toFixed(precision));
+          // B. Real-Time Pump Trailing Profit Lock (>= +0.50% gain -> Trail 0.10% behind peak)
+          const trailTrigger = pos.trailingTriggerPct || this.spotRiskManager?.trailingTriggerPct || 0.50;
+          const trailDist = (pos.trailingDistancePct || this.spotRiskManager?.trailingDistancePct || 0.10) / 100;
+          if (peakGainPct >= trailTrigger) {
+            const trailStop = Number((pos.highestPrice * (1 - trailDist)).toFixed(precision));
             if (trailStop > (pos.stopLoss || 0)) {
               pos.stopLoss = trailStop;
               pos.trailingStopActive = true;
@@ -1945,8 +1959,8 @@ export class AutonomousAgentLoop {
       maxConcurrentTrades: dynamicMarginSlots
     };
     const spotCash = spotPortfolio.balance != null ? spotPortfolio.balance : (userSpotEngine.balance || 10);
-    const dynamicSpotSlots = (spotCash < 20 || !userSpotRisk.maxSlots) ? 1 : userSpotRisk.maxSlots;
-    const dynamicAllocationPct = Number((100 / dynamicSpotSlots).toFixed(0));
+    const dynamicSpotSlots = userSpotRisk.maxSlots || 1;
+    const dynamicAllocationPct = Number((100 / dynamicSpotSlots).toFixed(1));
 
     const spotRisk = {
       ...userSpotRisk,

@@ -1,0 +1,457 @@
+{
+  "resultsByCoin": {
+    "RENDERUSDT": [
+      {
+        "config": "Pure TV (No SL, Exit at RSI 50 only)",
+        "totalTrades": 38,
+        "winRate": "52.6%",
+        "totalNetPct": "-1.84%",
+        "avgWin": "+0.37%",
+        "avgLoss": "-0.51%",
+        "avgDurationMins": "16.0m",
+        "profitFactor": "0.80"
+      },
+      {
+        "config": "Tight SL -0.50% (Exit at RSI 50)",
+        "totalTrades": 51,
+        "winRate": "45.1%",
+        "totalNetPct": "-4.15%",
+        "avgWin": "+0.43%",
+        "avgLoss": "-0.50%",
+        "avgDurationMins": "8.9m",
+        "profitFactor": "0.70"
+      },
+      {
+        "config": "Balanced SL -0.80% (Exit at RSI 50)",
+        "totalTrades": 47,
+        "winRate": "51.1%",
+        "totalNetPct": "-3.30%",
+        "avgWin": "+0.44%",
+        "avgLoss": "-0.60%",
+        "avgDurationMins": "11.1m",
+        "profitFactor": "0.76"
+      },
+      {
+        "config": "Wide SL -1.20% (Exit at RSI 50)",
+        "totalTrades": 43,
+        "winRate": "51.2%",
+        "totalNetPct": "-3.45%",
+        "avgWin": "+0.39%",
+        "avgLoss": "-0.57%",
+        "avgDurationMins": "13.1m",
+        "profitFactor": "0.71"
+      },
+      {
+        "config": "Ultra-Wide SL -2.00% (Exit at RSI 50)",
+        "totalTrades": 39,
+        "winRate": "53.8%",
+        "totalNetPct": "-2.75%",
+        "avgWin": "+0.39%",
+        "avgLoss": "-0.60%",
+        "avgDurationMins": "15.1m",
+        "profitFactor": "0.75"
+      }
+    ],
+    "NEARUSDT": [
+      {
+        "config": "Pure TV (No SL, Exit at RSI 50 only)",
+        "totalTrades": 39,
+        "winRate": "64.1%",
+        "totalNetPct": "1.13%",
+        "avgWin": "+0.33%",
+        "avgLoss": "-0.50%",
+        "avgDurationMins": "15.6m",
+        "profitFactor": "1.16"
+      },
+      {
+        "config": "Tight SL -0.50% (Exit at RSI 50)",
+        "totalTrades": 50,
+        "winRate": "56.0%",
+        "totalNetPct": "-1.19%",
+        "avgWin": "+0.39%",
+        "avgLoss": "-0.55%",
+        "avgDurationMins": "9.8m",
+        "profitFactor": "0.90"
+      },
+      {
+        "config": "Balanced SL -0.80% (Exit at RSI 50)",
+        "totalTrades": 47,
+        "winRate": "59.6%",
+        "totalNetPct": "0.29%",
+        "avgWin": "+0.39%",
+        "avgLoss": "-0.56%",
+        "avgDurationMins": "11.8m",
+        "profitFactor": "1.03"
+      },
+      {
+        "config": "Wide SL -1.20% (Exit at RSI 50)",
+        "totalTrades": 45,
+        "winRate": "62.2%",
+        "totalNetPct": "-1.72%",
+        "avgWin": "+0.35%",
+        "avgLoss": "-0.68%",
+        "avgDurationMins": "12.4m",
+        "profitFactor": "0.85"
+      },
+      {
+        "config": "Ultra-Wide SL -2.00% (Exit at RSI 50)",
+        "totalTrades": 40,
+        "winRate": "65.0%",
+        "totalNetPct": "0.55%",
+        "avgWin": "+0.32%",
+        "avgLoss": "-0.56%",
+        "avgDurationMins": "14.8m",
+        "profitFactor": "1.07"
+      }
+    ],
+    "SOLUSDT": [
+      {
+        "config": "Pure TV (No SL, Exit at RSI 50 only)",
+        "totalTrades": 34,
+        "winRate": "35.3%",
+        "totalNetPct": "-4.66%",
+        "avgWin": "+0.10%",
+        "avgLoss": "-0.27%",
+        "avgDurationMins": "18.0m",
+        "profitFactor": "0.21"
+      },
+      {
+        "config": "Tight SL -0.50% (Exit at RSI 50)",
+        "totalTrades": 41,
+        "winRate": "36.6%",
+        "totalNetPct": "-6.72%",
+        "avgWin": "+0.09%",
+        "avgLoss": "-0.31%",
+        "avgDurationMins": "13.9m",
+        "profitFactor": "0.17"
+      },
+      {
+        "config": "Balanced SL -0.80% (Exit at RSI 50)",
+        "totalTrades": 36,
+        "winRate": "33.3%",
+        "totalNetPct": "-5.69%",
+        "avgWin": "+0.10%",
+        "avgLoss": "-0.29%",
+        "avgDurationMins": "16.6m",
+        "profitFactor": "0.18"
+      },
+      {
+        "config": "Wide SL -1.20% (Exit at RSI 50)",
+        "totalTrades": 35,
+        "winRate": "37.1%",
+        "totalNetPct": "-5.25%",
+        "avgWin": "+0.10%",
+        "avgLoss": "-0.30%",
+        "avgDurationMins": "17.2m",
+        "profitFactor": "0.19"
+      },
+      {
+        "config": "Ultra-Wide SL -2.00% (Exit at RSI 50)",
+        "totalTrades": 34,
+        "winRate": "35.3%",
+        "totalNetPct": "-4.66%",
+        "avgWin": "+0.10%",
+        "avgLoss": "-0.27%",
+        "avgDurationMins": "18.0m",
+        "profitFactor": "0.21"
+      }
+    ],
+    "SUIUSDT": [
+      {
+        "config": "Pure TV (No SL, Exit at RSI 50 only)",
+        "totalTrades": 36,
+        "winRate": "36.1%",
+        "totalNetPct": "-6.80%",
+        "avgWin": "+0.17%",
+        "avgLoss": "-0.39%",
+        "avgDurationMins": "20.7m",
+        "profitFactor": "0.25"
+      },
+      {
+        "config": "Tight SL -0.50% (Exit at RSI 50)",
+        "totalTrades": 50,
+        "winRate": "38.0%",
+        "totalNetPct": "-9.88%",
+        "avgWin": "+0.20%",
+        "avgLoss": "-0.44%",
+        "avgDurationMins": "12.8m",
+        "profitFactor": "0.28"
+      },
+      {
+        "config": "Balanced SL -0.80% (Exit at RSI 50)",
+        "totalTrades": 44,
+        "winRate": "38.6%",
+        "totalNetPct": "-8.51%",
+        "avgWin": "+0.20%",
+        "avgLoss": "-0.44%",
+        "avgDurationMins": "15.9m",
+        "profitFactor": "0.28"
+      },
+      {
+        "config": "Wide SL -1.20% (Exit at RSI 50)",
+        "totalTrades": 40,
+        "winRate": "35.0%",
+        "totalNetPct": "-7.94%",
+        "avgWin": "+0.17%",
+        "avgLoss": "-0.40%",
+        "avgDurationMins": "18.1m",
+        "profitFactor": "0.23"
+      },
+      {
+        "config": "Ultra-Wide SL -2.00% (Exit at RSI 50)",
+        "totalTrades": 36,
+        "winRate": "36.1%",
+        "totalNetPct": "-6.80%",
+        "avgWin": "+0.17%",
+        "avgLoss": "-0.39%",
+        "avgDurationMins": "20.7m",
+        "profitFactor": "0.25"
+      }
+    ],
+    "FETUSDT": [
+      {
+        "config": "Pure TV (No SL, Exit at RSI 50 only)",
+        "totalTrades": 38,
+        "winRate": "44.7%",
+        "totalNetPct": "-3.23%",
+        "avgWin": "+0.21%",
+        "avgLoss": "-0.33%",
+        "avgDurationMins": "17.9m",
+        "profitFactor": "0.53"
+      },
+      {
+        "config": "Tight SL -0.50% (Exit at RSI 50)",
+        "totalTrades": 50,
+        "winRate": "48.0%",
+        "totalNetPct": "-8.70%",
+        "avgWin": "+0.24%",
+        "avgLoss": "-0.55%",
+        "avgDurationMins": "10.2m",
+        "profitFactor": "0.40"
+      },
+      {
+        "config": "Balanced SL -0.80% (Exit at RSI 50)",
+        "totalTrades": 46,
+        "winRate": "50.0%",
+        "totalNetPct": "-7.51%",
+        "avgWin": "+0.22%",
+        "avgLoss": "-0.55%",
+        "avgDurationMins": "12.7m",
+        "profitFactor": "0.41"
+      },
+      {
+        "config": "Wide SL -1.20% (Exit at RSI 50)",
+        "totalTrades": 42,
+        "winRate": "50.0%",
+        "totalNetPct": "-6.33%",
+        "avgWin": "+0.24%",
+        "avgLoss": "-0.54%",
+        "avgDurationMins": "15.1m",
+        "profitFactor": "0.44"
+      },
+      {
+        "config": "Ultra-Wide SL -2.00% (Exit at RSI 50)",
+        "totalTrades": 39,
+        "winRate": "46.2%",
+        "totalNetPct": "-3.27%",
+        "avgWin": "+0.22%",
+        "avgLoss": "-0.34%",
+        "avgDurationMins": "17.2m",
+        "profitFactor": "0.54"
+      }
+    ],
+    "AVAXUSDT": [
+      {
+        "config": "Pure TV (No SL, Exit at RSI 50 only)",
+        "totalTrades": 42,
+        "winRate": "31.0%",
+        "totalNetPct": "-8.88%",
+        "avgWin": "+0.11%",
+        "avgLoss": "-0.35%",
+        "avgDurationMins": "19.5m",
+        "profitFactor": "0.13"
+      },
+      {
+        "config": "Tight SL -0.50% (Exit at RSI 50)",
+        "totalTrades": 53,
+        "winRate": "30.2%",
+        "totalNetPct": "-13.64%",
+        "avgWin": "+0.12%",
+        "avgLoss": "-0.42%",
+        "avgDurationMins": "12.5m",
+        "profitFactor": "0.12"
+      },
+      {
+        "config": "Balanced SL -0.80% (Exit at RSI 50)",
+        "totalTrades": 50,
+        "winRate": "32.0%",
+        "totalNetPct": "-11.94%",
+        "avgWin": "+0.12%",
+        "avgLoss": "-0.41%",
+        "avgDurationMins": "15.2m",
+        "profitFactor": "0.14"
+      },
+      {
+        "config": "Wide SL -1.20% (Exit at RSI 50)",
+        "totalTrades": 46,
+        "winRate": "34.8%",
+        "totalNetPct": "-10.88%",
+        "avgWin": "+0.12%",
+        "avgLoss": "-0.43%",
+        "avgDurationMins": "17.3m",
+        "profitFactor": "0.15"
+      },
+      {
+        "config": "Ultra-Wide SL -2.00% (Exit at RSI 50)",
+        "totalTrades": 42,
+        "winRate": "31.0%",
+        "totalNetPct": "-8.88%",
+        "avgWin": "+0.11%",
+        "avgLoss": "-0.35%",
+        "avgDurationMins": "19.5m",
+        "profitFactor": "0.13"
+      }
+    ],
+    "APTUSDT": [
+      {
+        "config": "Pure TV (No SL, Exit at RSI 50 only)",
+        "totalTrades": 43,
+        "winRate": "65.1%",
+        "totalNetPct": "1.37%",
+        "avgWin": "+0.20%",
+        "avgLoss": "-0.29%",
+        "avgDurationMins": "13.6m",
+        "profitFactor": "1.32"
+      },
+      {
+        "config": "Tight SL -0.50% (Exit at RSI 50)",
+        "totalTrades": 47,
+        "winRate": "55.3%",
+        "totalNetPct": "-5.37%",
+        "avgWin": "+0.22%",
+        "avgLoss": "-0.53%",
+        "avgDurationMins": "9.6m",
+        "profitFactor": "0.52"
+      },
+      {
+        "config": "Balanced SL -0.80% (Exit at RSI 50)",
+        "totalTrades": 45,
+        "winRate": "60.0%",
+        "totalNetPct": "-3.25%",
+        "avgWin": "+0.20%",
+        "avgLoss": "-0.48%",
+        "avgDurationMins": "12.0m",
+        "profitFactor": "0.63"
+      },
+      {
+        "config": "Wide SL -1.20% (Exit at RSI 50)",
+        "totalTrades": 44,
+        "winRate": "63.6%",
+        "totalNetPct": "1.08%",
+        "avgWin": "+0.20%",
+        "avgLoss": "-0.29%",
+        "avgDurationMins": "13.2m",
+        "profitFactor": "1.23"
+      },
+      {
+        "config": "Ultra-Wide SL -2.00% (Exit at RSI 50)",
+        "totalTrades": 43,
+        "winRate": "65.1%",
+        "totalNetPct": "0.32%",
+        "avgWin": "+0.20%",
+        "avgLoss": "-0.36%",
+        "avgDurationMins": "13.5m",
+        "profitFactor": "1.06"
+      }
+    ],
+    "SEIUSDT": [
+      {
+        "config": "Pure TV (No SL, Exit at RSI 50 only)",
+        "totalTrades": 38,
+        "winRate": "34.2%",
+        "totalNetPct": "-12.64%",
+        "avgWin": "+0.13%",
+        "avgLoss": "-0.57%",
+        "avgDurationMins": "22.3m",
+        "profitFactor": "0.12"
+      },
+      {
+        "config": "Tight SL -0.50% (Exit at RSI 50)",
+        "totalTrades": 56,
+        "winRate": "33.9%",
+        "totalNetPct": "-15.59%",
+        "avgWin": "+0.15%",
+        "avgLoss": "-0.50%",
+        "avgDurationMins": "11.5m",
+        "profitFactor": "0.15"
+      },
+      {
+        "config": "Balanced SL -0.80% (Exit at RSI 50)",
+        "totalTrades": 51,
+        "winRate": "35.3%",
+        "totalNetPct": "-13.88%",
+        "avgWin": "+0.16%",
+        "avgLoss": "-0.51%",
+        "avgDurationMins": "14.7m",
+        "profitFactor": "0.17"
+      },
+      {
+        "config": "Wide SL -1.20% (Exit at RSI 50)",
+        "totalTrades": 43,
+        "winRate": "34.9%",
+        "totalNetPct": "-11.34%",
+        "avgWin": "+0.15%",
+        "avgLoss": "-0.49%",
+        "avgDurationMins": "18.2m",
+        "profitFactor": "0.17"
+      },
+      {
+        "config": "Ultra-Wide SL -2.00% (Exit at RSI 50)",
+        "totalTrades": 41,
+        "winRate": "36.6%",
+        "totalNetPct": "-11.90%",
+        "avgWin": "+0.15%",
+        "avgLoss": "-0.55%",
+        "avgDurationMins": "19.7m",
+        "profitFactor": "0.16"
+      }
+    ]
+  },
+  "summaryTable": [
+    {
+      "Configuration": "Pure TV (No SL, Exit at RSI 50 only)",
+      "TotalTrades": 308,
+      "AvgWinRate": "45.8%",
+      "CombinedNetReturn": "-35.55%",
+      "AvgTradeDuration": "17.9 mins"
+    },
+    {
+      "Configuration": "Tight SL -0.50% (Exit at RSI 50)",
+      "TotalTrades": 398,
+      "AvgWinRate": "42.7%",
+      "CombinedNetReturn": "-65.24%",
+      "AvgTradeDuration": "11.1 mins"
+    },
+    {
+      "Configuration": "Balanced SL -0.80% (Exit at RSI 50)",
+      "TotalTrades": 366,
+      "AvgWinRate": "45.1%",
+      "CombinedNetReturn": "-53.79%",
+      "AvgTradeDuration": "13.7 mins"
+    },
+    {
+      "Configuration": "Wide SL -1.20% (Exit at RSI 50)",
+      "TotalTrades": 338,
+      "AvgWinRate": "46.4%",
+      "CombinedNetReturn": "-45.83%",
+      "AvgTradeDuration": "15.5 mins"
+    },
+    {
+      "Configuration": "Ultra-Wide SL -2.00% (Exit at RSI 50)",
+      "TotalTrades": 314,
+      "AvgWinRate": "46.5%",
+      "CombinedNetReturn": "-37.39%",
+      "AvgTradeDuration": "17.2 mins"
+    }
+  ]
+}
