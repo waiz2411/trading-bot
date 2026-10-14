@@ -401,9 +401,9 @@ export function scanPumpingHalalCoins(assets, limit = 6) {
     // 1. Genuine Binance Kline Verification: Reject mock/synthetic candles
     if (!asset.isRealCandles) continue;
 
-    // 2. Deep Liquidity Filter: strictly >= $5M 24h volume (prevents low-liquidity slippage)
+    // 2. Deep Liquidity Filter: strictly >= $1.5M 24h volume (ensures active orderbook & low slippage)
     const quoteVol = Number(asset.quoteVolume || asset.volume24h || 0);
-    if (quoteVol < 5000000) continue;
+    if (quoteVol < 1500000) continue;
 
     const candles = asset.candles;
     if (!candles || candles.length < 25) continue;
@@ -484,9 +484,9 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
     };
   }
 
-  // 3. Deep Liquidity Filter: Only trade high-liquidity pairs (>= $5M 24h volume) to prevent slippage
+  // 3. Deep Liquidity Filter: Only trade high-liquidity pairs (>= $1.5M 24h volume) to prevent slippage
   const quoteVol = Number(asset.quoteVolume || technicals.volume24h || 0);
-  if (asset.category === 'Crypto' && quoteVol < 5000000) {
+  if (asset.category === 'Crypto' && quoteVol < 1500000) {
     return {
       action: 'NEUTRAL',
       side: null,

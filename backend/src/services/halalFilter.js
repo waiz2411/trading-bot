@@ -126,7 +126,71 @@ export const HALAL_APPROVED_ASSETS = {
   'GNS': { name: 'Gains Network', sector: 'Decentralized Trading Infrastructure', isVolatile: true, minVolatility: 1.8 },
   'BAT': { name: 'Basic Attention Token', sector: 'Privacy Browser & Web3 Ads', isVolatile: true, minVolatility: 1.5 },
   'JUP': { name: 'Jupiter', sector: 'DEX Routing & Liquidity Infrastructure', isVolatile: true, minVolatility: 1.8 },
-  'ONDO': { name: 'Ondo Finance', sector: 'Tokenized Real World Assets (RWA)', isVolatile: true, minVolatility: 1.8 }
+  'ONDO': { name: 'Ondo Finance', sector: 'Tokenized Real World Assets (RWA)', isVolatile: true, minVolatility: 1.8 },
+
+  // Additional Verified Halal Majors (L1 / L2 / Infrastructure)
+  'XLM': { name: 'Stellar Lumens', sector: 'Cross-Border Payments L1', isVolatile: false, minVolatility: 1.0 },
+  'TRX': { name: 'TRON', sector: 'High-Throughput DPoS L1', isVolatile: false, minVolatility: 0.8 },
+  'TON': { name: 'The Open Network', sector: 'Telegram Web3 Infrastructure L1', isVolatile: true, minVolatility: 1.6 },
+  'BCH': { name: 'Bitcoin Cash', sector: 'Peer-to-Peer Electronic Cash L1', isVolatile: false, minVolatility: 1.0 },
+  'XTZ': { name: 'Tezos', sector: 'Self-Amending PoS L1', isVolatile: true, minVolatility: 1.6 },
+  'CELO': { name: 'Celo', sector: 'Mobile-First Financial L1/L2', isVolatile: true, minVolatility: 1.7 },
+  'RVN': { name: 'Ravencoin', sector: 'Asset Issuance Proof-of-Work L1', isVolatile: true, minVolatility: 1.8 },
+  'IOTX': { name: 'IoTeX', sector: 'DePIN Machine Network L1', isVolatile: true, minVolatility: 1.7 },
+  'SKL': { name: 'SKALE Network', sector: 'Zero-Gas Modular L2', isVolatile: true, minVolatility: 1.8 },
+  'CTSI': { name: 'Cartesi', sector: 'Linux-Based VM Scaling L2', isVolatile: true, minVolatility: 1.8 },
+  'MOVR': { name: 'Moonriver', sector: 'Kusama Smart Contracts L1', isVolatile: true, minVolatility: 1.9 },
+  'GLMR': { name: 'Moonbeam', sector: 'Polkadot Smart Contracts L1', isVolatile: true, minVolatility: 1.8 },
+  'SCR': { name: 'Scroll', sector: 'Native zkEVM Ethereum Layer 2', isVolatile: true, minVolatility: 1.8 },
+  'LUMIA': { name: 'Lumia', sector: 'Hyper-Liquid Modular Layer 2', isVolatile: true, minVolatility: 1.9 },
+  'SAGA': { name: 'Saga Protocol', sector: 'Automated Integrated L1 Chainlets', isVolatile: true, minVolatility: 1.9 },
+  'OMNI': { name: 'Omni Network', sector: 'Ethereum Cross-Rollup Interoperability', isVolatile: true, minVolatility: 1.8 },
+  'ALT': { name: 'AltLayer', sector: 'Restaked Rollups & Modular Scaling', isVolatile: true, minVolatility: 1.8 },
+  'DUSK': { name: 'Dusk Network', sector: 'Zero-Knowledge Privacy-Preserving L1', isVolatile: true, minVolatility: 1.9 },
+
+  // Cross-Chain Interoperability, Oracles & Data Feeds
+  'ZRO': { name: 'LayerZero', sector: 'Omnichain Interoperability Protocol', isVolatile: true, minVolatility: 1.8 },
+  'AXL': { name: 'Axelar', sector: 'Decentralized Cross-Chain Routing', isVolatile: true, minVolatility: 1.8 },
+  'API3': { name: 'API3', sector: 'First-Party Decentralized Oracles', isVolatile: true, minVolatility: 1.8 },
+  'TRB': { name: 'Tellor', sector: 'Decentralized Oracle Network', isVolatile: true, minVolatility: 2.0 },
+  'BAND': { name: 'Band Protocol', sector: 'Cross-Chain Decentralized Oracle', isVolatile: true, minVolatility: 1.8 },
+  'SYN': { name: 'Synapse', sector: 'Universal Cross-Chain Transport Protocol', isVolatile: true, minVolatility: 1.8 },
+  'STG': { name: 'Stargate', sector: 'Cross-Chain Native Asset Bridge', isVolatile: true, minVolatility: 1.8 },
+
+  // Decentralized AI, Video & Compute
+  'RLC': { name: 'iExec RLC', sector: 'Decentralized Edge Cloud & Confidential AI', isVolatile: true, minVolatility: 1.8 },
+  'NFP': { name: 'NFPrompt', sector: 'AI-Powered Web3 UGC Creation Platform', isVolatile: true, minVolatility: 1.9 },
+  'AI': { name: 'Sleepless AI', sector: 'Web3 AI Virtual Companion Platform', isVolatile: true, minVolatility: 1.9 },
+  'XAI': { name: 'Xai', sector: 'Arbitrum Gaming AI Layer 3', isVolatile: true, minVolatility: 1.9 },
+  'LPT': { name: 'Livepeer', sector: 'Decentralized Video Transcoding & AI Inference', isVolatile: true, minVolatility: 1.8 },
+  'PHA': { name: 'Phala Network', sector: 'TEE-Protected Decentralized Compute & AI', isVolatile: true, minVolatility: 1.9 },
+  'GLM': { name: 'Golem', sector: 'Decentralized P2P Compute Network', isVolatile: true, minVolatility: 1.7 },
+  'CGPT': { name: 'ChainGPT', sector: 'AI Infrastructure for Web3 & Blockchain', isVolatile: true, minVolatility: 1.9 },
+
+  // 100% Physically Backed Gold Tokens (Halal Certified Commodities)
+  'PAXG': { name: 'Paxos Gold', sector: '100% Physical London Good Delivery Gold', isVolatile: false, minVolatility: 0.6 },
+  'XAUT': { name: 'Tether Gold', sector: '100% Physical Gold Bullion Backed', isVolatile: false, minVolatility: 0.6 },
+
+  // Web3 Identity, Storage, Gaming & DePIN Infrastructure
+  'ENS': { name: 'Ethereum Name Service', sector: 'Decentralized Naming & Identity', isVolatile: true, minVolatility: 1.7 },
+  'JASMY': { name: 'JasmyCoin', sector: 'IoT Data Locker & Decentralized Storage', isVolatile: true, minVolatility: 1.8 },
+  'TWT': { name: 'Trust Wallet Token', sector: 'Decentralized Non-Custodial Wallet Utility', isVolatile: true, minVolatility: 1.6 },
+  'BICO': { name: 'Biconomy', sector: 'Account Abstraction & Gasless Relayer', isVolatile: true, minVolatility: 1.8 },
+  'CYBER': { name: 'CyberConnect', sector: 'Web3 Social Graph Protocol', isVolatile: true, minVolatility: 1.9 },
+  'SSV': { name: 'SSV Network', sector: 'Decentralized Validator Technology (DVT)', isVolatile: true, minVolatility: 1.8 },
+  'GTC': { name: 'Gitcoin', sector: 'Open Source Grants & Public Goods Funding', isVolatile: true, minVolatility: 1.9 },
+  'MAGIC': { name: 'Treasure', sector: 'Arbitrum Web3 Gaming Ecosystem', isVolatile: true, minVolatility: 1.9 },
+  'ACE': { name: 'Fusionist', sector: 'Web3 AAA Gaming Blockchain', isVolatile: true, minVolatility: 1.9 },
+  'DAR': { name: 'Mines of Dalarnia', sector: 'Action-Adventure Web3 Gaming Utility', isVolatile: true, minVolatility: 1.9 },
+  'PYR': { name: 'Vulcan Forged', sector: 'Web3 Gaming Studio & Ecosystem', isVolatile: true, minVolatility: 1.9 },
+  'ILV': { name: 'Illuvium', sector: 'Decentralized AAA Gaming Universe', isVolatile: true, minVolatility: 1.9 },
+  'ALICE': { name: 'My Neighbor Alice', sector: 'Decentralized Multiplayer Metaverse', isVolatile: true, minVolatility: 1.9 },
+  'AUDIO': { name: 'Audius', sector: 'Decentralized Music Streaming Platform', isVolatile: true, minVolatility: 1.8 },
+  'RAD': { name: 'Radicle', sector: 'Decentralized P2P Code Collaboration', isVolatile: true, minVolatility: 1.8 },
+  'C98': { name: 'Coin98', sector: 'Multi-Chain DeFi Gateway & Wallet', isVolatile: true, minVolatility: 1.8 },
+  'MASK': { name: 'Mask Network', sector: 'Web3 Social Network Privacy Layer', isVolatile: true, minVolatility: 1.8 },
+  'ACH': { name: 'Alchemy Pay', sector: 'Crypto-Fiat Payment Gateway', isVolatile: true, minVolatility: 1.8 },
+  'BLUR': { name: 'Blur', sector: 'NFT Marketplace & Liquidity Infrastructure', isVolatile: true, minVolatility: 1.9 }
 };
 
 /**

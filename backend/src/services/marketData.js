@@ -223,8 +223,8 @@ export class MarketDataService {
 
         const quoteVol = parseFloat(t.quoteVolume || 0);
 
-        // Require at least $1.5M daily volume to ensure active orderbook & tight spread
-        if (quoteVol < 1500000 && !CRYPTO_BINANCE_MAP[`${baseAsset}-USD`]) continue;
+        // Track all liquid Halal coins with >= $500k daily volume
+        if (quoteVol < 500000 && !CRYPTO_BINANCE_MAP[`${baseAsset}-USD`]) continue;
 
         // Strict Shariah / Halal Verification
         if (!isHalalCompliant(baseAsset)) continue;
@@ -342,8 +342,8 @@ export class MarketDataService {
       return volB - volA;
     });
 
-    // Synchronize full 5m real Binance candles for all active Halal pairs (>= $2M volume)
-    const targets = cryptoAssets.filter(a => (a.quoteVolume || 0) >= 2000000).slice(0, 70);
+    // Synchronize full 5m real Binance candles for all active Halal pairs (>= $400k volume)
+    const targets = cryptoAssets.filter(a => (a.quoteVolume || 0) >= 400000).slice(0, 150);
 
     const fetchKline = async (asset) => {
       const baseAsset = asset.baseAsset || asset.symbol.replace(/[-_/]/g, '').replace(/USD$/, '');
@@ -384,9 +384,9 @@ export class MarketDataService {
         }
     };
 
-    // Parallel fetch in batches of 6
-    for (let i = 0; i < targets.length; i += 6) {
-      const batch = targets.slice(i, i + 6);
+    // Parallel fetch in batches of 10
+    for (let i = 0; i < targets.length; i += 10) {
+      const batch = targets.slice(i, i + 10);
       await Promise.allSettled(batch.map(fetchKline));
     }
   }
