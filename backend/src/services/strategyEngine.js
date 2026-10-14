@@ -596,9 +596,9 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
 
   const precision = getAssetPrecision(currentPrice, asset.decimals || 4);
 
-  // Calibrated 81.6% Win-Rate Quick-Pip Scalp Geometry:
-  const takeProfitPct = Number((spotRiskSettings.takeProfitPct || 0.60).toFixed(2));
-  const stopLossPct = Number((spotRiskSettings.stopLossPct || 0.90).toFixed(2));
+  // Calibrated Positive Expectancy Scalp Geometry (1.67:1 Gross / 1.22:1 Net R:R):
+  const takeProfitPct = Number((spotRiskSettings.takeProfitPct || 1.25).toFixed(2));
+  const stopLossPct = Number((spotRiskSettings.stopLossPct || 0.75).toFixed(2));
 
   const entryPrice = Number(currentPrice.toFixed(precision));
   const stopDist = Number((entryPrice * (stopLossPct / 100)).toFixed(precision));
@@ -609,7 +609,7 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
   const factors = [
     `Setup Trigger: ${setupReason}`,
     `Screening Validated: Liquid Top Pumping Leader with ${rvol.toFixed(1)}x Volume Surge`,
-    `81.6% Win-Rate Geometry: Target +${takeProfitPct}% | Stop -${stopLossPct}% (Break-Even lock at +0.25%)`
+    `Positive Expectancy Geometry: Target +${takeProfitPct}% | Stop -${stopLossPct}% (BE lock at +0.60%)`
   ];
 
   return {
@@ -625,12 +625,12 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
     targetDistance: targetDist,
     takeProfitPct,
     stopLossPct,
-    breakEvenTriggerPct: 0.25,
-    breakEvenLockPct: 0.22,
-    trailingTriggerPct: 0.50,
-    trailingDistancePct: 0.10,
+    breakEvenTriggerPct: 0.60,
+    breakEvenLockPct: 0.20,
+    trailingTriggerPct: 0.95,
+    trailingDistancePct: 0.25,
     riskRewardRatio: Number((takeProfitPct / stopLossPct).toFixed(2)),
-    maxHoldMinutes: 60,
+    maxHoldMinutes: 45,
     tradingStyle: 'SPOT_BUY',
     tradeDirection: 'LONG_ONLY',
     exitRule: 'REALTIME_PUMP_TRAILING_LOCK',

@@ -27,25 +27,28 @@ export default function MetricCards({ portfolio, riskSettings, onOpenBalanceModa
 
   // Accurate Win / Loss / Break-Even classification for all account sizes ($10 to $100,000+)
   const winCount = tradesList.filter(t => {
+    if (t.isBreakEven || t.exitReason === 'BREAKEVEN_STOP_TRIGGER') return false;
     const pnl = t.finalPnL !== undefined ? Number(t.finalPnL) : (t.profit !== undefined ? Number(t.profit) : 0);
     const pnlPct = t.finalPnLPercent !== undefined ? Number(t.finalPnLPercent) : 0;
-    const isExplicitWin = t.isWin || t.exitReason === 'TAKE_PROFIT_TRIGGER' || t.exitReason === 'TRAILING_PROFIT_LOCK';
-    return isExplicitWin || (pnl > 0.005 && t.exitReason !== 'BREAKEVEN_STOP_TRIGGER') || pnlPct >= 0.3;
+    if (Math.abs(pnlPct) <= 0.20 && Math.abs(pnl) < 0.02) return false;
+    const isExplicitWin = (t.isWin && !t.isBreakEven) || t.exitReason === 'TAKE_PROFIT_TRIGGER' || t.exitReason === 'TRAILING_PROFIT_LOCK';
+    return isExplicitWin || (pnl > 0.02 && pnlPct >= 0.25);
   }).length;
 
   const lossCount = tradesList.filter(t => {
+    if (t.isBreakEven || t.exitReason === 'BREAKEVEN_STOP_TRIGGER') return false;
     const pnl = t.finalPnL !== undefined ? Number(t.finalPnL) : (t.profit !== undefined ? Number(t.profit) : 0);
+    const pnlPct = t.finalPnLPercent !== undefined ? Number(t.finalPnLPercent) : 0;
+    if (Math.abs(pnlPct) <= 0.20 && Math.abs(pnl) < 0.02) return false;
     const isExplicitLoss = t.isLoss || t.exitReason === 'STOP_LOSS_TRIGGER' || t.exitReason === 'LIQUIDATION_TRIGGER';
-    return (isExplicitLoss || pnl < -0.005) && t.exitReason !== 'BREAKEVEN_STOP_TRIGGER';
+    return isExplicitLoss || pnl < -0.02;
   }).length;
 
   const breakEvenCount = tradesList.filter(t => {
+    if (t.isBreakEven || t.exitReason === 'BREAKEVEN_STOP_TRIGGER') return true;
     const pnl = t.finalPnL !== undefined ? Number(t.finalPnL) : (t.profit !== undefined ? Number(t.profit) : 0);
     const pnlPct = t.finalPnLPercent !== undefined ? Number(t.finalPnLPercent) : 0;
-    const isExplicitWin = t.isWin || t.exitReason === 'TAKE_PROFIT_TRIGGER' || t.exitReason === 'TRAILING_PROFIT_LOCK';
-    const isWin = isExplicitWin || (pnl > 0.005 && t.exitReason !== 'BREAKEVEN_STOP_TRIGGER') || pnlPct >= 0.3;
-    const isLoss = (t.isLoss || t.exitReason === 'STOP_LOSS_TRIGGER' || pnl < -0.005) && t.exitReason !== 'BREAKEVEN_STOP_TRIGGER';
-    return !isWin && !isLoss;
+    return Math.abs(pnlPct) <= 0.20 && Math.abs(pnl) < 0.02;
   }).length;
 
   const decisive = winCount + lossCount;

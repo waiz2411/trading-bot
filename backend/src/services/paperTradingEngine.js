@@ -150,13 +150,22 @@ export class PaperTradingEngine {
 
     for (const trade of this.closedTrades) {
       const netPnl = Number(trade.finalPnL != null ? trade.finalPnL : trade.netPnL || 0);
+      const pnlPct = Number(trade.finalPnLPercent != null ? trade.finalPnLPercent : trade.pnlPercent || 0);
       const fee = Number(trade.fee || (trade.entryFee || 0) + (trade.exitFee || 0));
       totalFees += fee;
 
-      if (netPnl > 0.0001) {
+      const isBE = trade.isBreakEven === true ||
+        trade.exitReason === 'BREAKEVEN_STOP_TRIGGER' ||
+        (Math.abs(pnlPct) <= 0.20 && Math.abs(netPnl) < 0.02);
+
+      if (isBE) {
+        breakEvenCount++;
+        if (netPnl > 0) grossProfit += netPnl;
+        else if (netPnl < 0) grossLoss += Math.abs(netPnl);
+      } else if (netPnl > 0) {
         winCount++;
         grossProfit += netPnl;
-      } else if (netPnl < -0.0001) {
+      } else if (netPnl < 0) {
         lossCount++;
         grossLoss += Math.abs(netPnl);
       } else {
@@ -397,18 +406,22 @@ export class PaperTradingEngine {
     this.balance = Number((this.balance + pnlRounded).toFixed(2));
     this.totalFeesPaid = Number((this.totalFeesPaid + totalFee).toFixed(2));
 
-    const isWin = pnlRounded > 0.0001;
-    const isLoss = pnlRounded < -0.0001;
-    const isBreakEven = !isWin && !isLoss;
+    const isExplicitBreakEven = exitReason === 'BREAKEVEN_STOP_TRIGGER';
+    const isFrictionBreakEven = Math.abs(pnlPercent) <= 0.20 && Math.abs(pnlRounded) < 0.02;
+    const isBreakEven = isExplicitBreakEven || isFrictionBreakEven || (Math.abs(pnlRounded) <= 0.0001);
+    const isWin = !isBreakEven && pnlRounded > 0;
+    const isLoss = !isBreakEven && pnlRounded < 0;
 
-    if (isWin) {
+    if (isBreakEven) {
+      this.breakEvenCount++;
+      if (pnlRounded > 0) this.totalGrossProfit += pnlRounded;
+      else if (pnlRounded < 0) this.totalGrossLoss += Math.abs(pnlRounded);
+    } else if (isWin) {
       this.winCount++;
       this.totalGrossProfit += pnlRounded;
     } else if (isLoss) {
       this.lossCount++;
       this.totalGrossLoss += Math.abs(pnlRounded);
-    } else {
-      this.breakEvenCount++;
     }
 
     const closedRecord = {
@@ -525,10 +538,10 @@ export class PaperTradingEngine {
           const runUp = pos.highestPrice - pos.entryPrice;
           const rawGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;
 
-          const beTrigger = pos.breakEvenTriggerPct !== undefined ? pos.breakEvenTriggerPct : 0.25;
-          const beLock = pos.breakEvenLockPct !== undefined ? pos.breakEvenLockPct : 0.22;
-          const trailTrigger = pos.trailingTriggerPct !== undefined ? pos.trailingTriggerPct : 0.50;
-          const trailDist = pos.trailingDistancePct !== undefined ? pos.trailingDistancePct : 0.10;
+          const beTrigger = pos.breakEvenTriggerPct !== undefined ? pos.breakEvenTriggerPct : 0.60;
+          const beLock = pos.breakEvenLockPct !== undefined ? pos.breakEvenLockPct : 0.20;
+          const trailTrigger = pos.trailingTriggerPct !== undefined ? pos.trailingTriggerPct : 0.95;
+          const trailDist = pos.trailingDistancePct !== undefined ? pos.trailingDistancePct : 0.25;
 
           // Break-Even Profit Lock (engages at +0.25% gain -> locks +0.22% net profit to clear fees)
           if (!pos.breakEvenLocked && rawGainPct >= beTrigger) {

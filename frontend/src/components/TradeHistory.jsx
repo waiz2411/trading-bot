@@ -192,10 +192,9 @@ export default function TradeHistory({ closedTrades = [], onClearLedger }) {
             {sortedTrades.map((trade, idx) => {
               const finalPnL = trade.finalPnL !== undefined ? Number(trade.finalPnL) : (trade.profit !== undefined ? Number(trade.profit) : 0);
               const pnlPct = trade.finalPnLPercent !== undefined ? Number(trade.finalPnLPercent) : 0;
-              const isExplicitWin = trade.isWin || trade.exitReason === 'TAKE_PROFIT_TRIGGER' || trade.exitReason === 'TRAILING_PROFIT_LOCK';
-              const isWin = isExplicitWin || (finalPnL > 0.005 && trade.exitReason !== 'BREAKEVEN_STOP_TRIGGER') || pnlPct >= 0.3;
-              const isLoss = (trade.isLoss || trade.exitReason === 'STOP_LOSS_TRIGGER' || finalPnL < -0.005) && trade.exitReason !== 'BREAKEVEN_STOP_TRIGGER';
-              const isBE = !isWin && !isLoss;
+              const isBE = trade.isBreakEven || trade.exitReason === 'BREAKEVEN_STOP_TRIGGER' || (Math.abs(pnlPct) <= 0.20 && Math.abs(finalPnL) < 0.02);
+              const isWin = !isBE && ((trade.isWin && !trade.isBreakEven) || trade.exitReason === 'TAKE_PROFIT_TRIGGER' || trade.exitReason === 'TRAILING_PROFIT_LOCK' || (finalPnL > 0.02 && pnlPct >= 0.25));
+              const isLoss = !isBE && !isWin && (trade.isLoss || trade.exitReason === 'STOP_LOSS_TRIGGER' || trade.exitReason === 'LIQUIDATION_TRIGGER' || finalPnL < -0.02);
               const isLong = trade.side === 'LONG' || trade.side === 'BUY';
               const sideLabel = trade.side === 'BUY' ? 'LONG' : (trade.side === 'SELL' ? 'SHORT' : trade.side);
 
