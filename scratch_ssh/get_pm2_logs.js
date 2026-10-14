@@ -10,7 +10,7 @@ conn.on('ready', () => {
       .stderr.on('data', data => console.error(data.toString()));
   });
 }).connect({
-  host: '217.196.54.11',
+  host: '82.198.229.98',
   port: 65002,
   username: 'u932536786',
   password: 'NexusQuant@6767',

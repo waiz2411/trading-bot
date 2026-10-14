@@ -398,9 +398,12 @@ export function scanPumpingHalalCoins(assets, limit = 6) {
     if (asset.symbol === 'BTC-USD' || asset.symbol === 'BTCUSDT' || asset.symbol === 'BTC/USDT') continue;
     if (!isHalalCompliant(asset.symbol)) continue;
 
-    // 1. Deep Liquidity Filter: strictly >= $5M 24h volume (prevents low-liquidity slippage)
+    // 1. Genuine Binance Kline Verification: Reject mock/synthetic candles
+    if (!asset.isRealCandles) continue;
+
+    // 2. Deep Liquidity Filter: strictly >= $5M 24h volume (prevents low-liquidity slippage)
     const quoteVol = Number(asset.quoteVolume || asset.volume24h || 0);
-    if (quoteVol > 0 && quoteVol < 5000000) continue;
+    if (quoteVol < 5000000) continue;
 
     const candles = asset.candles;
     if (!candles || candles.length < 25) continue;
@@ -408,7 +411,7 @@ export function scanPumpingHalalCoins(assets, limit = 6) {
     const currentCandle = candles[candles.length - 1];
     const currentPrice = currentCandle.close;
 
-    // 2. Daily Momentum Screen: Up 4% to 20% on the day. Avoid > 35% blow-off dump traps
+    // 3. Daily Momentum Screen: Up 4% to 20% on the day. Avoid > 35% blow-off dump traps
     const lookback24h = Math.min(candles.length - 1, 288);
     const candle24hAgo = candles[candles.length - 1 - lookback24h];
     const gain24h = asset.change24h !== undefined
@@ -417,11 +420,11 @@ export function scanPumpingHalalCoins(assets, limit = 6) {
 
     if (gain24h < 4.0 || gain24h > 35.0) continue;
 
-    // 3. Current Candle Volume Spike: RVOL >= 1.4x 20-period average
+    // 4. Current Candle Volume Spike: RVOL >= 1.5x 20-period average
     const recentVols = candles.slice(-21, -1).map(c => c.volume || 0);
     const avgVol = recentVols.length > 0 ? (recentVols.reduce((a, b) => a + b, 0) / recentVols.length) : 1;
     const rvol = avgVol > 0 ? Number((currentCandle.volume / avgVol).toFixed(2)) : 1;
-    if (rvol < 1.4) continue;
+    if (rvol < 1.5) continue;
 
     // Must be green candle or recovering
     if (currentCandle.close < currentCandle.open) continue;
@@ -450,10 +453,10 @@ export function scanPumpingHalalCoins(assets, limit = 6) {
  * 3. Resistance Breakout Scalping (Short Squeeze Surge)
  * 
  * Fee-Compensated Geometry:
- * - Take Profit: +1.20% (Net +1.05% after 0.15% BNB roundtrip fee)
- * - Stop Loss: -0.65% (Net -0.80% after fees, strictly cut immediately)
- * - Break-Even Lock: +0.50% gain -> ratchets stop to +0.20% net profit
- * - Trailing Profit Lock: +0.90% gain -> trails 0.20% behind peak
+ * - Take Profit: +1.10% (Net +0.95% after 0.15% BNB roundtrip fee)
+ * - Stop Loss: -0.90% (Net -1.05% after fees, strictly cut immediately)
+ * - Break-Even Lock: +0.50% gain -> ratchets stop to +0.22% net profit
+ * - Trailing Profit Lock: +0.80% gain -> trails 0.20% behind peak
  */
 export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {}, context = {}) {
   if (!technicals || asset.category !== 'Crypto') {
@@ -471,9 +474,19 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
     };
   }
 
-  // 2. Deep Liquidity Filter: Only trade high-liquidity pairs (> $5M 24h volume) to prevent slippage
+  // 2. Genuine Binance Kline Verification: Reject mock/synthetic candles
+  if (!asset.isRealCandles) {
+    return {
+      action: 'NEUTRAL',
+      side: null,
+      confidence: 0,
+      reason: 'Candle Guard: Asset candles are synthetic. Awaiting real Binance klines.'
+    };
+  }
+
+  // 3. Deep Liquidity Filter: Only trade high-liquidity pairs (>= $5M 24h volume) to prevent slippage
   const quoteVol = Number(asset.quoteVolume || technicals.volume24h || 0);
-  if (asset.category === 'Crypto' && quoteVol > 0 && quoteVol < 5000000) {
+  if (asset.category === 'Crypto' && quoteVol < 5000000) {
     return {
       action: 'NEUTRAL',
       side: null,

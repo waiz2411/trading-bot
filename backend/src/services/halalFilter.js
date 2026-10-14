@@ -120,7 +120,13 @@ export const HALAL_APPROVED_ASSETS = {
   'HOOK': { name: 'Hooked Protocol', sector: 'Web3 Gamified Learn & Onboarding', isVolatile: true, minVolatility: 1.9 },
   'HFT': { name: 'Hashflow', sector: 'Zero-Slippage MEV-Protected Trading', isVolatile: true, minVolatility: 1.9 },
   'ID': { name: 'SPACE ID', sector: 'Universal Web3 Domain & Identity', isVolatile: true, minVolatility: 1.8 },
-  'VANRY': { name: 'Vanar Chain', sector: 'Carbon-Neutral Entertainment L1', isVolatile: true, minVolatility: 2.0 }
+  'VANRY': { name: 'Vanar Chain', sector: 'Carbon-Neutral Entertainment L1', isVolatile: true, minVolatility: 2.0 },
+  'DYM': { name: 'Dymension', sector: 'RollApp Settlement L1', isVolatile: true, minVolatility: 1.8 },
+  'W': { name: 'Wormhole', sector: 'Cross-Chain Interoperability Protocol', isVolatile: true, minVolatility: 1.8 },
+  'GNS': { name: 'Gains Network', sector: 'Decentralized Trading Infrastructure', isVolatile: true, minVolatility: 1.8 },
+  'BAT': { name: 'Basic Attention Token', sector: 'Privacy Browser & Web3 Ads', isVolatile: true, minVolatility: 1.5 },
+  'JUP': { name: 'Jupiter', sector: 'DEX Routing & Liquidity Infrastructure', isVolatile: true, minVolatility: 1.8 },
+  'ONDO': { name: 'Ondo Finance', sector: 'Tokenized Real World Assets (RWA)', isVolatile: true, minVolatility: 1.8 }
 };
 
 /**
@@ -144,19 +150,18 @@ export function isHalalCompliant(symbolOrBase) {
     return false;
   }
 
-  // 2. Reject Leveraged Tokens (e.g. BTCUP, ETHDOWN, etc.)
-  if (clean.endsWith('UP') || clean.endsWith('DOWN') || clean.endsWith('BULL') || clean.endsWith('BEAR')) {
+  // 3. Reject Leveraged Tokens & Bull/Bear synthetics (e.g. BTCUP, ETHDOWN, SOXLB, etc.)
+  if (clean.endsWith('UP') || clean.endsWith('DOWN') || clean.endsWith('BULL') || clean.endsWith('BEAR') || clean.endsWith('LB')) {
     return false;
   }
 
-  // 3. Known Halal Approved Directory
+  // 4. Strict Halal Approved Whitelist: Coin must exist in HALAL_APPROVED_ASSETS
   if (clean in HALAL_APPROVED_ASSETS) {
     return true;
   }
 
-  // 4. Dynamic Halal Classifier: If not on blacklist and does not violate Shariah principles
-  // It is classified as an approved Web3 Utility / Infrastructure coin
-  return true;
+  // Strictly reject unverified tokens, meme traps, ETFs, or synthetic assets
+  return false;
 }
 
 /**

@@ -489,7 +489,7 @@ export class AutonomousAgentLoop {
         const remainingLockSec = isSpotCooldown ? Math.ceil((spotLockExpiry - Date.now()) / 1000) : 0;
 
         if (asset.category === 'Crypto') {
-          if (isHalalCompliant(asset.symbol)) {
+          if (isHalalCompliant(asset.symbol) && asset.isRealCandles && (asset.quoteVolume || 0) >= 5000000) {
             const allowVolatile = this.spotRiskManager.allowHighVolatility ?? true;
             const isVolatile = Boolean(asset.isHighVolatility || (asset.minVolatility && asset.minVolatility >= 1.4));
             
@@ -722,6 +722,8 @@ export class AutonomousAgentLoop {
           for (const asset of markets) {
             if (asset.category !== 'Crypto') continue;
             if (!isHalalCompliant(asset.symbol)) continue;
+            if (!asset.isRealCandles) continue;
+            if (Number(asset.quoteVolume || 0) < 5000000) continue;
 
             if (isUserLive && binanceConnector.getStatus().isRateLimited) {
               // Proactively pause live spot orders while proxy IP is in cooldown

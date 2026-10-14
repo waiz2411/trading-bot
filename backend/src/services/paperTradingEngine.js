@@ -648,7 +648,8 @@ export class PaperTradingEngine {
           const ageMs = pos.openTime ? (Date.now() - new Date(pos.openTime).getTime()) : ((pos.cycleCount || 0) * 1500);
           const holdSec = ageMs / 1000;
           const lossPct = ((livePrice - pos.entryPrice) / pos.entryPrice) * 100;
-          if (!pos.breakEvenLocked && !pos.trailingStopActive && holdSec < 90 && lossPct > -3.0) {
+          // Intra-candle noise guard: Give trade 4 minutes to develop without 0.8% wicks triggering instant stop
+          if (!pos.breakEvenLocked && !pos.trailingStopActive && holdSec < 240 && lossPct > -2.0) {
             continue;
           }
           const reason = pos.trailingStopActive

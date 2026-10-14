@@ -288,27 +288,38 @@ export class MarketDataService {
           cached.isLiveFeed = true;
           cached.lastLiveTime = Date.now();
 
-          // Maintain real-time sliding candle
+          // Maintain real-time sliding candle without corrupting verified real candles
           const candles = cached.candles;
           const now = Date.now();
-          if (!cached.candleStartTime) cached.candleStartTime = now;
 
-          if (now - cached.candleStartTime >= 60000) {
-            cached.candleStartTime = now;
-            candles.push({
-              time: new Date(now).toISOString(),
-              open: livePrice,
-              high: livePrice,
-              low: livePrice,
-              close: livePrice,
-              volume: Math.round(5000 + Math.random() * 15000)
-            });
-            if (candles.length > 70) candles.shift();
-          } else if (candles.length > 0) {
-            const lastCandle = candles[candles.length - 1];
-            lastCandle.close = livePrice;
-            lastCandle.high = Math.max(lastCandle.high, livePrice);
-            lastCandle.low = Math.min(lastCandle.low, livePrice);
+          if (cached.isRealCandles) {
+            // For verified Binance klines: update the live candle price ticks, preserving genuine volume
+            if (candles && candles.length > 0) {
+              const lastCandle = candles[candles.length - 1];
+              lastCandle.close = livePrice;
+              lastCandle.high = Math.max(lastCandle.high, livePrice);
+              lastCandle.low = Math.min(lastCandle.low, livePrice);
+            }
+          } else {
+            // For unverified/warming up assets only
+            if (!cached.candleStartTime) cached.candleStartTime = now;
+            if (now - cached.candleStartTime >= 60000) {
+              cached.candleStartTime = now;
+              candles.push({
+                time: new Date(now).toISOString(),
+                open: livePrice,
+                high: livePrice,
+                low: livePrice,
+                close: livePrice,
+                volume: Math.round(5000 + Math.random() * 15000)
+              });
+              if (candles.length > 70) candles.shift();
+            } else if (candles && candles.length > 0) {
+              const lastCandle = candles[candles.length - 1];
+              lastCandle.close = livePrice;
+              lastCandle.high = Math.max(lastCandle.high, livePrice);
+              lastCandle.low = Math.min(lastCandle.low, livePrice);
+            }
           }
         }
       }
@@ -331,8 +342,8 @@ export class MarketDataService {
       return volB - volA;
     });
 
-    // Take top 42 most volatile/promising Halal coins for full 5m candle sync
-    const targets = cryptoAssets.slice(0, 42);
+    // Synchronize full 5m real Binance candles for all active Halal pairs (>= $2M volume)
+    const targets = cryptoAssets.filter(a => (a.quoteVolume || 0) >= 2000000).slice(0, 70);
 
     const fetchKline = async (asset) => {
       const baseAsset = asset.baseAsset || asset.symbol.replace(/[-_/]/g, '').replace(/USD$/, '');
