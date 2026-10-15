@@ -28,10 +28,14 @@ import {
   BarChart3,
   Flame,
   Shield,
-  Layers
+  Layers,
+  FlaskConical,
+  Sparkles
 } from 'lucide-react';
+import BacktestLab from './BacktestLab.jsx';
 
 export default function AdminPanel({ user, token, onLogout, showNotification }) {
+  const [adminTab, setAdminTab] = useState('ACCOUNTS'); // 'ACCOUNTS' | 'BACKTEST'
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -222,32 +226,76 @@ export default function AdminPanel({ user, token, onLogout, showNotification }) 
         </div>
       </header>
 
+      {/* Admin Sub-Navigation Tabs */}
+      <div className="border-b border-terminal-border/80 bg-terminal-950/95 sticky top-[61px] z-30 px-4 lg:px-8 pt-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setAdminTab('ACCOUNTS')}
+            className={`px-4 py-2.5 rounded-t-xl font-mono text-xs font-bold flex items-center gap-2 border-t border-x transition-all cursor-pointer ${
+              adminTab === 'ACCOUNTS'
+                ? 'bg-terminal-900 border-terminal-border text-white shadow-lg'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-terminal-900/40'
+            }`}
+          >
+            <Users className="w-4 h-4 text-indigo-400" />
+            <span>Client Accounts & Progress</span>
+            {pendingCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-black font-extrabold animate-pulse">
+                {pendingCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setAdminTab('BACKTEST')}
+            className={`px-4 py-2.5 rounded-t-xl font-mono text-xs font-bold flex items-center gap-2 border-t border-x transition-all cursor-pointer ${
+              adminTab === 'BACKTEST'
+                ? 'bg-terminal-900 border-terminal-border text-white shadow-lg'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-terminal-900/40'
+            }`}
+          >
+            <FlaskConical className="w-4 h-4 text-amber-400" />
+            <span>Strategy Backtest Lab</span>
+            <span className="px-1.5 py-0.5 rounded text-[9px] bg-gradient-to-r from-amber-500/20 to-indigo-500/20 text-amber-300 font-extrabold border border-amber-500/30">
+              FAST
+            </span>
+          </button>
+        </div>
+
+        <div className="hidden sm:flex items-center gap-2 text-xs font-mono text-slate-500 pb-2">
+          <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+          <span>Real-time Binance Backtesting Engine</span>
+        </div>
+      </div>
+
       {/* Main SaaS Administration Dashboard */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        {/* Pending Approvals Alert Banner (if any pending) */}
-        {pendingCount > 0 && (
-          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-amber-500/5 animate-pulse">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-300">
-                <AlertTriangle className="w-5 h-5" />
+        {adminTab === 'ACCOUNTS' ? (
+          <>
+            {/* Pending Approvals Alert Banner (if any pending) */}
+            {pendingCount > 0 && (
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-amber-500/5 animate-pulse">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-300">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-amber-200">
+                      {pendingCount} Pending Account Application{pendingCount > 1 ? 's' : ''} Awaiting Approval
+                    </h3>
+                    <p className="text-xs text-amber-300/80 font-mono mt-0.5">
+                      New clients cannot log in until you approve their registrations.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setStatusFilter('PENDING')}
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs transition-all shadow-md shadow-amber-500/20 cursor-pointer self-start sm:self-auto"
+                >
+                  Review Pending Applications ({pendingCount})
+                </button>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-amber-200">
-                  {pendingCount} Pending Account Application{pendingCount > 1 ? 's' : ''} Awaiting Approval
-                </h3>
-                <p className="text-xs text-amber-300/80 font-mono mt-0.5">
-                  New clients cannot log in until you approve their registrations.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setStatusFilter('PENDING')}
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs transition-all shadow-md shadow-amber-500/20 cursor-pointer self-start sm:self-auto"
-            >
-              Review Pending Applications ({pendingCount})
-            </button>
-          </div>
-        )}
+            )}
 
         {/* Top Executive Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -627,7 +675,11 @@ export default function AdminPanel({ user, token, onLogout, showNotification }) 
             </div>
           )}
         </div>
-      </main>
+      </>
+    ) : (
+      <BacktestLab token={token} showNotification={showNotification} />
+    )}
+  </main>
 
       {/* Deep Client Progress & Trade History Inspector Modal */}
       {inspectingUser && (

@@ -11,6 +11,7 @@ import { authService } from './services/authService.js';
 import { binanceConnector } from './services/binanceConnector.js';
 import { mt5Connector } from './services/mt5Connector.js';
 import { mexcConnector } from './services/mexcConnector.js';
+import { backtestService } from './services/backtestService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -199,6 +200,27 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
     res.json({ success: true, ...result });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// ====================================================
+// ADMIN BACKTEST LAB ROUTES
+// ====================================================
+app.get('/api/admin/backtest/metadata', requireAdmin, async (req, res) => {
+  try {
+    const metadata = backtestService.getMetadata();
+    res.json({ success: true, metadata });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/backtest/run', requireAdmin, async (req, res) => {
+  try {
+    const result = backtestService.run(req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
