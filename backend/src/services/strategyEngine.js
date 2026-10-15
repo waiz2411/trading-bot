@@ -418,13 +418,13 @@ export function scanPumpingHalalCoins(assets, limit = 6) {
       ? Number(asset.change24h)
       : (((currentPrice - candle24hAgo.close) / candle24hAgo.close) * 100);
 
-    if (gain24h < 4.0 || gain24h > 35.0) continue;
+    if (gain24h < 6.0 || gain24h > 45.0) continue;
 
-    // 4. Current Candle Volume Spike: RVOL >= 1.5x 20-period average
+    // 4. Current Candle Volume Spike: RVOL >= 2.0x 20-period average
     const recentVols = candles.slice(-21, -1).map(c => c.volume || 0);
     const avgVol = recentVols.length > 0 ? (recentVols.reduce((a, b) => a + b, 0) / recentVols.length) : 1;
     const rvol = avgVol > 0 ? Number((currentCandle.volume / avgVol).toFixed(2)) : 1;
-    if (rvol < 1.5) continue;
+    if (rvol < 2.0) continue;
 
     // Must be green candle or recovering
     if (currentCandle.close < currentCandle.open) continue;
@@ -641,9 +641,14 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
 
   const precision = getAssetPrecision(currentPrice, asset.decimals || 4);
 
-  // Calibrated Positive Expectancy Scalp Geometry (1.67:1 Gross / 1.22:1 Net R:R):
-  const takeProfitPct = Number((spotRiskSettings.takeProfitPct || 1.25).toFixed(2));
-  const stopLossPct = Number((spotRiskSettings.stopLossPct || 0.75).toFixed(2));
+  // Asymmetric Pump Squeeze Geometry (Target +10.0%, SL -2.0%, Trailing +4.0% with 1.5% distance):
+  const takeProfitPct = Number((spotRiskSettings.takeProfitPct || 10.00).toFixed(2));
+  const stopLossPct = Number((spotRiskSettings.stopLossPct || 2.00).toFixed(2));
+  const breakEvenTriggerPct = Number((spotRiskSettings.breakEvenTriggerPct || 2.50).toFixed(2));
+  const breakEvenLockPct = Number((spotRiskSettings.breakEvenLockPct || 0.35).toFixed(2));
+  const trailingTriggerPct = Number((spotRiskSettings.trailingTriggerPct || 4.00).toFixed(2));
+  const trailingDistancePct = Number((spotRiskSettings.trailingDistancePct || 1.50).toFixed(2));
+  const maxHoldMinutes = spotRiskSettings.maxHoldMinutes || 240;
 
   const entryPrice = Number(currentPrice.toFixed(precision));
   const stopDist = Number((entryPrice * (stopLossPct / 100)).toFixed(precision));
@@ -654,14 +659,14 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
   const factors = [
     `Setup Trigger: ${setupReason}`,
     `Screening Validated: Liquid Top Pumping Leader with ${rvol.toFixed(1)}x Volume Surge`,
-    `Positive Expectancy Geometry: Target +${takeProfitPct}% | Stop -${stopLossPct}% (BE lock at +0.55%)`
+    `Asymmetric Squeeze Geometry: Target +${takeProfitPct}% (+$1.00 on $10) | Stop -${stopLossPct}% | Trail 1.5% after +4.0%`
   ];
 
   return {
     action: 'STRONG_BUY',
     side: 'LONG',
     confidence: setupConfidence,
-    winProbability: 81.6,
+    winProbability: 75.0,
     strategySetup: detectedSetup,
     entryPrice,
     stopLoss,
@@ -670,16 +675,16 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
     targetDistance: targetDist,
     takeProfitPct,
     stopLossPct,
-    breakEvenTriggerPct: 0.55,
-    breakEvenLockPct: 0.18,
-    trailingTriggerPct: 0.85,
-    trailingDistancePct: 0.20,
+    breakEvenTriggerPct,
+    breakEvenLockPct,
+    trailingTriggerPct,
+    trailingDistancePct,
     riskRewardRatio: Number((takeProfitPct / stopLossPct).toFixed(2)),
-    maxHoldMinutes: 45,
+    maxHoldMinutes,
     tradingStyle: 'SPOT_BUY',
     tradeDirection: 'LONG_ONLY',
     exitRule: 'REALTIME_PUMP_TRAILING_LOCK',
-    reason: `${setupReason} Target: +${takeProfitPct}% | Stop: -${stopLossPct}%`,
+    reason: `${setupReason} Target: +${takeProfitPct}% | Stop: -${stopLossPct}% (Trailing Lock at +4.0%)`,
     factors
   };
 }
@@ -718,18 +723,21 @@ export function evaluatePositionExit(position, technicals, currentPrice) {
     const peakPrice = position.highestPrice || entryPrice;
     const peakGainPct = ((peakPrice - entryPrice) / entryPrice) * 100;
 
-    // A. Break-Even Lock at +0.70% move -> Ratchet stop to +0.25% net profit above entry (covers fees)
-    if (peakGainPct >= 0.70) {
-      const beStop = entryPrice * 1.0025;
+    // A. Break-Even Lock at +2.50% move -> Ratchet stop to +0.35% net profit above entry (covers fees)
+    if (peakGainPct >= (position.breakEvenTriggerPct || 2.50)) {
+      const lockPct = (position.breakEvenLockPct || 0.35) / 100;
+      const beStop = entryPrice * (1 + lockPct);
       if (beStop > (position.stopLoss || 0)) {
         position.stopLoss = beStop;
         position.breakEvenLocked = true;
       }
     }
 
-    // B. Trailing Profit Lock at >= +0.95% gain -> Trail 0.25% behind peak
-    if (peakGainPct >= 0.95) {
-      const lockStop = peakPrice * (1 - 0.0025);
+    // B. Trailing Profit Lock at >= +4.00% gain -> Trail 1.50% behind peak
+    const trailTrig = position.trailingTriggerPct || 4.00;
+    const trailDist = (position.trailingDistancePct || 1.50) / 100;
+    if (peakGainPct >= trailTrig) {
+      const lockStop = peakPrice * (1 - trailDist);
       if (lockStop > (position.stopLoss || 0)) {
         position.stopLoss = lockStop;
         position.trailingStopActive = true;

@@ -538,12 +538,12 @@ export class PaperTradingEngine {
           const runUp = pos.highestPrice - pos.entryPrice;
           const rawGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;
 
-          const beTrigger = pos.breakEvenTriggerPct !== undefined ? pos.breakEvenTriggerPct : 0.55;
-          const beLock = pos.breakEvenLockPct !== undefined ? pos.breakEvenLockPct : 0.18;
-          const trailTrigger = pos.trailingTriggerPct !== undefined ? pos.trailingTriggerPct : 0.85;
-          const trailDist = pos.trailingDistancePct !== undefined ? pos.trailingDistancePct : 0.20;
+          const beTrigger = pos.breakEvenTriggerPct !== undefined ? pos.breakEvenTriggerPct : 2.50;
+          const beLock = pos.breakEvenLockPct !== undefined ? pos.breakEvenLockPct : 0.35;
+          const trailTrigger = pos.trailingTriggerPct !== undefined ? pos.trailingTriggerPct : 4.00;
+          const trailDist = pos.trailingDistancePct !== undefined ? pos.trailingDistancePct : 1.50;
 
-          // Break-Even Profit Lock (engages at +0.25% gain -> locks +0.22% net profit to clear fees)
+          // Break-Even Profit Lock (engages at +2.50% gain -> locks +0.35% net profit to clear fees)
           if (!pos.breakEvenLocked && rawGainPct >= beTrigger) {
             const proposedStop = Number((pos.entryPrice * (1 + beLock / 100)).toFixed(dec));
             if (proposedStop < livePrice && (!pos.takeProfit || proposedStop < pos.takeProfit) && proposedStop > pos.stopLoss) {
@@ -552,7 +552,7 @@ export class PaperTradingEngine {
             }
           }
 
-          // Real-Time Pump Trailing Stop: Once price gains >= trailTrigger, trail stop closely behind peak
+          // Real-Time Pump Trailing Stop: Once price gains >= trailTrigger (+4.0%), trail stop 1.5% behind peak
           if (rawGainPct >= trailTrigger) {
             const hotTrailStop = Number((pos.highestPrice * (1 - trailDist / 100)).toFixed(dec));
             if (hotTrailStop < livePrice && hotTrailStop > pos.stopLoss) {
