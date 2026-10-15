@@ -538,10 +538,10 @@ export class PaperTradingEngine {
           const runUp = pos.highestPrice - pos.entryPrice;
           const rawGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;
 
-          const beTrigger = pos.breakEvenTriggerPct !== undefined ? pos.breakEvenTriggerPct : 0.60;
-          const beLock = pos.breakEvenLockPct !== undefined ? pos.breakEvenLockPct : 0.20;
-          const trailTrigger = pos.trailingTriggerPct !== undefined ? pos.trailingTriggerPct : 0.95;
-          const trailDist = pos.trailingDistancePct !== undefined ? pos.trailingDistancePct : 0.25;
+          const beTrigger = pos.breakEvenTriggerPct !== undefined ? pos.breakEvenTriggerPct : 0.55;
+          const beLock = pos.breakEvenLockPct !== undefined ? pos.breakEvenLockPct : 0.18;
+          const trailTrigger = pos.trailingTriggerPct !== undefined ? pos.trailingTriggerPct : 0.85;
+          const trailDist = pos.trailingDistancePct !== undefined ? pos.trailingDistancePct : 0.20;
 
           // Break-Even Profit Lock (engages at +0.25% gain -> locks +0.22% net profit to clear fees)
           if (!pos.breakEvenLocked && rawGainPct >= beTrigger) {
