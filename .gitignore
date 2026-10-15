@@ -24,3 +24,7 @@ Thumbs.db
 
 # User data & credentials
 backend/data/
+backend/src/data/binance_cache/
+scratch/
+scratch_ssh/
+

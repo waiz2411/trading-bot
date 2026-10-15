@@ -446,20 +446,20 @@ export default function BacktestLab({ token, showNotification }) {
               <span>Concurrent Trade Slots</span>
               <span className="text-indigo-400 font-bold font-mono">{maxSlots} Slot{maxSlots > 1 ? 's' : ''}</span>
             </label>
-            <div className="grid grid-cols-3 gap-2">
-              {[1, 2, 3].map(slot => (
+            <div className="grid grid-cols-4 gap-2">
+              {[1, 2, 3, 5].map(slot => (
                 <button
                   key={slot}
                   type="button"
                   onClick={() => setMaxSlots(slot)}
                   className={`py-1.5 rounded-lg font-mono text-xs border text-center transition-all cursor-pointer ${maxSlots === slot ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300 font-bold' : 'bg-terminal-950 border-terminal-border text-slate-400'}`}
                 >
-                  {slot} {slot === 1 ? '(100% Size)' : `(${Math.round(100 / slot)}% Size)`}
+                  {slot} {slot === 1 ? '(100%)' : `(${Math.round(100 / slot)}%)`}
                 </button>
               ))}
             </div>
             <p className="text-[10px] font-mono text-slate-500 mt-1">
-              For $10 accounts, 1 slot commits the entire $10 into the highest conviction leader.
+              {maxSlots === 1 ? '1 slot: Bot holds 1 coin at a time (100% capital). Higher slots allow simultaneous trades.' : `${maxSlots} slots: Bot can take up to ${maxSlots} simultaneous trades across different coins.`}
             </p>
           </div>
 
@@ -472,7 +472,7 @@ export default function BacktestLab({ token, showNotification }) {
                 onClick={() => setSelectedCoinsMode('ALL')}
                 className={`py-1.5 px-3 rounded-lg text-xs font-mono border transition-all cursor-pointer ${selectedCoinsMode === 'ALL' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 font-bold' : 'bg-terminal-950 border-terminal-border text-slate-400'}`}
               >
-                🕌 All 39 Halal Pairs
+                🕌 All {metadata?.symbols?.length || 94} Halal Pairs
               </button>
               <button
                 type="button"
