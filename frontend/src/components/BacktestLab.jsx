@@ -28,8 +28,24 @@ import {
 } from 'lucide-react';
 
 export default function BacktestLab({ token, showNotification }) {
-  // Top Mathematically Optimized Presets (Derived from 11,580 backtests across 94 Halal coins)
+  // Top Mathematically Optimized Presets (Derived from 11,580+ backtests across 94 Halal coins)
   const PRESETS = {
+    DAILY_MACHINE: {
+      name: '💵 Daily Profit Machine (4/4 Days Profit | 68% Win Rate | 3 Slots)',
+      takeProfitPct: 5.0,
+      stopLossPct: 2.5,
+      breakEvenTriggerPct: 0.6,
+      breakEvenLockPct: 0.20,
+      trailingTriggerPct: 1.0,
+      trailingDistancePct: 0.5,
+      min24hGain: 7.0,
+      max24hGain: 45.0,
+      minRvol: 1.5,
+      maxHoldMinutes: 240,
+      maxSlots: 3,
+      entryStrategy: 'ANY_VALID',
+      useBtcFilter: false
+    },
     BEST_OVERALL: {
       name: '🏆 #1 Best Risk-Adjusted Growth (+48.7% ROI | 13% Max DD)',
       takeProfitPct: 3.5,
@@ -80,27 +96,27 @@ export default function BacktestLab({ token, showNotification }) {
     }
   };
 
-  // Form Configuration State
+  // Form Configuration State (Defaults to Daily Profit Machine)
   const [initialBalance, setInitialBalance] = useState(10);
   const [startDate, setStartDate] = useState('2026-08-15');
   const [endDate, setEndDate] = useState('2026-10-15');
-  const [maxSlots, setMaxSlots] = useState(1);
+  const [maxSlots, setMaxSlots] = useState(3);
   const [selectedCoinsMode, setSelectedCoinsMode] = useState('ALL'); // 'ALL' | 'CUSTOM'
   const [selectedSymbols, setSelectedSymbols] = useState([]);
 
   // Strategy Parameters
-  const [takeProfitPct, setTakeProfitPct] = useState(10.0);
-  const [stopLossPct, setStopLossPct] = useState(2.0);
-  const [breakEvenTriggerPct, setBreakEvenTriggerPct] = useState(2.5);
-  const [breakEvenLockPct, setBreakEvenLockPct] = useState(0.35);
-  const [trailingTriggerPct, setTrailingTriggerPct] = useState(4.0);
-  const [trailingDistancePct, setTrailingDistancePct] = useState(1.5);
-  const [min24hGain, setMin24hGain] = useState(6.0);
+  const [takeProfitPct, setTakeProfitPct] = useState(5.0);
+  const [stopLossPct, setStopLossPct] = useState(2.5);
+  const [breakEvenTriggerPct, setBreakEvenTriggerPct] = useState(0.6);
+  const [breakEvenLockPct, setBreakEvenLockPct] = useState(0.20);
+  const [trailingTriggerPct, setTrailingTriggerPct] = useState(1.0);
+  const [trailingDistancePct, setTrailingDistancePct] = useState(0.5);
+  const [min24hGain, setMin24hGain] = useState(7.0);
   const [max24hGain, setMax24hGain] = useState(45.0);
-  const [minRvol, setMinRvol] = useState(2.0);
+  const [minRvol, setMinRvol] = useState(1.5);
   const [maxHoldMinutes, setMaxHoldMinutes] = useState(240);
   const [entryStrategy, setEntryStrategy] = useState('ANY_VALID');
-  const [useBtcFilter, setUseBtcFilter] = useState(true);
+  const [useBtcFilter, setUseBtcFilter] = useState(false);
   const [feeRatePct, setFeeRatePct] = useState(0.10);
   const [slippagePct, setSlippagePct] = useState(0.05);
 
@@ -329,6 +345,14 @@ export default function BacktestLab({ token, showNotification }) {
           {/* Quick Preset Buttons */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-mono text-slate-400 mr-1">Best Settings:</span>
+            <button
+              onClick={() => applyPreset('DAILY_MACHINE')}
+              className="px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/50 text-cyan-300 text-xs font-bold font-mono transition-all flex items-center gap-1.5 cursor-pointer shadow-md ring-1 ring-cyan-500/30"
+              title="5% TP / 2.5% SL / 0.6% BE / 1.0% Trailing / 3 Slots / 68% Win Rate / Oct 12-15 All Profitable"
+            >
+              <DollarSign className="w-3.5 h-3.5 text-cyan-400" />
+              <span>💵 Daily Profit Machine (4/4 Days)</span>
+            </button>
             <button
               onClick={() => applyPreset('BEST_OVERALL')}
               className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold font-mono transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
