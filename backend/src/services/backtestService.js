@@ -87,25 +87,37 @@ class BacktestService {
     const volumes = candles.map(c => c.volume);
     const len = candles.length;
 
-    // EMA 9 & EMA 21
+    // EMA 9, EMA 21, EMA 50 (15m) & Effective 4H EMAs (16x resolution)
     const ema9 = new Array(len);
     const ema21 = new Array(len);
     const ema50 = new Array(len);
+    const ema21_4h = new Array(len);
+    const ema50_4h = new Array(len);
+
     const k9 = 2 / 10;
     const k21 = 2 / 22;
     const k50 = 2 / 51;
+    const k21_4h = 2 / (21 * 16 + 1);
+    const k50_4h = 2 / (50 * 16 + 1);
 
     let e9 = closes[0];
     let e21 = closes[0];
     let e50 = closes[0];
+    let e21_4 = closes[0];
+    let e50_4 = closes[0];
 
     for (let i = 0; i < len; i++) {
       e9 = closes[i] * k9 + e9 * (1 - k9);
       e21 = closes[i] * k21 + e21 * (1 - k21);
       e50 = closes[i] * k50 + e50 * (1 - k50);
+      e21_4 = closes[i] * k21_4h + e21_4 * (1 - k21_4h);
+      e50_4 = closes[i] * k50_4h + e50_4 * (1 - k50_4h);
+
       ema9[i] = e9;
       ema21[i] = e21;
       ema50[i] = e50;
+      ema21_4h[i] = e21_4;
+      ema50_4h[i] = e50_4;
     }
 
     // SMA 20 of Volume
@@ -143,7 +155,45 @@ class BacktestService {
       }
     }
 
-    return { ema9, ema21, ema50, volSma20, rsi14 };
+    return { ema9, ema21, ema50, ema21_4h, ema50_4h, volSma20, rsi14 };
+  }
+
+  resampleTo4H(c15m) {
+    const c4h = [];
+    for (let i = 0; i < c15m.length; i += 16) {
+      const slice = c15m.slice(i, i + 16);
+      if (slice.length === 16) {
+        c4h.push({
+          openTime: slice[0].openTime,
+          time: slice[0].time,
+          open: slice[0].open,
+          high: Math.max(...slice.map(c => c.high)),
+          low: Math.min(...slice.map(c => c.low)),
+          close: slice[15].close,
+          volume: slice.reduce((acc, c) => acc + c.volume, 0)
+        });
+      }
+    }
+    return c4h;
+  }
+
+  calculate4HEMAs(candles) {
+    const len = candles.length;
+    const closes = candles.map(c => c.close);
+    const ema21 = new Float64Array(len);
+    const ema50 = new Float64Array(len);
+    const k21 = 2 / 22;
+    const k50 = 2 / 51;
+    let e21 = closes[0], e50 = closes[0];
+
+    for (let i = 0; i < len; i++) {
+      const cl = closes[i];
+      e21 = i === 0 ? cl : (cl * k21) + (e21 * (1 - k21));
+      e50 = i === 0 ? cl : (cl * k50) + (e50 * (1 - k50));
+      ema21[i] = e21;
+      ema50[i] = e50;
+    }
+    return { ema21, ema50 };
   }
 
   /**
@@ -174,7 +224,8 @@ class BacktestService {
       feeRatePct = 0.10, // 0.10% each way
       slippagePct = 0.05,
       useBtcFilter = true,
-      entryStrategy = 'ANY_VALID' // 'PULLBACK' | 'BREAKOUT' | 'CROSSOVER' | 'ANY_VALID'
+      btcFilterMode = 'STANDARD', // 'STANDARD' (BTC > EMA21) | 'CRASH_ONLY' (BTC not dumping >2% below EMA50) | 'OFF'
+      entryStrategy = 'ANY_VALID' // 'PULLBACK' | 'BREAKOUT' | 'CROSSOVER' | 'ANY_VALID' | 'VALUE_PULLBACK'
     } = params;
 
     const startMs = new Date(startDate).getTime();
@@ -198,10 +249,18 @@ class BacktestService {
       const filtered = datasets[sym].filter(c => c.openTime >= startMs - (96 * 15 * 60 * 1000) && c.openTime <= endMs);
       if (filtered.length < 30) continue;
 
+      const c4 = this.resampleTo4H(datasets[sym]);
+      const tech4 = this.calculate4HEMAs(c4);
+      const timeMap4 = new Map();
+      c4.forEach((c, idx) => timeMap4.set(c.openTime, idx));
+
       techData[sym] = {
         candles: filtered,
         tech: this.calculateTechnicals(filtered),
-        timeMap: new Map()
+        timeMap: new Map(),
+        c4,
+        tech4,
+        timeMap4
       };
 
       filtered.forEach((c, idx) => {
@@ -352,22 +411,37 @@ class BacktestService {
         }
       }
 
-      // 2. Scan for Entry Signals if capital available & slots open
-      if (activeTrades.length < maxSlots && balance >= 5.0) {
+      // 2. Scan for Entry Signals if slots open (Never stop due to balance cutoff)
+      if (activeTrades.length < maxSlots) {
         // BTC Health Gate check
-        if (useBtcFilter && btcEntry) {
-          const btcIdx = btcEntry.timeMap.get(openTime);
-          if (btcIdx !== undefined && btcIdx >= 20) {
-            const btcC = btcEntry.candles[btcIdx];
-            const btcEma = btcEntry.tech.ema21[btcIdx];
-            if (btcC.close < btcEma) {
-              continue; // BTC below 21 EMA -> Skip altcoin entries
+        if (useBtcFilter && btcFilterMode !== 'OFF' && btcEntry) {
+          if (entryStrategy === 'PANIC_DIP') {
+            const nearest4hTime = openTime - (openTime % (4 * 3600 * 1000));
+            const btcIdx4 = btcEntry.timeMap4.get(nearest4hTime);
+            if (btcIdx4 !== undefined && btcIdx4 >= 50 && btcEntry.c4[btcIdx4].close < btcEntry.tech4.ema50[btcIdx4]) {
+              continue;
+            }
+          } else {
+            const btcIdx = btcEntry.timeMap.get(openTime);
+            if (btcIdx !== undefined && btcIdx >= 50) {
+              const btcC = btcEntry.candles[btcIdx];
+              if (btcFilterMode === 'CRASH_ONLY') {
+                const btcEma50 = btcEntry.tech.ema50[btcIdx];
+                if (btcC.close < btcEma50 * 0.98 || btcEntry.tech.rsi14[btcIdx] < 28) {
+                  continue;
+                }
+              } else {
+                const btcEma = btcEntry.tech.ema21[btcIdx];
+                if (btcC.close < btcEma) {
+                  continue;
+                }
+              }
             }
           }
         }
 
         let bestCandidate = null;
-        let highestScore = -1;
+        let highestScore = -Infinity;
 
         for (const sym of targetSymbols) {
           // Check if already holding this coin
@@ -381,56 +455,79 @@ class BacktestService {
 
           const c = symData.candles[idx];
           const tech = symData.tech;
-
-          // 24h percentage gain
-          const past24hClose = symData.candles[idx - 96].close;
-          const gain24h = ((c.close - past24hClose) / past24hClose) * 100;
-          if (gain24h < min24hGain || gain24h > max24hGain) continue;
-
-          // RVOL
-          const rvol = tech.volSma20[idx] > 0 ? c.volume / tech.volSma20[idx] : 1;
-          if (rvol < minRvol) continue;
-
-          // RSI filter
           const rsi = tech.rsi14[idx];
-          if (rsi < rsiMin || rsi > rsiMax) continue;
-
-          // Trend requirement
-          const isUptrend = tech.ema9[idx] > tech.ema21[idx] && c.close >= tech.ema21[idx];
-          if (!isUptrend) continue;
 
           let isSetupMatch = false;
+          let score = 0;
 
-          // Pullback setup
-          const isPullback = c.low <= tech.ema9[idx] * 1.004 && c.close >= tech.ema9[idx] && c.close > c.open;
-          // Breakout setup
-          const high20 = Math.max(...symData.candles.slice(idx - 20, idx).map(x => x.high));
-          const isBreakout = c.close > high20 && c.close > c.open;
-          // Crossover setup
-          const isCross = (tech.ema9[idx - 1] <= tech.ema21[idx - 1]) && (tech.ema9[idx] > tech.ema21[idx]);
+          if (entryStrategy === 'PANIC_DIP') {
+            const nearest4hTime = openTime - (openTime % (4 * 3600 * 1000));
+            const idx4 = symData.timeMap4.get(nearest4hTime);
+            if (idx4 === undefined || idx4 < 50) continue;
 
-          if (entryStrategy === 'PULLBACK' && isPullback) isSetupMatch = true;
-          else if (entryStrategy === 'BREAKOUT' && isBreakout) isSetupMatch = true;
-          else if (entryStrategy === 'CROSSOVER' && isCross) isSetupMatch = true;
-          else if (entryStrategy === 'ANY_VALID' && (isPullback || isBreakout || isCross)) isSetupMatch = true;
+            const is4hBull = symData.tech4.ema21[idx4] > symData.tech4.ema50[idx4] && symData.c4[idx4].close > symData.tech4.ema50[idx4];
+            if (!is4hBull) continue;
 
-          if (isSetupMatch) {
-            const score = rvol * 2 + gain24h;
-            if (score > highestScore) {
-              highestScore = score;
-              bestCandidate = {
-                symbol: sym,
-                entryPrice: c.close * (1 + slipRate),
-                entryTime: c.time
-              };
-            }
+            if (rsi > 30) continue;
+
+            const candleRange = c.high - c.low;
+            if (candleRange <= 0) continue;
+            const lowerWick = Math.min(c.open, c.close) - c.low;
+            const isRejection = (lowerWick / candleRange) >= 0.35;
+            if (!isRejection) continue;
+
+            isSetupMatch = true;
+            score = (50 - rsi) * 2 + (symData.tech4.ema21[idx4] / symData.tech4.ema50[idx4]) * 10;
+          } else {
+            // Standard/Legacy momentum screening filters
+            const past24hClose = symData.candles[idx - 96].close;
+            const gain24h = ((c.close - past24hClose) / past24hClose) * 100;
+            if (gain24h < min24hGain || gain24h > max24hGain) continue;
+
+            // RVOL
+            const rvol = tech.volSma20[idx] > 0 ? c.volume / tech.volSma20[idx] : 1;
+            if (rvol < minRvol) continue;
+
+            // RSI filter
+            if (rsi < rsiMin || rsi > rsiMax) continue;
+
+            // Trend requirement
+            const isUptrend = tech.ema9[idx] > tech.ema21[idx] && c.close >= tech.ema21[idx];
+            if (!isUptrend) continue;
+
+            // Pullback setup
+            const isPullback = c.low <= tech.ema9[idx] * 1.004 && c.close >= tech.ema9[idx] && c.close > c.open;
+            // Breakout setup
+            const high20 = Math.max(...symData.candles.slice(idx - 20, idx).map(x => x.high));
+            const isBreakout = c.close > high20 && c.close > c.open;
+            // Crossover setup
+            const isCross = (tech.ema9[idx - 1] <= tech.ema21[idx - 1]) && (tech.ema9[idx] > tech.ema21[idx]);
+            // Value Pullback
+            const isValuePullback = c.low <= tech.ema21[idx] * 1.008 && c.close >= tech.ema21[idx] * 0.995 && rsi >= 38 && rsi <= 55 && c.close > c.open;
+
+            if (entryStrategy === 'PULLBACK' && isPullback) isSetupMatch = true;
+            else if (entryStrategy === 'BREAKOUT' && isBreakout) isSetupMatch = true;
+            else if (entryStrategy === 'CROSSOVER' && isCross) isSetupMatch = true;
+            else if (entryStrategy === 'VALUE_PULLBACK' && isValuePullback) isSetupMatch = true;
+            else if (entryStrategy === 'ANY_VALID' && (isPullback || isBreakout || isCross || isValuePullback)) isSetupMatch = true;
+
+            score = entryStrategy === 'VALUE_PULLBACK'
+              ? ((60 - rsi) * 2 + Math.min(rvol, 3.0) * 10)
+              : (rvol * 2 + gain24h);
+          }
+
+          if (isSetupMatch && score > highestScore) {
+            highestScore = score;
+            bestCandidate = {
+              symbol: sym,
+              entryPrice: c.close * (1 + slipRate),
+              entryTime: c.time
+            };
           }
         }
 
         if (bestCandidate) {
-          const availableSlots = maxSlots - activeTrades.length;
-          const slotCash = Math.floor((balance / (availableSlots || 1)) * 100) / 100;
-          const posSize = Math.max(5.0, Math.min(balance, slotCash));
+          const posSize = maxSlots === 1 ? balance : Math.max(1.0, (balance / maxSlots));
 
           activeTrades.push({
             symbol: bestCandidate.symbol,

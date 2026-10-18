@@ -52,7 +52,7 @@ export class AutonomousAgentLoop {
     if (!this.configs[userKey]) {
       this.configs[userKey] = {
         mode: 'SIMULATED',
-        activeAccount: userKey === 'waiztahseen@gmail.com' ? 'SPOT' : 'MARGIN',
+        activeAccount: 'SPOT',
         isAutoTradingEnabled: undefined,
         lastSpotTradeOpenedAt: 0,
         lastMarginTradeOpenedAt: 0,
@@ -69,17 +69,22 @@ export class AutonomousAgentLoop {
           maxHoldMinutes: 120
         }),
         spotRiskManager: {
-          maxSlots: 1,
-          allocationPct: 100,
+          maxSlots: 2,
+          allocationPct: 50,
+          baseAllocationPct: 35,
+          soAllocationPct: 65,
           maxTradesPerPair: 1,
-          stopLossPct: 2.0,
-          takeProfitPct: 10.0,
+          stopLossPct: 12.0,
+          takeProfitPct: 2.0,
+          middleLimitRsi: 55,
+          minProfitBufferPct: 1.0,
+          safetyOrderDevPct: 4.5,
           breakEvenTriggerPct: 2.50,
           breakEvenLockPct: 0.35,
           trailingTriggerPct: 4.00,
           trailingDistancePct: 1.50,
           pullbackDiscountPct: 0,
-          maxHoldMinutes: 240,
+          maxHoldMinutes: 2880,
           minConfidenceThreshold: 80,
           allowHighVolatility: true,
           volatilityMode: 'HIGH_VOLATILITY_HALAL',
@@ -340,13 +345,13 @@ export class AutonomousAgentLoop {
     const spotRiskManager = config.spotRiskManager;
 
     if (newSettings.stopLossPct !== undefined) {
-      spotRiskManager.stopLossPct = Math.max(0.1, Math.min(10, Number(newSettings.stopLossPct)));
+      spotRiskManager.stopLossPct = Math.max(0.1, Math.min(25, Number(newSettings.stopLossPct)));
     }
     if (newSettings.takeProfitPct !== undefined) {
       spotRiskManager.takeProfitPct = Math.max(0.1, Math.min(25, Number(newSettings.takeProfitPct)));
     }
     if (newSettings.maxHoldMinutes !== undefined) {
-      spotRiskManager.maxHoldMinutes = Math.max(1, Math.min(1440, parseInt(newSettings.maxHoldMinutes, 10)));
+      spotRiskManager.maxHoldMinutes = Math.max(1, Math.min(4320, parseInt(newSettings.maxHoldMinutes, 10)));
     }
     if (newSettings.minConfidenceThreshold !== undefined) {
       spotRiskManager.minConfidenceThreshold = Math.max(70, Math.min(95, Number(newSettings.minConfidenceThreshold)));
@@ -358,6 +363,21 @@ export class AutonomousAgentLoop {
     }
     if (newSettings.maxTradesPerPair !== undefined) {
       spotRiskManager.maxTradesPerPair = Math.max(1, Math.min(4, parseInt(newSettings.maxTradesPerPair, 10)));
+    }
+    if (newSettings.middleLimitRsi !== undefined) {
+      spotRiskManager.middleLimitRsi = Math.max(40, Math.min(65, Number(newSettings.middleLimitRsi)));
+    }
+    if (newSettings.minProfitBufferPct !== undefined) {
+      spotRiskManager.minProfitBufferPct = Math.max(0.1, Math.min(5.0, Number(newSettings.minProfitBufferPct)));
+    }
+    if (newSettings.safetyOrderDevPct !== undefined) {
+      spotRiskManager.safetyOrderDevPct = Math.max(1.0, Math.min(10.0, Number(newSettings.safetyOrderDevPct)));
+    }
+    if (newSettings.baseAllocationPct !== undefined) {
+      spotRiskManager.baseAllocationPct = Math.max(10, Math.min(90, Number(newSettings.baseAllocationPct)));
+    }
+    if (newSettings.soAllocationPct !== undefined) {
+      spotRiskManager.soAllocationPct = Math.max(10, Math.min(90, Number(newSettings.soAllocationPct)));
     }
     if (newSettings.allowHighVolatility !== undefined) {
       spotRiskManager.allowHighVolatility = Boolean(newSettings.allowHighVolatility);
@@ -378,6 +398,53 @@ export class AutonomousAgentLoop {
     const feeLabel = spotRiskManager.useBnbFeeDiscount ? '0.075% BNB Discount' : '0.10% Standard';
     this.log(`⚙️ Spot Strategy updated: [${volLabel} | ${feeLabel}] ${spotRiskManager.maxSlots} Portions (${spotRiskManager.allocationPct}% each, max ${spotRiskManager.maxTradesPerPair}/coin, max ${spotRiskManager.maxHoldMinutes || 5}m hold), SL: -${spotRiskManager.stopLossPct}%, TP: +${spotRiskManager.takeProfitPct}% (🕌 100% Shariah Compliant)`, 'INFO');
     return spotRiskManager;
+  }
+
+  resetSettingsToDefault(userEmail = null, account = 'SPOT') {
+    const userKey = userEmail || this.currentUser || 'default';
+    const config = this.getConfig(userKey);
+    const targetAccount = (account || 'SPOT').toUpperCase();
+    if (targetAccount === 'SPOT') {
+      config.spotRiskManager = {
+        maxSlots: 2,
+        allocationPct: 50,
+        baseAllocationPct: 35,
+        soAllocationPct: 65,
+        maxTradesPerPair: 1,
+        stopLossPct: 12.0,
+        takeProfitPct: 2.0,
+        middleLimitRsi: 55,
+        minProfitBufferPct: 1.0,
+        safetyOrderDevPct: 4.5,
+        breakEvenTriggerPct: 2.50,
+        breakEvenLockPct: 0.35,
+        trailingTriggerPct: 4.00,
+        trailingDistancePct: 1.50,
+        pullbackDiscountPct: 0,
+        maxHoldMinutes: 2880,
+        minConfidenceThreshold: 80,
+        allowHighVolatility: true,
+        volatilityMode: 'HIGH_VOLATILITY_HALAL',
+        useBnbFeeDiscount: true,
+        feeRate: 0.00075,
+        isHalalStrict: true
+      };
+      this.log(`🔄 [${userKey}] Reset SPOT settings to best defaults (30m RSI-55 Re-entry + Safety Orders, 2 slots, TP +2%, SL -12%)`, 'INFO');
+      return config.spotRiskManager;
+    } else {
+      config.marginRiskManager = new RiskManager({
+        riskPerTradePct: 1.5,
+        maxConcurrentTrades: 20,
+        minConfidenceThreshold: 70,
+        tradeDirection: 'BOTH',
+        tradingStyle: 'SCALPING',
+        defaultLeverage: 500,
+        targetRiskRewardRatio: 1.6,
+        maxHoldMinutes: 120
+      });
+      this.log(`🔄 [${userKey}] Reset MARGIN settings to best defaults`, 'INFO');
+      return config.marginRiskManager.getSettings();
+    }
   }
 
   setTradeDirection(direction) {
@@ -1263,10 +1330,18 @@ export class AutonomousAgentLoop {
           let exitReason = null;
           let exitMsg = '';
 
-          // 1. Take Profit Target Hit (+2.50%)
+          // 1. Take Profit Target Hit (+2.00%)
           if (pos.takeProfit && livePrice >= pos.takeProfit) {
             exitReason = 'TAKE_PROFIT_TRIGGER';
             exitMsg = `🎯 [BINANCE LIVE] TP Hit: ${pos.symbol} reached target ($${livePrice} >= $${pos.takeProfit})!`;
+          }
+          // 1B. User RSI 55 Middle Limit Exit (30m Strategy Alpha)
+          else if (pos.strategySetup === 'RSI_30M_PURPLE_ZONE_REENTRY' && pos.pnlPercent >= 1.0) {
+            const currentRsi = technicalsMap?.[pos.symbol]?.rsi;
+            if (currentRsi && currentRsi >= 55) {
+              exitReason = 'RSI_55_MIDDLE_LIMIT_TRIGGER';
+              exitMsg = `📈 [BINANCE LIVE] RSI 55 Midline Hit: ${pos.symbol} reached RSI ${currentRsi.toFixed(1)} with +${pos.pnlPercent}% gain!`;
+            }
           }
           // 2. Break-Even Lock, Trailing Lock, or Stop Loss Protection Trigger
           else if (pos.stopLoss && livePrice <= pos.stopLoss) {

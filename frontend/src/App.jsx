@@ -481,11 +481,29 @@ export default function App() {
       });
       const json = await res.json();
       if (json.success) {
-        showNotification(`[${acc}] Portfolio reset`, 'WARN');
+        showNotification(`[${acc}] Portfolio & strategy settings reset to best defaults`, 'WARN');
         await fetchDashboard();
       }
     } catch (err) {
       showNotification('Failed to reset portfolio', 'ERROR');
+    }
+  };
+
+  const handleResetSettings = async (accountToReset = null) => {
+    const acc = accountToReset || data.activeAccount || 'SPOT';
+    try {
+      const res = await fetch('/api/agent/settings/reset', {
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ account: acc })
+      });
+      const json = await res.json();
+      if (json.success) {
+        showNotification(`[${acc}] Restored best strategy default settings (30m RSI-55 + Safety Orders)`, 'SUCCESS');
+        await fetchDashboard();
+      }
+    } catch (err) {
+      showNotification('Failed to reset settings', 'ERROR');
     }
   };
 
@@ -709,7 +727,7 @@ export default function App() {
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
               <span className="font-bold text-emerald-300">PURE SPOT CRYPTO ENGINE ACTIVE:</span>
               <span className="text-slate-300">
-                100% Capital Allocation per trade ({isLiveMode && !data.brokers?.binance?.connected ? 'Connect Binance to see balance' : `$${(data.portfolio?.balance ?? 0).toFixed(2)} full balance buy`}). 0x leverage. Stop: -{data.riskSettings?.stopLossPct || 1.0}% | Target: +{data.riskSettings?.takeProfitPct || 2.5}%.
+                100% Capital Allocation ({isLiveMode && !data.brokers?.binance?.connected ? 'Connect Binance to see balance' : `$${(data.portfolio?.balance ?? 0).toFixed(2)} active capital`}). 0x leverage. Stop: -{data.riskSettings?.stopLossPct || 12.0}% | Target: +{data.riskSettings?.takeProfitPct || 2.0}%.
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -964,9 +982,10 @@ export default function App() {
           settings={data.riskSettings}
           marginSettings={data.margin?.riskSettings}
           spotSettings={data.spot?.riskSettings}
-          activeAccount={data.activeAccount || 'MARGIN'}
+          activeAccount={data.activeAccount || 'SPOT'}
           onSaveSettings={handleSaveSettings}
           onResetPortfolio={handleResetPortfolio}
+          onResetSettings={handleResetSettings}
           onClose={() => setIsSettingsOpen(false)}
         />
       )}

@@ -6,13 +6,13 @@
     "beLock": 0.22,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 629,
-    "wins": 513,
-    "losses": 116,
-    "wr": 81.6,
-    "avgWin": "+0.93%",
+    "total": 906,
+    "wins": 735,
+    "losses": 171,
+    "wr": 81.1,
+    "avgWin": "+1.07%",
     "avgLoss": "-1.14%",
-    "pnlSum": 345.4
+    "pnlSum": 592.3
   },
   {
     "tp": 0.45,
@@ -21,13 +21,13 @@
     "beLock": 0.24,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 629,
-    "wins": 513,
-    "losses": 116,
-    "wr": 81.6,
-    "avgWin": "+0.93%",
+    "total": 906,
+    "wins": 735,
+    "losses": 171,
+    "wr": 81.1,
+    "avgWin": "+1.07%",
     "avgLoss": "-1.14%",
-    "pnlSum": 347.1
+    "pnlSum": 594.3
   },
   {
     "tp": 0.5,
@@ -36,13 +36,13 @@
     "beLock": 0.22,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 629,
-    "wins": 513,
-    "losses": 116,
-    "wr": 81.6,
-    "avgWin": "+0.93%",
+    "total": 906,
+    "wins": 735,
+    "losses": 171,
+    "wr": 81.1,
+    "avgWin": "+1.07%",
     "avgLoss": "-1.14%",
-    "pnlSum": 344
+    "pnlSum": 590.2
   },
   {
     "tp": 0.5,
@@ -51,13 +51,13 @@
     "beLock": 0.24,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 629,
-    "wins": 513,
-    "losses": 116,
-    "wr": 81.6,
-    "avgWin": "+0.93%",
+    "total": 906,
+    "wins": 735,
+    "losses": 171,
+    "wr": 81.1,
+    "avgWin": "+1.07%",
     "avgLoss": "-1.14%",
-    "pnlSum": 346
+    "pnlSum": 592.7
   },
   {
     "tp": 0.55,
@@ -66,13 +66,13 @@
     "beLock": 0.22,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 629,
-    "wins": 513,
-    "losses": 116,
-    "wr": 81.6,
-    "avgWin": "+0.92%",
+    "total": 906,
+    "wins": 735,
+    "losses": 171,
+    "wr": 81.1,
+    "avgWin": "+1.06%",
     "avgLoss": "-1.14%",
-    "pnlSum": 341.4
+    "pnlSum": 586.9
   },
   {
     "tp": 0.55,
@@ -81,13 +81,13 @@
     "beLock": 0.24,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 629,
-    "wins": 513,
-    "losses": 116,
-    "wr": 81.6,
-    "avgWin": "+0.93%",
+    "total": 906,
+    "wins": 735,
+    "losses": 171,
+    "wr": 81.1,
+    "avgWin": "+1.07%",
     "avgLoss": "-1.14%",
-    "pnlSum": 343.8
+    "pnlSum": 589.9
   },
   {
     "tp": 0.6,
@@ -96,13 +96,13 @@
     "beLock": 0.22,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 629,
-    "wins": 513,
-    "losses": 116,
-    "wr": 81.6,
-    "avgWin": "+0.92%",
+    "total": 906,
+    "wins": 735,
+    "losses": 171,
+    "wr": 81.1,
+    "avgWin": "+1.06%",
     "avgLoss": "-1.14%",
-    "pnlSum": 338.5
+    "pnlSum": 582.3
   },
   {
     "tp": 0.6,
@@ -111,13 +111,13 @@
     "beLock": 0.24,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 629,
-    "wins": 513,
-    "losses": 116,
-    "wr": 81.6,
-    "avgWin": "+0.92%",
+    "total": 906,
+    "wins": 735,
+    "losses": 171,
+    "wr": 81.1,
+    "avgWin": "+1.06%",
     "avgLoss": "-1.14%",
-    "pnlSum": 341.3
+    "pnlSum": 585.9
   },
   {
     "tp": 0.65,
@@ -126,13 +126,13 @@
     "beLock": 0.22,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 629,
-    "wins": 513,
-    "losses": 116,
-    "wr": 81.6,
-    "avgWin": "+0.91%",
+    "total": 906,
+    "wins": 735,
+    "losses": 171,
+    "wr": 81.1,
+    "avgWin": "+1.05%",
     "avgLoss": "-1.14%",
-    "pnlSum": 335.6
+    "pnlSum": 578.6
   },
   {
     "tp": 0.65,
@@ -141,13 +141,13 @@
     "beLock": 0.24,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 629,
-    "wins": 513,
-    "losses": 116,
-    "wr": 81.6,
-    "avgWin": "+0.92%",
+    "total": 906,
+    "wins": 735,
+    "losses": 171,
+    "wr": 81.1,
+    "avgWin": "+1.06%",
     "avgLoss": "-1.14%",
-    "pnlSum": 338.7
+    "pnlSum": 582.5
   },
   {
     "tp": 0.7,
@@ -156,13 +156,13 @@
     "beLock": 0.22,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 629,
-    "wins": 513,
-    "losses": 116,
-    "wr": 81.6,
-    "avgWin": "+0.90%",
+    "total": 906,
+    "wins": 735,
+    "losses": 171,
+    "wr": 81.1,
+    "avgWin": "+1.04%",
     "avgLoss": "-1.14%",
-    "pnlSum": 331.1
+    "pnlSum": 572.3
   },
   {
     "tp": 0.7,
@@ -171,13 +171,13 @@
     "beLock": 0.24,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 629,
-    "wins": 513,
-    "losses": 116,
-    "wr": 81.6,
-    "avgWin": "+0.91%",
+    "total": 906,
+    "wins": 735,
+    "losses": 171,
+    "wr": 81.1,
+    "avgWin": "+1.05%",
     "avgLoss": "-1.14%",
-    "pnlSum": 334.5
+    "pnlSum": 576.7
   },
   {
     "tp": 0.45,
@@ -186,13 +186,13 @@
     "beLock": 0.22,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 632,
-    "wins": 512,
-    "losses": 120,
-    "wr": 81,
-    "avgWin": "+0.93%",
+    "total": 913,
+    "wins": 734,
+    "losses": 179,
+    "wr": 80.4,
+    "avgWin": "+1.07%",
     "avgLoss": "-1.06%",
-    "pnlSum": 348.3
+    "pnlSum": 592.8
   },
   {
     "tp": 0.45,
@@ -201,13 +201,13 @@
     "beLock": 0.24,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 632,
-    "wins": 512,
-    "losses": 120,
-    "wr": 81,
-    "avgWin": "+0.93%",
+    "total": 913,
+    "wins": 734,
+    "losses": 179,
+    "wr": 80.4,
+    "avgWin": "+1.07%",
     "avgLoss": "-1.06%",
-    "pnlSum": 350
+    "pnlSum": 594.8
   },
   {
     "tp": 0.5,
@@ -216,13 +216,13 @@
     "beLock": 0.22,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 632,
-    "wins": 512,
-    "losses": 120,
-    "wr": 81,
-    "avgWin": "+0.93%",
+    "total": 913,
+    "wins": 734,
+    "losses": 179,
+    "wr": 80.4,
+    "avgWin": "+1.06%",
     "avgLoss": "-1.06%",
-    "pnlSum": 346.9
+    "pnlSum": 590.7
   },
   {
     "tp": 0.5,
@@ -231,13 +231,13 @@
     "beLock": 0.24,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 632,
-    "wins": 512,
-    "losses": 120,
-    "wr": 81,
-    "avgWin": "+0.93%",
+    "total": 913,
+    "wins": 734,
+    "losses": 179,
+    "wr": 80.4,
+    "avgWin": "+1.07%",
     "avgLoss": "-1.06%",
-    "pnlSum": 348.9
+    "pnlSum": 593.2
   },
   {
     "tp": 0.55,
@@ -246,13 +246,13 @@
     "beLock": 0.22,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 632,
-    "wins": 512,
-    "losses": 120,
-    "wr": 81,
-    "avgWin": "+0.92%",
+    "total": 913,
+    "wins": 734,
+    "losses": 179,
+    "wr": 80.4,
+    "avgWin": "+1.06%",
     "avgLoss": "-1.06%",
-    "pnlSum": 344.3
+    "pnlSum": 587.2
   },
   {
     "tp": 0.55,
@@ -261,13 +261,13 @@
     "beLock": 0.24,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 632,
-    "wins": 512,
-    "losses": 120,
-    "wr": 81,
-    "avgWin": "+0.92%",
+    "total": 913,
+    "wins": 734,
+    "losses": 179,
+    "wr": 80.4,
+    "avgWin": "+1.06%",
     "avgLoss": "-1.06%",
-    "pnlSum": 346.7
+    "pnlSum": 590.3
   },
   {
     "tp": 0.6,
@@ -276,13 +276,13 @@
     "beLock": 0.22,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 632,
-    "wins": 512,
-    "losses": 120,
-    "wr": 81,
-    "avgWin": "+0.91%",
+    "total": 913,
+    "wins": 734,
+    "losses": 179,
+    "wr": 80.4,
+    "avgWin": "+1.05%",
     "avgLoss": "-1.06%",
-    "pnlSum": 341.4
+    "pnlSum": 582.7
   },
   {
     "tp": 0.6,
@@ -291,12 +291,12 @@
     "beLock": 0.24,
     "minRvol": 2,
     "minRS": 1.5,
-    "total": 632,
-    "wins": 512,
-    "losses": 120,
-    "wr": 81,
-    "avgWin": "+0.92%",
+    "total": 913,
+    "wins": 734,
+    "losses": 179,
+    "wr": 80.4,
+    "avgWin": "+1.06%",
     "avgLoss": "-1.06%",
-    "pnlSum": 344.2
+    "pnlSum": 586.3
   }
 ]

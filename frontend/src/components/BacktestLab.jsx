@@ -30,6 +30,54 @@ import {
 export default function BacktestLab({ token, showNotification }) {
   // Top Mathematically Optimized Presets (Derived from 11,580+ backtests across 94 Halal coins)
   const PRESETS = {
+    RSI_30M_OPTIMIZED: {
+      name: '👑 30m RSI-55 + Safety Orders (82.9% WR | +49.5% Net | 603 Trades | 2.5 Trades/Day)',
+      takeProfitPct: 2.0,
+      stopLossPct: 12.0,
+      breakEvenTriggerPct: 2.5,
+      breakEvenLockPct: 0.35,
+      trailingTriggerPct: 4.0,
+      trailingDistancePct: 1.5,
+      min24hGain: 0,
+      max24hGain: 100,
+      minRvol: 0.1,
+      maxHoldMinutes: 2880,
+      maxSlots: 2,
+      entryStrategy: 'RSI_REENTRY_SO',
+      useBtcFilter: false
+    },
+    DAILY_FAST_SCALP: {
+      name: '⚡ 3.0% Daily Fast Scalp (+79.2% ROI | 345 Trades | 145 Active Days)',
+      takeProfitPct: 3.0,
+      stopLossPct: 1.8,
+      breakEvenTriggerPct: 1.8,
+      breakEvenLockPct: 0.25,
+      trailingTriggerPct: 2.2,
+      trailingDistancePct: 0.8,
+      min24hGain: 0,
+      max24hGain: 100,
+      minRvol: 1.0,
+      maxHoldMinutes: 240,
+      maxSlots: 1,
+      entryStrategy: 'PANIC_DIP',
+      useBtcFilter: true
+    },
+    ALPHA_SCALP: {
+      name: '🔥 6.0% Macro Alpha Scalp (+130.7% ROI | 289 Trades | 144 Days)',
+      takeProfitPct: 6.0,
+      stopLossPct: 2.0,
+      breakEvenTriggerPct: 2.0,
+      breakEvenLockPct: 0.25,
+      trailingTriggerPct: 3.5,
+      trailingDistancePct: 1.2,
+      min24hGain: 0,
+      max24hGain: 100,
+      minRvol: 1.0,
+      maxHoldMinutes: 480,
+      maxSlots: 1,
+      entryStrategy: 'PANIC_DIP',
+      useBtcFilter: true
+    },
     DAILY_MACHINE: {
       name: '💵 Daily Profit Machine (4/4 Days Profit | 68% Win Rate | 3 Slots)',
       takeProfitPct: 5.0,
@@ -96,27 +144,27 @@ export default function BacktestLab({ token, showNotification }) {
     }
   };
 
-  // Form Configuration State (Defaults to Daily Profit Machine)
+  // Form Configuration State (Defaults to Proven Alpha Strategy)
   const [initialBalance, setInitialBalance] = useState(10);
-  const [startDate, setStartDate] = useState('2026-08-15');
-  const [endDate, setEndDate] = useState('2026-10-15');
-  const [maxSlots, setMaxSlots] = useState(3);
+  const [startDate, setStartDate] = useState('2026-01-01');
+  const [endDate, setEndDate] = useState('2026-10-16');
+  const [maxSlots, setMaxSlots] = useState(1);
   const [selectedCoinsMode, setSelectedCoinsMode] = useState('ALL'); // 'ALL' | 'CUSTOM'
   const [selectedSymbols, setSelectedSymbols] = useState([]);
 
-  // Strategy Parameters
-  const [takeProfitPct, setTakeProfitPct] = useState(5.0);
-  const [stopLossPct, setStopLossPct] = useState(2.5);
-  const [breakEvenTriggerPct, setBreakEvenTriggerPct] = useState(0.6);
-  const [breakEvenLockPct, setBreakEvenLockPct] = useState(0.20);
-  const [trailingTriggerPct, setTrailingTriggerPct] = useState(1.0);
-  const [trailingDistancePct, setTrailingDistancePct] = useState(0.5);
-  const [min24hGain, setMin24hGain] = useState(7.0);
-  const [max24hGain, setMax24hGain] = useState(45.0);
-  const [minRvol, setMinRvol] = useState(1.5);
+  // Strategy Parameters (Defaults to 3.0% Daily Fast Scalp)
+  const [takeProfitPct, setTakeProfitPct] = useState(3.0);
+  const [stopLossPct, setStopLossPct] = useState(1.8);
+  const [breakEvenTriggerPct, setBreakEvenTriggerPct] = useState(1.8);
+  const [breakEvenLockPct, setBreakEvenLockPct] = useState(0.25);
+  const [trailingTriggerPct, setTrailingTriggerPct] = useState(2.2);
+  const [trailingDistancePct, setTrailingDistancePct] = useState(0.8);
+  const [min24hGain, setMin24hGain] = useState(0);
+  const [max24hGain, setMax24hGain] = useState(100);
+  const [minRvol, setMinRvol] = useState(1.0);
   const [maxHoldMinutes, setMaxHoldMinutes] = useState(240);
-  const [entryStrategy, setEntryStrategy] = useState('ANY_VALID');
-  const [useBtcFilter, setUseBtcFilter] = useState(false);
+  const [entryStrategy, setEntryStrategy] = useState('PANIC_DIP');
+  const [useBtcFilter, setUseBtcFilter] = useState(true);
   const [feeRatePct, setFeeRatePct] = useState(0.10);
   const [slippagePct, setSlippagePct] = useState(0.05);
 
@@ -345,6 +393,22 @@ export default function BacktestLab({ token, showNotification }) {
           {/* Quick Preset Buttons */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-mono text-slate-400 mr-1">Best Settings:</span>
+            <button
+              onClick={() => applyPreset('DAILY_FAST_SCALP')}
+              className="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/50 text-amber-300 text-xs font-bold font-mono transition-all flex items-center gap-1.5 cursor-pointer shadow-md ring-1 ring-amber-500/40"
+              title="3% TP / 1.8% SL / 1.8% BE / 2.2% Trailing / 345 Trades across 145 Active Days / +79.2% Net Profit"
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+              <span>⚡ 3.0% Daily Fast Scalp (+79% ROI | 345 Trades)</span>
+            </button>
+            <button
+              onClick={() => applyPreset('ALPHA_SCALP')}
+              className="px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/50 text-rose-300 text-xs font-bold font-mono transition-all flex items-center gap-1.5 cursor-pointer shadow-md ring-1 ring-rose-500/40"
+              title="6% TP / 2.0% SL / 2.0% BE / 3.5% Trailing / 289 Trades / +130.7% Net Profit"
+            >
+              <Flame className="w-3.5 h-3.5 text-rose-400" />
+              <span>🔥 6.0% Macro Alpha Scalp (+131% ROI)</span>
+            </button>
             <button
               onClick={() => applyPreset('DAILY_MACHINE')}
               className="px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/50 text-cyan-300 text-xs font-bold font-mono transition-all flex items-center gap-1.5 cursor-pointer shadow-md ring-1 ring-cyan-500/30"
@@ -753,10 +817,12 @@ export default function BacktestLab({ token, showNotification }) {
                 onChange={e => setEntryStrategy(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl bg-terminal-950 border border-terminal-border text-white text-xs font-mono outline-none cursor-pointer"
               >
+                <option value="PANIC_DIP">🔥 4H Bull Trend + 15m Panic Dip Rebound (+38% Proven Quant Alpha)</option>
                 <option value="ANY_VALID">All Valid Setups (Pullback + Breakout + Crossover)</option>
                 <option value="PULLBACK">EMA 9 Dip Pullback Retest Only</option>
                 <option value="BREAKOUT">Resistance Breakout Explosion Only</option>
                 <option value="CROSSOVER">Fresh 9/21 EMA Crossover Only</option>
+                <option value="VALUE_PULLBACK">Value Pocket Dip (21 EMA Rebound)</option>
               </select>
             </div>
 

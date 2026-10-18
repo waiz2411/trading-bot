@@ -1,0 +1,72 @@
+[
+  {
+    "name": "Micro-Scalp TP 0.8%, SL 0.6%, RSI7 < 20 (Snapback)",
+    "trades": 3802,
+    "wins": 1396,
+    "losses": 2387,
+    "winRate": 36.7,
+    "netProfit": -77.56,
+    "roiPct": -77.56,
+    "profitFactor": 0.43,
+    "maxDrawdownPct": 78.2,
+    "activeDays": 286,
+    "totalFeesPaid": 76.04,
+    "avgDailyTrades": 13.3
+  },
+  {
+    "name": "Micro-Scalp TP 1.2%, SL 0.8%, RSI7 < 25 (Rejection)",
+    "trades": 13995,
+    "wins": 5238,
+    "losses": 8707,
+    "winRate": 37.4,
+    "netProfit": -275.78,
+    "roiPct": -275.78,
+    "profitFactor": 0.52,
+    "maxDrawdownPct": 276.2,
+    "activeDays": 289,
+    "totalFeesPaid": 279.9,
+    "avgDailyTrades": 48.4
+  },
+  {
+    "name": "Micro-Scalp TP 1.5%, SL 1.0%, RSI14 < 30",
+    "trades": 5330,
+    "wins": 2113,
+    "losses": 3192,
+    "winRate": 39.6,
+    "netProfit": -102.75,
+    "roiPct": -102.75,
+    "profitFactor": 0.59,
+    "maxDrawdownPct": 103.1,
+    "activeDays": 284,
+    "totalFeesPaid": 106.6,
+    "avgDailyTrades": 18.8
+  },
+  {
+    "name": "Trend Micro-Scalp TP 1.0%, SL 0.7%, 9 EMA Touch",
+    "trades": 41288,
+    "wins": 13234,
+    "losses": 27874,
+    "winRate": 32.1,
+    "netProfit": -1111.15,
+    "roiPct": -1111.15,
+    "profitFactor": 0.42,
+    "maxDrawdownPct": 1110.6,
+    "activeDays": 289,
+    "totalFeesPaid": 825.76,
+    "avgDailyTrades": 142.9
+  },
+  {
+    "name": "Volume Surge Micro-Scalp TP 1.2%, SL 0.8%, RVOL > 2.5x",
+    "trades": 23316,
+    "wins": 7927,
+    "losses": 15290,
+    "winRate": 34,
+    "netProfit": -528.46,
+    "roiPct": -528.46,
+    "profitFactor": 0.47,
+    "maxDrawdownPct": 528.5,
+    "activeDays": 289,
+    "totalFeesPaid": 466.32,
+    "avgDailyTrades": 80.7
+  }
+]

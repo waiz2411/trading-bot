@@ -730,6 +730,30 @@ app.post('/api/agent/settings', async (req, res) => {
   }
 });
 
+// API: Reset risk management settings to best strategy defaults
+app.post('/api/agent/settings/reset', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const user = await authService.validateToken(token);
+    const userEmail = user ? user.email : 'default';
+    const { account } = req.body;
+    const targetAccount = (account || agentLoop.activeAccount || 'SPOT').toUpperCase();
+
+    agentLoop.resetSettingsToDefault(userEmail, targetAccount);
+    const userConfig = agentLoop.getConfig(userEmail);
+    const dashboard = agentLoop.getDashboardData(null, targetAccount, userEmail);
+    res.json({
+      success: true,
+      spotSettings: userConfig.spotRiskManager,
+      marginSettings: userConfig.marginRiskManager.getSettings(),
+      settings: dashboard.riskSettings
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // API: Set Trade Direction (SHORT_ONLY, BOTH, LONG_ONLY)
 app.post('/api/agent/direction', async (req, res) => {
   try {
@@ -1351,11 +1375,12 @@ app.post('/api/portfolio/reset', async (req, res) => {
     const user = await authService.validateToken(token);
     const userEmail = user ? user.email : 'default';
     const { initialBalance, account } = req.body;
-    const targetAccount = (account || agentLoop.activeAccount).toUpperCase();
+    const targetAccount = (account || agentLoop.activeAccount || 'SPOT').toUpperCase();
     const engine = agentLoop.getEngine(targetAccount, userEmail);
-    const initBal = initialBalance !== undefined ? parseFloat(initialBalance) : 10;
+    const initBal = initialBalance !== undefined ? parseFloat(initialBalance) : (targetAccount === 'SPOT' ? 50 : 100);
     const resetState = engine.reset(initBal);
-    agentLoop.log(`🔄 [${targetAccount}] Portfolio reset to $${initBal.toLocaleString('en-US')} virtual balance.`, 'WARN');
+    agentLoop.resetSettingsToDefault(userEmail, targetAccount);
+    agentLoop.log(`🔄 [${targetAccount}] Portfolio reset to $${initBal.toLocaleString('en-US')} virtual balance and optimal strategy defaults restored.`, 'WARN');
     const userMode = (user && user.mode) ? user.mode : (userEmail === 'waiztahseen@gmail.com' ? 'LIVE' : 'SIMULATED');
     res.json({ success: true, portfolio: resetState, dashboard: agentLoop.getDashboardData(userMode, targetAccount, userEmail) });
   } catch (err) {

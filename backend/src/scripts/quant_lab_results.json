@@ -1,0 +1,54 @@
+[
+  {
+    "name": "4H Asymmetric Trend Following (15% TP, 3.5% SL, 6% Trail)",
+    "roiPct": -11.03,
+    "finalBalance": 88.97,
+    "trades": 182,
+    "wins": 79,
+    "losses": 103,
+    "be": 0,
+    "winRate": 43.4,
+    "profitFactor": 0.93,
+    "maxDrawdownPct": 29.8,
+    "activeDays": 118
+  },
+  {
+    "name": "1H Volume Squeeze Breakout (8% TP, 2.5% SL, 4% Trail)",
+    "roiPct": -79.9,
+    "finalBalance": 20.1,
+    "trades": 583,
+    "wins": 232,
+    "losses": 351,
+    "be": 0,
+    "winRate": 39.8,
+    "profitFactor": 0.61,
+    "maxDrawdownPct": 85.3,
+    "activeDays": 215
+  },
+  {
+    "name": "4H Bull Trend + 15m Panic Dip Rebound (6% TP, 2.2% SL)",
+    "roiPct": 17.24,
+    "finalBalance": 117.24,
+    "trades": 90,
+    "wins": 52,
+    "losses": 38,
+    "be": 0,
+    "winRate": 57.8,
+    "profitFactor": 1.59,
+    "maxDrawdownPct": 6.4,
+    "activeDays": 62
+  },
+  {
+    "name": "1H Dynamic Trend Pullback (10% TP, 3.0% SL, 4.5% Trail)",
+    "roiPct": -67.79,
+    "finalBalance": 32.21,
+    "trades": 410,
+    "wins": 184,
+    "losses": 226,
+    "be": 0,
+    "winRate": 44.9,
+    "profitFactor": 0.67,
+    "maxDrawdownPct": 71.5,
+    "activeDays": 197
+  }
+]
