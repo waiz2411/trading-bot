@@ -190,7 +190,22 @@ export const HALAL_APPROVED_ASSETS = {
   'C98': { name: 'Coin98', sector: 'Multi-Chain DeFi Gateway & Wallet', isVolatile: true, minVolatility: 1.8 },
   'MASK': { name: 'Mask Network', sector: 'Web3 Social Network Privacy Layer', isVolatile: true, minVolatility: 1.8 },
   'ACH': { name: 'Alchemy Pay', sector: 'Crypto-Fiat Payment Gateway', isVolatile: true, minVolatility: 1.8 },
-  'BLUR': { name: 'Blur', sector: 'NFT Marketplace & Liquidity Infrastructure', isVolatile: true, minVolatility: 1.9 }
+  'BLUR': { name: 'Blur', sector: 'NFT Marketplace & Liquidity Infrastructure', isVolatile: true, minVolatility: 1.9 },
+  'CHR': { name: 'Chromia', sector: 'Relational Blockchain L1', isVolatile: true, minVolatility: 1.8 },
+  'SC': { name: 'Siacoin', sector: 'Decentralized Storage Network', isVolatile: true, minVolatility: 1.7 },
+  'OM': { name: 'MANTRA', sector: 'RWA Layer 1 Blockchain', isVolatile: true, minVolatility: 1.9 },
+  'LTO': { name: 'LTO Network', sector: 'Real World Asset Blockchain', isVolatile: true, minVolatility: 1.8 },
+  'XNO': { name: 'Nano', sector: 'Fee-less Instant Currency', isVolatile: true, minVolatility: 1.6 },
+  'HNT': { name: 'Helium', sector: 'DePIN Decentralized Wireless', isVolatile: true, minVolatility: 1.8 },
+  'WAXP': { name: 'WAX', sector: 'Web3 Gaming & NFT L1', isVolatile: true, minVolatility: 1.8 },
+  'ICX': { name: 'ICON', sector: 'Interoperability Protocol', isVolatile: true, minVolatility: 1.7 },
+  'EIGEN': { name: 'EigenLayer', sector: 'Ethereum Restaking Infrastructure', isVolatile: true, minVolatility: 1.9 },
+  'HYPE': { name: 'Hyperliquid', sector: 'High-Performance L1 Trading', isVolatile: true, minVolatility: 2.0 },
+  'AVA': { name: 'Travala', sector: 'Web3 Travel Infrastructure', isVolatile: true, minVolatility: 1.8 },
+  'ETC': { name: 'Ethereum Classic', sector: 'PoW Smart Contracts L1', isVolatile: false, minVolatility: 1.1 },
+  'ZRX': { name: '0x Protocol', sector: 'DEX Settlement & Liquidity Protocol', isVolatile: true, minVolatility: 1.7 },
+  'CFG': { name: 'Centrifuge', sector: 'RWA Credit Protocol', isVolatile: true, minVolatility: 1.8 },
+  'TRU': { name: 'TrueFi', sector: 'Institutional Credit Infrastructure', isVolatile: true, minVolatility: 1.9 }
 };
 
 /**
@@ -200,9 +215,9 @@ export function isHalalCompliant(symbolOrBase) {
   if (!symbolOrBase) return false;
   const clean = String(symbolOrBase)
     .toUpperCase()
-    .replace(/[-_/=X].*$/, '')
-    .replace(/USD.*$/, '')
-    .replace(/USDT$/, '');
+    .replace(/[-_/=].*$/, '')
+    .replace(/USDT$/, '')
+    .replace(/USD$/, '');
 
   // 1. Must be clean ASCII characters (strictly rejects non-standard foreign tokens like Chinese memes)
   if (!/^[A-Z0-9]+$/.test(clean)) {
@@ -234,9 +249,9 @@ export function isHalalCompliant(symbolOrBase) {
 export function getHalalMetadata(symbolOrBase) {
   const clean = String(symbolOrBase || '')
     .toUpperCase()
-    .replace(/[-_/=X].*$/, '')
-    .replace(/USD.*$/, '')
-    .replace(/USDT$/, '');
+    .replace(/[-_/=].*$/, '')
+    .replace(/USDT$/, '')
+    .replace(/USD$/, '');
 
   if (HALAL_APPROVED_ASSETS[clean]) {
     return HALAL_APPROVED_ASSETS[clean];
@@ -261,9 +276,9 @@ export function filterHalalAssets(assets = [], options = {}) {
 
     const clean = (asset.baseAsset || asset.symbol)
       .toUpperCase()
-      .replace(/[-_/=X].*$/, '')
-      .replace(/USD.*$/, '')
-      .replace(/USDT$/, '');
+      .replace(/[-_/=].*$/, '')
+      .replace(/USDT$/, '')
+      .replace(/USD$/, '');
 
     // Strict Halal check
     if (!isHalalCompliant(clean)) {

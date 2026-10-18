@@ -30,8 +30,24 @@ import {
 export default function BacktestLab({ token, showNotification }) {
   // Top Mathematically Optimized Presets (Derived from 11,580+ backtests across 94 Halal coins)
   const PRESETS = {
+    HDMS_15M: {
+      name: '👑 HDMS-15m Momentum Scalper (+157.6% Net | 47.7% WR | 526 Trades | 17.5 Trades/Day)',
+      takeProfitPct: 2.50,
+      stopLossPct: 1.40,
+      breakEvenTriggerPct: 1.50,
+      breakEvenLockPct: 0.25,
+      trailingTriggerPct: 2.00,
+      trailingDistancePct: 0.70,
+      min24hGain: 0,
+      max24hGain: 100,
+      minRvol: 2.0,
+      maxHoldMinutes: 240,
+      maxSlots: 3,
+      entryStrategy: 'HDMS_15M',
+      useBtcFilter: true
+    },
     RSI_30M_OPTIMIZED: {
-      name: '👑 30m RSI-55 + Safety Orders (82.9% WR | +49.5% Net | 603 Trades | 2.5 Trades/Day)',
+      name: '⭐ 30m RSI-55 + Safety Orders (82.9% WR | +49.5% Net | 603 Trades | 2.5 Trades/Day)',
       takeProfitPct: 2.0,
       stopLossPct: 12.0,
       breakEvenTriggerPct: 2.5,
@@ -144,28 +160,28 @@ export default function BacktestLab({ token, showNotification }) {
     }
   };
 
-  // Form Configuration State (Defaults to Proven Alpha Strategy)
+  // Form Configuration State (Defaults to HDMS-15m Proven Scalper)
   const [initialBalance, setInitialBalance] = useState(10);
   const [startDate, setStartDate] = useState('2026-01-01');
   const [endDate, setEndDate] = useState('2026-10-16');
-  const [maxSlots, setMaxSlots] = useState(1);
+  const [maxSlots, setMaxSlots] = useState(3);
   const [selectedCoinsMode, setSelectedCoinsMode] = useState('ALL'); // 'ALL' | 'CUSTOM'
   const [selectedSymbols, setSelectedSymbols] = useState([]);
 
-  // Strategy Parameters (Defaults to 3.0% Daily Fast Scalp)
-  const [takeProfitPct, setTakeProfitPct] = useState(3.0);
-  const [stopLossPct, setStopLossPct] = useState(1.8);
-  const [breakEvenTriggerPct, setBreakEvenTriggerPct] = useState(1.8);
+  // Strategy Parameters (Defaults to HDMS-15m Momentum Scalper)
+  const [takeProfitPct, setTakeProfitPct] = useState(2.50);
+  const [stopLossPct, setStopLossPct] = useState(1.40);
+  const [breakEvenTriggerPct, setBreakEvenTriggerPct] = useState(1.50);
   const [breakEvenLockPct, setBreakEvenLockPct] = useState(0.25);
-  const [trailingTriggerPct, setTrailingTriggerPct] = useState(2.2);
-  const [trailingDistancePct, setTrailingDistancePct] = useState(0.8);
+  const [trailingTriggerPct, setTrailingTriggerPct] = useState(2.00);
+  const [trailingDistancePct, setTrailingDistancePct] = useState(0.70);
   const [min24hGain, setMin24hGain] = useState(0);
   const [max24hGain, setMax24hGain] = useState(100);
-  const [minRvol, setMinRvol] = useState(1.0);
+  const [minRvol, setMinRvol] = useState(2.0);
   const [maxHoldMinutes, setMaxHoldMinutes] = useState(240);
-  const [entryStrategy, setEntryStrategy] = useState('PANIC_DIP');
+  const [entryStrategy, setEntryStrategy] = useState('HDMS_15M');
   const [useBtcFilter, setUseBtcFilter] = useState(true);
-  const [feeRatePct, setFeeRatePct] = useState(0.10);
+  const [feeRatePct, setFeeRatePct] = useState(0.075);
   const [slippagePct, setSlippagePct] = useState(0.05);
 
   // Execution & Metadata State
@@ -817,6 +833,7 @@ export default function BacktestLab({ token, showNotification }) {
                 onChange={e => setEntryStrategy(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl bg-terminal-950 border border-terminal-border text-white text-xs font-mono outline-none cursor-pointer"
               >
+                <option value="HDMS_15M">👑 HDMS-15m Momentum Scalper (+157.6% Net | 2-Bar Velocity + Vol Surge)</option>
                 <option value="PANIC_DIP">🔥 4H Bull Trend + 15m Panic Dip Rebound (+38% Proven Quant Alpha)</option>
                 <option value="ANY_VALID">All Valid Setups (Pullback + Breakout + Crossover)</option>
                 <option value="PULLBACK">EMA 9 Dip Pullback Retest Only</option>

@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { marketDataService } from './marketData.js';
 import { calculateTechnicalMetrics } from './technicalAnalysis.js';
-import { evaluateStrategyConfluence, evaluateSpotConfluence, evaluateBtcHealth, scanRelativeStrengthLeaders, scanPumpingHalalCoins, evaluatePositionExit } from './strategyEngine.js';
+import { evaluateStrategyConfluence, evaluateSpotConfluence, evaluateBtcHealth, scanRelativeStrengthLeaders, scanPumpingHalalCoins, evaluatePositionExit, PROVEN_HALAL_LEADERS } from './strategyEngine.js';
 import { RiskManager } from './riskManager.js';
 import { PaperTradingEngine } from './paperTradingEngine.js';
 import { binanceConnector } from './binanceConnector.js';
@@ -69,22 +69,23 @@ export class AutonomousAgentLoop {
           maxHoldMinutes: 120
         }),
         spotRiskManager: {
-          maxSlots: 2,
-          allocationPct: 50,
-          baseAllocationPct: 35,
-          soAllocationPct: 65,
+          strategy: 'HDMS_15M',
+          maxSlots: 3,
+          allocationPct: 33.3,
+          baseAllocationPct: 33.3,
+          soAllocationPct: 0,
           maxTradesPerPair: 1,
-          stopLossPct: 12.0,
-          takeProfitPct: 2.0,
-          middleLimitRsi: 55,
-          minProfitBufferPct: 1.0,
-          safetyOrderDevPct: 4.5,
-          breakEvenTriggerPct: 2.50,
-          breakEvenLockPct: 0.35,
-          trailingTriggerPct: 4.00,
-          trailingDistancePct: 1.50,
+          stopLossPct: 1.40,
+          takeProfitPct: 2.50,
+          surgeVelocityPct: 2.40,
+          volumeSurgeRatio: 2.0,
+          upperWickMaxRatio: 0.30,
+          breakEvenTriggerPct: 1.50,
+          breakEvenLockPct: 0.25,
+          trailingTriggerPct: 2.00,
+          trailingDistancePct: 0.70,
           pullbackDiscountPct: 0,
-          maxHoldMinutes: 2880,
+          maxHoldMinutes: 240,
           minConfidenceThreshold: 80,
           allowHighVolatility: true,
           volatilityMode: 'HIGH_VOLATILITY_HALAL',
@@ -377,7 +378,28 @@ export class AutonomousAgentLoop {
       spotRiskManager.baseAllocationPct = Math.max(10, Math.min(90, Number(newSettings.baseAllocationPct)));
     }
     if (newSettings.soAllocationPct !== undefined) {
-      spotRiskManager.soAllocationPct = Math.max(10, Math.min(90, Number(newSettings.soAllocationPct)));
+      spotRiskManager.soAllocationPct = Math.max(0, Math.min(90, Number(newSettings.soAllocationPct)));
+    }
+    if (newSettings.breakEvenTriggerPct !== undefined) {
+      spotRiskManager.breakEvenTriggerPct = Math.max(0.5, Math.min(10.0, Number(newSettings.breakEvenTriggerPct)));
+    }
+    if (newSettings.breakEvenLockPct !== undefined) {
+      spotRiskManager.breakEvenLockPct = Math.max(0.05, Math.min(5.0, Number(newSettings.breakEvenLockPct)));
+    }
+    if (newSettings.trailingTriggerPct !== undefined) {
+      spotRiskManager.trailingTriggerPct = Math.max(0.5, Math.min(15.0, Number(newSettings.trailingTriggerPct)));
+    }
+    if (newSettings.trailingDistancePct !== undefined) {
+      spotRiskManager.trailingDistancePct = Math.max(0.2, Math.min(5.0, Number(newSettings.trailingDistancePct)));
+    }
+    if (newSettings.surgeVelocityPct !== undefined) {
+      spotRiskManager.surgeVelocityPct = Math.max(0.5, Math.min(10.0, Number(newSettings.surgeVelocityPct)));
+    }
+    if (newSettings.volumeSurgeRatio !== undefined) {
+      spotRiskManager.volumeSurgeRatio = Math.max(1.0, Math.min(5.0, Number(newSettings.volumeSurgeRatio)));
+    }
+    if (newSettings.upperWickMaxRatio !== undefined) {
+      spotRiskManager.upperWickMaxRatio = Math.max(0.1, Math.min(0.8, Number(newSettings.upperWickMaxRatio)));
     }
     if (newSettings.allowHighVolatility !== undefined) {
       spotRiskManager.allowHighVolatility = Boolean(newSettings.allowHighVolatility);
@@ -396,7 +418,7 @@ export class AutonomousAgentLoop {
     }
     const volLabel = spotRiskManager.allowHighVolatility ? '⚡ High-Volatility Halal Hunter' : '🛡️ Standard Halal Majors';
     const feeLabel = spotRiskManager.useBnbFeeDiscount ? '0.075% BNB Discount' : '0.10% Standard';
-    this.log(`⚙️ Spot Strategy updated: [${volLabel} | ${feeLabel}] ${spotRiskManager.maxSlots} Portions (${spotRiskManager.allocationPct}% each, max ${spotRiskManager.maxTradesPerPair}/coin, max ${spotRiskManager.maxHoldMinutes || 5}m hold), SL: -${spotRiskManager.stopLossPct}%, TP: +${spotRiskManager.takeProfitPct}% (🕌 100% Shariah Compliant)`, 'INFO');
+    this.log(`⚙️ Spot Strategy updated: [${volLabel} | ${feeLabel}] ${spotRiskManager.maxSlots} Portions (${spotRiskManager.allocationPct}% each, max ${spotRiskManager.maxTradesPerPair}/coin, max ${spotRiskManager.maxHoldMinutes || 240}m hold), SL: -${spotRiskManager.stopLossPct}%, TP: +${spotRiskManager.takeProfitPct}% (🕌 100% Shariah Compliant HDMS-15m)`, 'INFO');
     return spotRiskManager;
   }
 
@@ -406,22 +428,21 @@ export class AutonomousAgentLoop {
     const targetAccount = (account || 'SPOT').toUpperCase();
     if (targetAccount === 'SPOT') {
       config.spotRiskManager = {
-        maxSlots: 2,
-        allocationPct: 50,
-        baseAllocationPct: 35,
-        soAllocationPct: 65,
+        maxSlots: 3,
+        allocationPct: 33.3,
+        baseAllocationPct: 100,
+        soAllocationPct: 0,
         maxTradesPerPair: 1,
-        stopLossPct: 12.0,
-        takeProfitPct: 2.0,
-        middleLimitRsi: 55,
-        minProfitBufferPct: 1.0,
-        safetyOrderDevPct: 4.5,
-        breakEvenTriggerPct: 2.50,
-        breakEvenLockPct: 0.35,
-        trailingTriggerPct: 4.00,
-        trailingDistancePct: 1.50,
-        pullbackDiscountPct: 0,
-        maxHoldMinutes: 2880,
+        stopLossPct: 1.40,
+        takeProfitPct: 2.50,
+        breakEvenTriggerPct: 1.50,
+        breakEvenLockPct: 0.25,
+        trailingTriggerPct: 2.00,
+        trailingDistancePct: 0.70,
+        surgeVelocityPct: 2.40,
+        volumeSurgeRatio: 2.0,
+        upperWickMaxRatio: 0.30,
+        maxHoldMinutes: 240,
         minConfidenceThreshold: 80,
         allowHighVolatility: true,
         volatilityMode: 'HIGH_VOLATILITY_HALAL',
@@ -429,7 +450,7 @@ export class AutonomousAgentLoop {
         feeRate: 0.00075,
         isHalalStrict: true
       };
-      this.log(`🔄 [${userKey}] Reset SPOT settings to best defaults (30m RSI-55 Re-entry + Safety Orders, 2 slots, TP +2%, SL -12%)`, 'INFO');
+      this.log(`🔄 [${userKey}] Reset SPOT settings to best defaults (HDMS-15m Momentum Scalper, 3 slots, TP +2.50%, SL -1.40%, BE +1.50%/+0.25%, Trail +2.00%/0.70%, 240m cap)`, 'INFO');
       return config.spotRiskManager;
     } else {
       config.marginRiskManager = new RiskManager({
@@ -545,12 +566,14 @@ export class AutonomousAgentLoop {
 
         // 3B. Pure Spot Crypto Confluence (100% Shariah Halal Filtered & Volatility Selected)
         let spotSignal = null;
-        const cleanName = (asset.name || asset.symbol.replace(/[-_/]/g, '').replace(/USD$/, '')).toUpperCase();
+        const cleanBase = (asset.baseAsset || asset.symbol.replace(/[-_/]/g, '').replace(/USDT$/, '').replace(/USD$/, '')).toUpperCase();
+        const cleanName = (asset.name || cleanBase).toUpperCase();
         const spotLockExpiry = Math.max(
           this.spotCooldownUntil?.get(asset.symbol) || 0,
+          this.spotCooldownUntil?.get(cleanBase) || 0,
           this.spotCooldownUntil?.get(cleanName) || 0,
-          this.spotCooldownUntil?.get(`${cleanName}-USD`) || 0,
-          this.spotCooldownUntil?.get(`${cleanName}USDT`) || 0
+          this.spotCooldownUntil?.get(`${cleanBase}-USD`) || 0,
+          this.spotCooldownUntil?.get(`${cleanBase}USDT`) || 0
         );
         const isSpotCooldown = spotLockExpiry > Date.now();
         const remainingLockSec = isSpotCooldown ? Math.ceil((spotLockExpiry - Date.now()) / 1000) : 0;
@@ -560,8 +583,8 @@ export class AutonomousAgentLoop {
             const allowVolatile = this.spotRiskManager.allowHighVolatility ?? true;
             const isVolatile = Boolean(asset.isHighVolatility || (asset.minVolatility && asset.minVolatility >= 1.4));
             
-            // Respect user choice: strictly enforce volatility mode
-            const passesVolatilityFilter = allowVolatile ? isVolatile : !isVolatile;
+            // Respect user choice: allow volatile momentum coins and all proven halal leaders
+            const passesVolatilityFilter = allowVolatile ? (isVolatile || PROVEN_HALAL_LEADERS.includes(cleanBase)) : !isVolatile;
             if (passesVolatilityFilter) {
               spotSignal = evaluateSpotConfluence(asset, technicals, this.spotRiskManager, spotContext);
               if (spotSignal.action === 'STRONG_BUY' && !isSpotCooldown) {
@@ -817,20 +840,26 @@ export class AutonomousAgentLoop {
             );
             if (spotLockExpiry > Date.now()) continue;
 
-            // Strict anti-churn safeguard: Never re-buy the same coin within 2 hours of closing
+            // Strict anti-churn safeguard: 30 minutes lockout per coin after exit
             const recentClosed = isUserLive ? (this.liveSpotClosedTrades || []) : (uSpotEngine.closedTrades || []);
             const lastTradeForCoin = recentClosed.find(t => {
-              const tAsset = (t.name || t.symbol || '').replace(/[-_/]/g, '').replace(/USD$/, '').toUpperCase();
+              const tAsset = (t.name || t.symbol || '').replace(/[-_/]/g, '').replace(/USDT$/, '').replace(/USD$/, '').toUpperCase();
               return tAsset === cleanBase || tAsset === cleanName;
             });
             if (lastTradeForCoin && lastTradeForCoin.exitTime) {
               const msSinceExit = Date.now() - new Date(lastTradeForCoin.exitTime).getTime();
-              if (msSinceExit < 2 * 60 * 60 * 1000) continue; // 2 hours lockout per coin
+              if (msSinceExit < 30 * 60 * 1000) continue; // 30 mins anti-churn lockout
+            }
+
+            // Sector Diversification Guardrail: Max 2 positions per sector
+            if (asset.halalSector) {
+              const sectorCount = uSpotPositions.filter(p => p.halalSector === asset.halalSector).length;
+              if (sectorCount >= 2) continue;
             }
 
             const allowVolatile = uSpotRisk.allowHighVolatility ?? true;
             const isVolatile = Boolean(asset.isHighVolatility || (asset.minVolatility && asset.minVolatility >= 1.4));
-            const passesVolatilityFilter = allowVolatile ? isVolatile : !isVolatile;
+            const passesVolatilityFilter = allowVolatile ? (isVolatile || PROVEN_HALAL_LEADERS.includes(cleanBase)) : !isVolatile;
             if (!passesVolatilityFilter) continue;
 
             const technicals = technicalsMap[asset.symbol];
@@ -1303,11 +1332,11 @@ export class AutonomousAgentLoop {
           const holdMinutes = (Date.now() - openMs) / 60000;
           const maxHoldMinutes = pos.maxHoldMinutes || this.spotRiskManager.maxHoldMinutes || 240;
 
-          // A. Break-Even Profit Lock (+2.50% move -> Lock in +0.35% Net Profit to clear Binance fees)
+          // A. Break-Even Profit Lock (+1.50% move -> Lock in +0.25% Net Profit to clear Binance fees)
           const peakGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;
           const precision = pos.decimals || 4;
-          const beTrigger = pos.breakEvenTriggerPct || this.spotRiskManager?.breakEvenTriggerPct || 2.50;
-          const beLock = pos.breakEvenLockPct || this.spotRiskManager?.breakEvenLockPct || 0.35;
+          const beTrigger = pos.breakEvenTriggerPct || this.spotRiskManager?.breakEvenTriggerPct || 1.50;
+          const beLock = pos.breakEvenLockPct || this.spotRiskManager?.breakEvenLockPct || 0.25;
           if (peakGainPct >= beTrigger) {
             const beStop = Number((pos.entryPrice * (1 + beLock / 100)).toFixed(precision));
             if (beStop > (pos.stopLoss || 0)) {
@@ -1316,9 +1345,9 @@ export class AutonomousAgentLoop {
             }
           }
 
-          // B. Real-Time Pump Trailing Profit Lock (>= +4.00% gain -> Trail 1.50% behind peak)
-          const trailTrigger = pos.trailingTriggerPct || this.spotRiskManager?.trailingTriggerPct || 4.00;
-          const trailDist = (pos.trailingDistancePct || this.spotRiskManager?.trailingDistancePct || 1.50) / 100;
+          // B. Real-Time Pump Trailing Profit Lock (>= +2.00% gain -> Trail 0.70% behind peak)
+          const trailTrigger = pos.trailingTriggerPct || this.spotRiskManager?.trailingTriggerPct || 2.00;
+          const trailDist = (pos.trailingDistancePct || this.spotRiskManager?.trailingDistancePct || 0.70) / 100;
           if (peakGainPct >= trailTrigger) {
             const trailStop = Number((pos.highestPrice * (1 - trailDist)).toFixed(precision));
             if (trailStop > (pos.stopLoss || 0)) {
@@ -1654,10 +1683,10 @@ export class AutonomousAgentLoop {
           confidence: 95,
           reason: 'Live Binance Spot Holding',
           riskRewardRatio: Number((this.spotRiskManager.takeProfitPct / this.spotRiskManager.stopLossPct).toFixed(1)),
-          maxHoldMinutes: this.spotRiskManager.maxHoldMinutes || 60,
+          maxHoldMinutes: this.spotRiskManager.maxHoldMinutes || 240,
           openTime: new Date().toISOString(),
           tradingStyle: 'SPOT_BUY',
-          exitRule: 'HOT_RETEST_TRAILING_LOCK',
+          exitRule: 'HDMS_15M_TRAILING_LOCK',
           trailingStopActive: false,
           breakEvenLocked: false,
           cycleCount: 0,
@@ -1932,7 +1961,7 @@ export class AutonomousAgentLoop {
             margin: currentNotional,
             leverage: 1,
             tradingStyle: 'SPOT_BUY',
-            maxHoldMinutes: pos.maxHoldMinutes || this.spotRiskManager.maxHoldMinutes || 60,
+            maxHoldMinutes: pos.maxHoldMinutes || this.spotRiskManager.maxHoldMinutes || 240,
             openTime: pos.openTime,
             trailingStopActive: pos.trailingStopActive,
             breakEvenLocked: pos.breakEvenLocked,

@@ -223,9 +223,12 @@ class BacktestService {
       maxSlots = 1,
       feeRatePct = 0.10, // 0.10% each way
       slippagePct = 0.05,
+      surgeVelocityPct = 2.40,
+      volumeSurgeRatio = 2.0,
+      upperWickMaxRatio = 0.30,
       useBtcFilter = true,
       btcFilterMode = 'STANDARD', // 'STANDARD' (BTC > EMA21) | 'CRASH_ONLY' (BTC not dumping >2% below EMA50) | 'OFF'
-      entryStrategy = 'ANY_VALID' // 'PULLBACK' | 'BREAKOUT' | 'CROSSOVER' | 'ANY_VALID' | 'VALUE_PULLBACK'
+      entryStrategy = 'HDMS_15M' // 'HDMS_15M' | 'PULLBACK' | 'BREAKOUT' | 'CROSSOVER' | 'ANY_VALID' | 'VALUE_PULLBACK' | 'PANIC_DIP'
     } = params;
 
     const startMs = new Date(startDate).getTime();
@@ -415,7 +418,16 @@ class BacktestService {
       if (activeTrades.length < maxSlots) {
         // BTC Health Gate check
         if (useBtcFilter && btcFilterMode !== 'OFF' && btcEntry) {
-          if (entryStrategy === 'PANIC_DIP') {
+          if (entryStrategy === 'HDMS_15M') {
+            const btcIdx = btcEntry.timeMap.get(openTime);
+            if (btcIdx !== undefined) {
+              const btcC = btcEntry.candles[btcIdx];
+              const btcBarChange = ((btcC.close - btcC.open) / btcC.open) * 100;
+              if (btcBarChange <= -1.50) {
+                continue; // Circuit breaker: halt buying if BTC dumps >= 1.5% on current bar
+              }
+            }
+          } else if (entryStrategy === 'PANIC_DIP') {
             const nearest4hTime = openTime - (openTime % (4 * 3600 * 1000));
             const btcIdx4 = btcEntry.timeMap4.get(nearest4hTime);
             if (btcIdx4 !== undefined && btcIdx4 >= 50 && btcEntry.c4[btcIdx4].close < btcEntry.tech4.ema50[btcIdx4]) {
@@ -460,7 +472,30 @@ class BacktestService {
           let isSetupMatch = false;
           let score = 0;
 
-          if (entryStrategy === 'PANIC_DIP') {
+          if (entryStrategy === 'HDMS_15M') {
+            if (idx < 2) continue;
+            // 1. Volume Surge: V_t >= 2.0 * SMA20(V)
+            const smaVol = tech.volSma20[idx];
+            if (!smaVol || smaVol <= 0) continue;
+            const volRatio = c.volume / smaVol;
+            if (volRatio < volumeSurgeRatio) continue;
+
+            // 2. 2-Bar Price Velocity: (C_t - C_t-2) / C_t-2 >= 2.40%
+            const prev2Close = symData.candles[idx - 2].close;
+            const velocityPct = ((c.close - prev2Close) / prev2Close) * 100;
+            if (velocityPct < surgeVelocityPct) continue;
+
+            // 3. Candle Geometry: Green candle & Upper Wick <= 30% of total range
+            if (c.close <= c.open) continue;
+            const candleRange = c.high - c.low;
+            if (candleRange > 0) {
+              const upperWick = c.high - c.close;
+              if ((upperWick / candleRange) > upperWickMaxRatio) continue;
+            }
+
+            isSetupMatch = true;
+            score = velocityPct * 10 + volRatio * 5;
+          } else if (entryStrategy === 'PANIC_DIP') {
             const nearest4hTime = openTime - (openTime % (4 * 3600 * 1000));
             const idx4 = symData.timeMap4.get(nearest4hTime);
             if (idx4 === undefined || idx4 < 50) continue;

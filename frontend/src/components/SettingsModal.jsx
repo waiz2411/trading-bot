@@ -29,14 +29,14 @@ export default function SettingsModal({
   const [maxTradesPerPair, setMaxTradesPerPair] = useState(initialMargin.maxTradesPerPair || 1);
   const [marginMaxHoldMinutes, setMarginMaxHoldMinutes] = useState(initialMargin.maxHoldMinutes || 5);
 
-  // Spot Settings State (82.9% Win-Rate 30m RSI-55 Re-entry + Safety Orders)
+  // Spot Settings State (HDMS-15m Momentum Scalper: +157.6% Net, 526 Trades)
   const initialSpot = spotSettings || {};
-  const [spotStopLossPct, setSpotStopLossPct] = useState(initialSpot.stopLossPct !== undefined ? initialSpot.stopLossPct : 12.0);
-  const [spotTakeProfitPct, setSpotTakeProfitPct] = useState(initialSpot.takeProfitPct !== undefined ? initialSpot.takeProfitPct : 2.0);
+  const [spotStopLossPct, setSpotStopLossPct] = useState(initialSpot.stopLossPct !== undefined ? initialSpot.stopLossPct : 1.40);
+  const [spotTakeProfitPct, setSpotTakeProfitPct] = useState(initialSpot.takeProfitPct !== undefined ? initialSpot.takeProfitPct : 2.50);
   const [spotMinConfidence, setSpotMinConfidence] = useState(initialSpot.minConfidenceThreshold || 80);
-  const [spotMaxSlots, setSpotMaxSlots] = useState(initialSpot.maxSlots || 2);
+  const [spotMaxSlots, setSpotMaxSlots] = useState(initialSpot.maxSlots || 3);
   const [spotMaxTradesPerPair, setSpotMaxTradesPerPair] = useState(initialSpot.maxTradesPerPair || 1);
-  const [spotMaxHoldMinutes, setSpotMaxHoldMinutes] = useState(initialSpot.maxHoldMinutes || 2880);
+  const [spotMaxHoldMinutes, setSpotMaxHoldMinutes] = useState(initialSpot.maxHoldMinutes || 240);
   const [spotAllowHighVolatility, setSpotAllowHighVolatility] = useState(initialSpot.allowHighVolatility !== undefined ? initialSpot.allowHighVolatility : true);
   const [spotUseBnbFee, setSpotUseBnbFee] = useState(initialSpot.useBnbFeeDiscount !== undefined ? initialSpot.useBnbFeeDiscount : true);
 
@@ -55,21 +55,18 @@ export default function SettingsModal({
   ];
 
   const holdTimePresets = [
-    { label: '5 Mins', value: 5, tag: 'Hyper Scalp' },
-    { label: '15 Mins', value: 15, tag: 'Micro Scalp' },
-    { label: '30 Mins', value: 30, tag: 'Mid Scalp' },
-    { label: '60 Mins ⭐', value: 60, tag: '81% WR Cap' },
+    { label: '60 Mins', value: 60, tag: 'Fast Exit' },
     { label: '120 Mins', value: 120, tag: '2-Hour Cap' },
-    { label: '240 Mins', value: 240, tag: '4-Hour Cap' },
+    { label: '240 Mins ⭐', value: 240, tag: 'HDMS-15m Optimal' },
+    { label: '480 Mins', value: 480, tag: '8-Hour Cap' },
     { label: '1440 Mins', value: 1440, tag: '1-Day Cap' }
   ];
 
   const spotPortionPresets = [
-    { label: '2 Portions (50%) ⭐', value: 2, tag: '35% Base / 65% SO Optimal' },
+    { label: '3 Portions (33.3%) ⭐', value: 3, tag: 'HDMS-15m Optimal' },
+    { label: '2 Portions (50%)', value: 2, tag: 'Conservative' },
     { label: '1 Portion (100%)', value: 1, tag: 'All-in' },
-    { label: '3 Portions (33.3%)', value: 3, tag: '3 Scalps' },
-    { label: '4 Portions (25%)', value: 4, tag: 'Multi-Scalp' },
-    { label: '6 Portions (16.7%)', value: 6, tag: 'Active' }
+    { label: '4 Portions (25%)', value: 4, tag: 'Multi-Scalp' }
   ];
 
   const slotPresets = [
@@ -97,17 +94,17 @@ export default function SettingsModal({
   ];
 
   const spotSlPresets = [
-    { label: '-12.0% ⭐', value: 12.0, tag: '82.9% WR Optimal' },
-    { label: '-4.5%', value: 4.5, tag: 'SO Trigger' },
-    { label: '-2.0%', value: 2.0, tag: 'Tight' },
-    { label: '-0.9%', value: 0.9, tag: 'Micro-Scalp' }
+    { label: '-1.40% ⭐', value: 1.40, tag: 'HDMS-15m Optimal' },
+    { label: '-2.0%', value: 2.0, tag: 'Standard' },
+    { label: '-4.5%', value: 4.5, tag: 'Wide' },
+    { label: '-12.0%', value: 12.0, tag: 'Swing DCA' }
   ];
 
   const spotTpPresets = [
-    { label: '+2.0% ⭐', value: 2.0, tag: '82.9% WR Target' },
-    { label: '+1.5%', value: 1.5, tag: 'Midline Exit' },
-    { label: '+3.0%', value: 3.0, tag: 'Trend Runner' },
-    { label: '+5.0%', value: 5.0, tag: 'Swing High' }
+    { label: '+2.50% ⭐', value: 2.50, tag: 'HDMS-15m Optimal' },
+    { label: '+2.0%', value: 2.0, tag: 'Fast Exit' },
+    { label: '+3.0%', value: 3.0, tag: 'Extended' },
+    { label: '+5.0%', value: 5.0, tag: 'Runner' }
   ];
 
   const handleSave = (e) => {
@@ -902,11 +899,11 @@ export default function SettingsModal({
                 onClick={() => {
                   if (onResetSettings) onResetSettings(selectedTab);
                   if (selectedTab === 'SPOT') {
-                    setSpotStopLossPct(12.0);
-                    setSpotTakeProfitPct(2.0);
-                    setSpotMaxSlots(2);
+                    setSpotStopLossPct(1.40);
+                    setSpotTakeProfitPct(2.50);
+                    setSpotMaxSlots(3);
                     setSpotMinConfidence(80);
-                    setSpotMaxHoldMinutes(2880);
+                    setSpotMaxHoldMinutes(240);
                     setSpotAllowHighVolatility(true);
                     setSpotUseBnbFee(true);
                   } else {
