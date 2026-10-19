@@ -269,7 +269,7 @@ class BacktestService {
       upperWickMaxRatio = 0.30,
       useBtcFilter = true,
       btcFilterMode = 'STANDARD', // 'STANDARD' (BTC > EMA21) | 'CRASH_ONLY' (BTC not dumping >2% below EMA50) | 'OFF'
-      entryStrategy = 'HDMS_15M' // 'HDMS_15M' | 'PULLBACK' | 'BREAKOUT' | 'CROSSOVER' | 'ANY_VALID' | 'VALUE_PULLBACK' | 'PANIC_DIP'
+      entryStrategy = 'PANIC_DIP' // 'PANIC_DIP' (Institutional Alpha Scalper) | 'HDMS_15M' | 'PULLBACK' | 'BREAKOUT' | 'CROSSOVER' | 'ANY_VALID' | 'VALUE_PULLBACK'
     } = params;
 
     const startMs = new Date(startDate).getTime();
