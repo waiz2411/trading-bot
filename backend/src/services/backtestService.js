@@ -196,6 +196,47 @@ class BacktestService {
     return { ema21, ema50 };
   }
 
+  resampleTo30m(c15m) {
+    const c30m = [];
+    for (let i = 0; i < c15m.length - 1; i += 2) {
+      const c1 = c15m[i];
+      const c2 = c15m[i + 1];
+      c30m.push({
+        openTime: c1.openTime,
+        time: c1.time,
+        open: c1.open,
+        high: Math.max(c1.high, c2.high),
+        low: Math.min(c1.low, c2.low),
+        close: c2.close,
+        volume: c1.volume + c2.volume
+      });
+    }
+    return c30m;
+  }
+
+  calculateRSI(closes, period = 14) {
+    const rsi = new Array(closes.length).fill(50);
+    if (closes.length <= period) return rsi;
+    let g = 0, l = 0;
+    for (let i = 1; i <= period; i++) {
+      const d = closes[i] - closes[i - 1];
+      if (d >= 0) g += d; else l -= d;
+    }
+    let avgG = g / period;
+    let avgL = l / period;
+    rsi[period] = avgL === 0 ? 100 : 100 - (100 / (1 + avgG / avgL));
+
+    for (let i = period + 1; i < closes.length; i++) {
+      const d = closes[i] - closes[i - 1];
+      const gain = d > 0 ? d : 0;
+      const loss = d < 0 ? -d : 0;
+      avgG = (avgG * (period - 1) + gain) / period;
+      avgL = (avgL * (period - 1) + loss) / period;
+      rsi[i] = avgL === 0 ? 100 : 100 - (100 / (1 + avgG / avgL));
+    }
+    return rsi;
+  }
+
   /**
    * Run high-speed comprehensive backtest
    */
@@ -257,13 +298,21 @@ class BacktestService {
       const timeMap4 = new Map();
       c4.forEach((c, idx) => timeMap4.set(c.openTime, idx));
 
+      const c30 = this.resampleTo30m(datasets[sym]);
+      const rsi30 = this.calculateRSI(c30.map(c => c.close), 14);
+      const timeMap30 = new Map();
+      c30.forEach((c, idx) => timeMap30.set(c.openTime, idx));
+
       techData[sym] = {
         candles: filtered,
         tech: this.calculateTechnicals(filtered),
         timeMap: new Map(),
         c4,
         tech4,
-        timeMap4
+        timeMap4,
+        c30,
+        rsi30,
+        timeMap30
       };
 
       filtered.forEach((c, idx) => {
@@ -325,51 +374,97 @@ class BacktestService {
         let exitPrice = null;
         let exitReason = null;
 
-        // Realistic intrabar check: Did low hit stop loss?
-        if (candle.low <= pos.currentStop) {
-          exitPrice = pos.currentStop * (1 - slipRate); // slippage on stop execution
-          exitReason = pos.isTrailing ? 'TRAILING_STOP' : (pos.isBE ? 'BREAKEVEN' : 'STOP_LOSS');
-        } else {
-          // Check peak price reached in this candle
-          if (candle.high > pos.peakPrice) {
-            pos.peakPrice = candle.high;
-          }
-
-          const peakGainPct = ((pos.peakPrice - pos.entryPrice) / pos.entryPrice) * 100;
-
-          // Break-Even Lock Check
-          if (peakGainPct >= breakEvenTriggerPct && !pos.isBE) {
-            const bePrice = pos.entryPrice * (1 + breakEvenLockPct / 100);
-            if (bePrice > pos.currentStop) {
-              pos.currentStop = bePrice;
-              pos.isBE = true;
+        if (entryStrategy === 'RSI_REENTRY_SO') {
+          // Safety Order Check (-4.5% deviation from entry)
+          if (!pos.soFilled) {
+            const dropPct = ((pos.entryPrice - candle.low) / pos.entryPrice) * 100;
+            const soDevPct = 4.5;
+            const soMultiplier = 1.8;
+            if (dropPct >= soDevPct) {
+              const soPrice = pos.entryPrice * (1 - soDevPct / 100);
+              const soSize = pos.baseNotional * soMultiplier;
+              pos.notional = pos.baseNotional + soSize;
+              pos.avgPrice = (pos.baseNotional + soSize) / ((pos.baseNotional / pos.entryPrice) + (soSize / soPrice));
+              pos.soFilled = true;
+              pos.currentStop = pos.avgPrice * (1 - stopLossPct / 100);
             }
           }
 
-          // Trailing Stop Check
-          if (peakGainPct >= trailingTriggerPct) {
-            const trPrice = pos.peakPrice * (1 - trailingDistancePct / 100);
-            if (trPrice > pos.currentStop) {
-              pos.currentStop = trPrice;
-              pos.isTrailing = true;
-            }
-          }
+          const evalPrice = pos.avgPrice || pos.entryPrice;
+          const currentGain = ((candle.close - evalPrice) / evalPrice) * 100;
 
-          // Take Profit Cap Check
-          if (takeProfitPct > 0 && candle.high >= pos.entryPrice * (1 + takeProfitPct / 100)) {
-            exitPrice = pos.entryPrice * (1 + takeProfitPct / 100);
+          // Intrabar check: Did low hit stop loss?
+          if (candle.low <= pos.currentStop) {
+            exitPrice = pos.currentStop * (1 - slipRate);
+            exitReason = 'STOP_LOSS';
+          }
+          // Take Profit (+2% above average price)
+          else if (takeProfitPct > 0 && candle.high >= evalPrice * (1 + takeProfitPct / 100)) {
+            exitPrice = evalPrice * (1 + takeProfitPct / 100);
             exitReason = 'TAKE_PROFIT';
           }
-          // Max Hold Duration Expiry
-          else if (pos.barsHeld >= maxHoldBars) {
-            exitPrice = candle.close;
-            exitReason = 'TIME_LIMIT';
+          // Dynamic 30m RSI Midline Exit (RSI >= 55 with >= 0.5% profit)
+          else {
+            const openTime30 = openTime - (openTime % (30 * 60 * 1000));
+            const idx30 = symEntry.timeMap30 ? symEntry.timeMap30.get(openTime30) : undefined;
+            const rsi30Val = (idx30 !== undefined && symEntry.rsi30) ? symEntry.rsi30[idx30] : null;
+
+            if (rsi30Val !== null && rsi30Val >= 55 && currentGain >= 0.5) {
+              exitPrice = candle.close;
+              exitReason = 'RSI_55_MIDLINE';
+            } else if (pos.barsHeld >= maxHoldBars) {
+              exitPrice = candle.close;
+              exitReason = 'TIME_LIMIT';
+            }
+          }
+        } else {
+          // Realistic intrabar check: Did low hit stop loss?
+          if (candle.low <= pos.currentStop) {
+            exitPrice = pos.currentStop * (1 - slipRate); // slippage on stop execution
+            exitReason = pos.isTrailing ? 'TRAILING_STOP' : (pos.isBE ? 'BREAKEVEN' : 'STOP_LOSS');
+          } else {
+            // Check peak price reached in this candle
+            if (candle.high > pos.peakPrice) {
+              pos.peakPrice = candle.high;
+            }
+
+            const peakGainPct = ((pos.peakPrice - pos.entryPrice) / pos.entryPrice) * 100;
+
+            // Break-Even Lock Check
+            if (peakGainPct >= breakEvenTriggerPct && !pos.isBE) {
+              const bePrice = pos.entryPrice * (1 + breakEvenLockPct / 100);
+              if (bePrice > pos.currentStop) {
+                pos.currentStop = bePrice;
+                pos.isBE = true;
+              }
+            }
+
+            // Trailing Stop Check
+            if (peakGainPct >= trailingTriggerPct) {
+              const trPrice = pos.peakPrice * (1 - trailingDistancePct / 100);
+              if (trPrice > pos.currentStop) {
+                pos.currentStop = trPrice;
+                pos.isTrailing = true;
+              }
+            }
+
+            // Take Profit Cap Check
+            if (takeProfitPct > 0 && candle.high >= pos.entryPrice * (1 + takeProfitPct / 100)) {
+              exitPrice = pos.entryPrice * (1 + takeProfitPct / 100);
+              exitReason = 'TAKE_PROFIT';
+            }
+            // Max Hold Duration Expiry
+            else if (pos.barsHeld >= maxHoldBars) {
+              exitPrice = candle.close;
+              exitReason = 'TIME_LIMIT';
+            }
           }
         }
 
         if (exitPrice !== null) {
           const notional = pos.notional;
-          const grossReturnPct = ((exitPrice - pos.entryPrice) / pos.entryPrice) * 100;
+          const basisPrice = pos.avgPrice || pos.entryPrice;
+          const grossReturnPct = ((exitPrice - basisPrice) / basisPrice) * 100;
           const grossGain = notional * (grossReturnPct / 100);
           const totalFees = notional * feeRate * 2;
           const netPnL = grossGain - totalFees;
@@ -389,7 +484,7 @@ class BacktestService {
             symbol: pos.symbol,
             entryTime: pos.entryTime,
             exitTime: candle.time,
-            entryPrice: Number(pos.entryPrice.toFixed(4)),
+            entryPrice: Number((pos.avgPrice || pos.entryPrice).toFixed(4)),
             exitPrice: Number(exitPrice.toFixed(4)),
             notional: Number(notional.toFixed(2)),
             grossPnL: Number(grossGain.toFixed(3)),
@@ -397,6 +492,7 @@ class BacktestService {
             netPnL: Number(netPnL.toFixed(3)),
             returnPct: Number(netReturnPct.toFixed(2)),
             exitReason,
+            soFilled: pos.soFilled || false,
             durationMins: pos.barsHeld * 15,
             balanceAfter: balance
           };
@@ -513,6 +609,23 @@ class BacktestService {
 
             isSetupMatch = true;
             score = (50 - rsi) * 2 + (symData.tech4.ema21[idx4] / symData.tech4.ema50[idx4]) * 10;
+          } else if (entryStrategy === 'RSI_REENTRY_SO') {
+            const openTime30 = openTime - (openTime % (30 * 60 * 1000));
+            const idx30 = symData.timeMap30 ? symData.timeMap30.get(openTime30) : undefined;
+            if (idx30 === undefined || idx30 < 15) continue;
+
+            const prevRsi = symData.rsi30[idx30 - 1];
+            const currRsi = symData.rsi30[idx30];
+            const c30Bar = symData.c30[idx30];
+
+            if (openTime % (30 * 60 * 1000) === 0) {
+              const isReentry = (prevRsi < 30 || (idx30 >= 2 && symData.rsi30[idx30 - 2] < 30)) &&
+                                currRsi >= 30 && currRsi <= 45 && c30Bar.close > c30Bar.open;
+              if (isReentry) {
+                isSetupMatch = true;
+                score = (50 - currRsi) * 2;
+              }
+            }
           } else {
             // Standard/Legacy momentum screening filters
             const past24hClose = symData.candles[idx - 96].close;
@@ -562,19 +675,37 @@ class BacktestService {
         }
 
         if (bestCandidate) {
-          const posSize = maxSlots === 1 ? balance : Math.max(1.0, (balance / maxSlots));
+          const slotBudget = maxSlots === 1 ? balance : Math.max(1.0, (balance / maxSlots));
 
-          activeTrades.push({
-            symbol: bestCandidate.symbol,
-            entryPrice: bestCandidate.entryPrice,
-            entryTime: bestCandidate.entryTime,
-            notional: posSize,
-            peakPrice: bestCandidate.entryPrice,
-            currentStop: bestCandidate.entryPrice * (1 - stopLossPct / 100),
-            barsHeld: 0,
-            isBE: false,
-            isTrailing: false
-          });
+          if (entryStrategy === 'RSI_REENTRY_SO') {
+            const baseNotional = slotBudget * 0.35; // 35% base order, 65% for SO
+            activeTrades.push({
+              symbol: bestCandidate.symbol,
+              entryPrice: bestCandidate.entryPrice,
+              avgPrice: bestCandidate.entryPrice,
+              entryTime: bestCandidate.entryTime,
+              baseNotional,
+              notional: baseNotional,
+              peakPrice: bestCandidate.entryPrice,
+              currentStop: bestCandidate.entryPrice * (1 - (4.5 + stopLossPct) / 100),
+              barsHeld: 0,
+              soFilled: false,
+              isBE: false,
+              isTrailing: false
+            });
+          } else {
+            activeTrades.push({
+              symbol: bestCandidate.symbol,
+              entryPrice: bestCandidate.entryPrice,
+              entryTime: bestCandidate.entryTime,
+              notional: slotBudget,
+              peakPrice: bestCandidate.entryPrice,
+              currentStop: bestCandidate.entryPrice * (1 - stopLossPct / 100),
+              barsHeld: 0,
+              isBE: false,
+              isTrailing: false
+            });
+          }
         }
       }
     }
@@ -653,6 +784,7 @@ class BacktestService {
         avgHoldDurationMins,
         exitsBreakdown: {
           takeProfit: closedTrades.filter(t => t.exitReason === 'TAKE_PROFIT').length,
+          rsi55Midline: closedTrades.filter(t => t.exitReason === 'RSI_55_MIDLINE').length,
           trailingStop: closedTrades.filter(t => t.exitReason === 'TRAILING_STOP').length,
           breakEven: closedTrades.filter(t => t.exitReason === 'BREAKEVEN').length,
           stopLoss: closedTrades.filter(t => t.exitReason === 'STOP_LOSS').length,
