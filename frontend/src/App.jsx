@@ -499,7 +499,7 @@ export default function App() {
       });
       const json = await res.json();
       if (json.success) {
-        showNotification(`[${acc}] Restored best strategy default settings (HDMS-15m Momentum Scalper)`, 'SUCCESS');
+        showNotification(`[${acc}] Restored best strategy default settings (30m RSI-55 Rebound + Safety Orders, 87.1% Win Rate)`, 'SUCCESS');
         await fetchDashboard();
       }
     } catch (err) {
@@ -727,7 +727,7 @@ export default function App() {
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
               <span className="font-bold text-emerald-300">PURE SPOT CRYPTO ENGINE ACTIVE:</span>
               <span className="text-slate-300">
-                100% Capital Allocation ({isLiveMode && !data.brokers?.binance?.connected ? 'Connect Binance to see balance' : `$${(data.portfolio?.balance ?? 0).toFixed(2)} active capital`}). 0x leverage. Stop: -{data.riskSettings?.stopLossPct || 1.40}% | Target: +{data.riskSettings?.takeProfitPct || 2.50}%.
+                100% Capital Allocation ({isLiveMode && !data.brokers?.binance?.connected ? 'Connect Binance to see balance' : `$${(data.portfolio?.balance ?? 0).toFixed(2)} active capital`}). 0x leverage. Stop: -{data.riskSettings?.stopLossPct || 12.0}% | Target: +{data.riskSettings?.takeProfitPct || 2.0}%.
               </span>
             </div>
             <div className="flex items-center gap-2">

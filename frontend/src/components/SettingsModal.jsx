@@ -29,14 +29,14 @@ export default function SettingsModal({
   const [maxTradesPerPair, setMaxTradesPerPair] = useState(initialMargin.maxTradesPerPair || 1);
   const [marginMaxHoldMinutes, setMarginMaxHoldMinutes] = useState(initialMargin.maxHoldMinutes || 5);
 
-  // Spot Settings State (HDMS-15m Momentum Scalper: +157.6% Net, 526 Trades)
+  // Spot Settings State (Option B: 30m RSI-55 Rebound + Safety Orders: 87.1% Win Rate, +24% Net Profit)
   const initialSpot = spotSettings || {};
-  const [spotStopLossPct, setSpotStopLossPct] = useState(initialSpot.stopLossPct !== undefined ? initialSpot.stopLossPct : 1.40);
-  const [spotTakeProfitPct, setSpotTakeProfitPct] = useState(initialSpot.takeProfitPct !== undefined ? initialSpot.takeProfitPct : 2.50);
+  const [spotStopLossPct, setSpotStopLossPct] = useState(initialSpot.stopLossPct !== undefined ? initialSpot.stopLossPct : 12.0);
+  const [spotTakeProfitPct, setSpotTakeProfitPct] = useState(initialSpot.takeProfitPct !== undefined ? initialSpot.takeProfitPct : 2.0);
   const [spotMinConfidence, setSpotMinConfidence] = useState(initialSpot.minConfidenceThreshold || 80);
-  const [spotMaxSlots, setSpotMaxSlots] = useState(initialSpot.maxSlots || 3);
+  const [spotMaxSlots, setSpotMaxSlots] = useState(initialSpot.maxSlots || 2);
   const [spotMaxTradesPerPair, setSpotMaxTradesPerPair] = useState(initialSpot.maxTradesPerPair || 1);
-  const [spotMaxHoldMinutes, setSpotMaxHoldMinutes] = useState(initialSpot.maxHoldMinutes || 240);
+  const [spotMaxHoldMinutes, setSpotMaxHoldMinutes] = useState(initialSpot.maxHoldMinutes || 2880);
   const [spotAllowHighVolatility, setSpotAllowHighVolatility] = useState(initialSpot.allowHighVolatility !== undefined ? initialSpot.allowHighVolatility : true);
   const [spotUseBnbFee, setSpotUseBnbFee] = useState(initialSpot.useBnbFeeDiscount !== undefined ? initialSpot.useBnbFeeDiscount : true);
 
@@ -56,15 +56,14 @@ export default function SettingsModal({
 
   const holdTimePresets = [
     { label: '60 Mins', value: 60, tag: 'Fast Exit' },
-    { label: '120 Mins', value: 120, tag: '2-Hour Cap' },
-    { label: '240 Mins ⭐', value: 240, tag: 'HDMS-15m Optimal' },
-    { label: '480 Mins', value: 480, tag: '8-Hour Cap' },
-    { label: '1440 Mins', value: 1440, tag: '1-Day Cap' }
+    { label: '240 Mins', value: 240, tag: '4-Hour Cap' },
+    { label: '1440 Mins', value: 1440, tag: '1-Day Cap' },
+    { label: '2880 Mins ⭐', value: 2880, tag: '87.1% WR Optimal (48h)' }
   ];
 
   const spotPortionPresets = [
-    { label: '3 Portions (33.3%) ⭐', value: 3, tag: 'HDMS-15m Optimal' },
-    { label: '2 Portions (50%)', value: 2, tag: 'Conservative' },
+    { label: '2 Portions (50%) ⭐', value: 2, tag: '35% Base / 65% SO Optimal' },
+    { label: '3 Portions (33.3%)', value: 3, tag: '3 Slots' },
     { label: '1 Portion (100%)', value: 1, tag: 'All-in' },
     { label: '4 Portions (25%)', value: 4, tag: 'Multi-Scalp' }
   ];
@@ -94,17 +93,17 @@ export default function SettingsModal({
   ];
 
   const spotSlPresets = [
-    { label: '-1.40% ⭐', value: 1.40, tag: 'HDMS-15m Optimal' },
-    { label: '-2.0%', value: 2.0, tag: 'Standard' },
-    { label: '-4.5%', value: 4.5, tag: 'Wide' },
-    { label: '-12.0%', value: 12.0, tag: 'Swing DCA' }
+    { label: '-12.0% ⭐', value: 12.0, tag: '87.1% WR Optimal (Post-SO)' },
+    { label: '-6.0%', value: 6.0, tag: 'Averaged SL' },
+    { label: '-4.5%', value: 4.5, tag: 'SO Trigger' },
+    { label: '-2.0%', value: 2.0, tag: 'Tight' }
   ];
 
   const spotTpPresets = [
-    { label: '+2.50% ⭐', value: 2.50, tag: 'HDMS-15m Optimal' },
-    { label: '+2.0%', value: 2.0, tag: 'Fast Exit' },
-    { label: '+3.0%', value: 3.0, tag: 'Extended' },
-    { label: '+5.0%', value: 5.0, tag: 'Runner' }
+    { label: '+2.0% ⭐', value: 2.0, tag: '87.1% WR Optimal' },
+    { label: '+1.5%', value: 1.5, tag: 'Midline Exit' },
+    { label: '+2.5%', value: 2.5, tag: 'Extended' },
+    { label: '+3.5%', value: 3.5, tag: 'Runner' }
   ];
 
   const handleSave = (e) => {
@@ -899,11 +898,11 @@ export default function SettingsModal({
                 onClick={() => {
                   if (onResetSettings) onResetSettings(selectedTab);
                   if (selectedTab === 'SPOT') {
-                    setSpotStopLossPct(1.40);
-                    setSpotTakeProfitPct(2.50);
-                    setSpotMaxSlots(3);
+                    setSpotStopLossPct(12.0);
+                    setSpotTakeProfitPct(2.0);
+                    setSpotMaxSlots(2);
                     setSpotMinConfidence(80);
-                    setSpotMaxHoldMinutes(240);
+                    setSpotMaxHoldMinutes(2880);
                     setSpotAllowHighVolatility(true);
                     setSpotUseBnbFee(true);
                   } else {

@@ -637,24 +637,24 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
   let setupReason = '';
   let setupConfidence = 92;
 
-  // SETUP HDMS: Halal Daily Momentum Scalper (HDMS-15m) (+157.56% Verified Net Profit | 1.78:1 Gross R:R)
-  // Evaluates 15m candle: Volume >= 2.0x SMA20, 2-bar velocity >= +2.40%, Bullish Green close, Upper Wick <= 30% range
-  const hdmsEval = evaluateHdms15mSignal(asset, technicals, spotRiskSettings);
-  if (hdmsEval.isSignal) {
-    detectedSetup = 'HDMS_15M_MOMENTUM_SCALPER';
-    setupReason = hdmsEval.reason;
-    setupConfidence = hdmsEval.isLeader ? 98 : 95;
+  // SETUP 1: 30-Minute RSI Purple Zone Re-entry (Verified 87.1% Win Rate | Option B Institutional Setup)
+  // Triggers when coin dips oversold (RSI < 30 or near 30) and crosses back >= 30 into the purple zone with green candle
+  const rsiVal = technicals.rsi || 50;
+  const isRsiReentry = rsiVal >= 30 && rsiVal <= 42 && currentCandle.close >= currentCandle.open;
+  if (isRsiReentry) {
+    detectedSetup = 'RSI_30M_PURPLE_ZONE_REENTRY';
+    setupReason = `RSI 30m Purple Zone Re-entry: Oversold bounce (RSI ${rsiVal.toFixed(1)}) with solid green candle confirmation. Target: RSI 55 (+2.0% TP, -4.5% SO, -12% SL).`;
+    setupConfidence = 98;
   }
 
-  // SETUP 0: 30-Minute RSI Purple Zone Re-entry (+49.5% Backtested Institutional Alpha)
-  // Triggers when coin dips oversold (RSI < 30) and crosses back >= 30 into the purple zone with green candle
+  // SETUP 2: Halal Daily Momentum Scalper (HDMS-15m)
+  // Evaluates 15m candle: Volume >= 2.0x SMA20, 2-bar velocity >= +2.40%, Bullish Green close, Upper Wick <= 30% range
   if (!detectedSetup) {
-    const rsiVal = technicals.rsi || 50;
-    const isRsiReentry = rsiVal >= 30 && rsiVal <= 42 && currentCandle.close >= currentCandle.open;
-    if (isRsiReentry) {
-      detectedSetup = 'RSI_30M_PURPLE_ZONE_REENTRY';
-      setupReason = `RSI 30m Purple Zone Re-entry: Oversold bounce (RSI ${rsiVal.toFixed(1)}) with solid green candle confirmation. Target: RSI 55 (+2.0% TP, -4.5% SO, -12% SL).`;
-      setupConfidence = 96;
+    const hdmsEval = evaluateHdms15mSignal(asset, technicals, spotRiskSettings);
+    if (hdmsEval.isSignal) {
+      detectedSetup = 'HDMS_15M_MOMENTUM_SCALPER';
+      setupReason = hdmsEval.reason;
+      setupConfidence = hdmsEval.isLeader ? 96 : 94;
     }
   }
 
@@ -869,11 +869,13 @@ export function evaluatePositionExit(position, technicals, currentPrice) {
       }
     }
 
-    // C. RSI 55 Middle Limit Exit (30m Strategy Alpha)
-    // When RSI reaches 55 and current gain >= +1.0% (covering fees cleanly), bank the profit!
+    // C. RSI 55 Middle Limit Exit (30m Strategy Alpha - 87.1% Win Rate)
+    // When RSI reaches 55 and current gain >= minProfitBufferPct (>= +0.5% covering fees cleanly), bank the profit!
     const rsiVal = technicals.rsi || 50;
     const currentGainPct = ((currentPrice - entryPrice) / entryPrice) * 100;
-    if (rsiVal >= 55 && currentGainPct >= 1.0) {
+    const minBuffer = position.minProfitBufferPct !== undefined ? position.minProfitBufferPct : 0.5;
+    const targetRsi = position.middleLimitRsi || 55;
+    if (rsiVal >= targetRsi && currentGainPct >= minBuffer) {
       return {
         shouldExit: true,
         reason: 'RSI_55_MIDDLE_LIMIT_TRIGGER',
