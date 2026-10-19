@@ -533,8 +533,8 @@ export class MarketDataService {
     if (mt5Ticks) {
       this.ingestMt5Ticks(mt5Ticks);
     }
+    await this.fetchCryptoBinance();
     await Promise.allSettled([
-      this.fetchCryptoBinance(),
       this.fetchRealCandlesCrypto(),
       this.fetchForexYahoo()
     ]);

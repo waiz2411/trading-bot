@@ -583,8 +583,9 @@ export class AutonomousAgentLoop {
             const allowVolatile = this.spotRiskManager.allowHighVolatility ?? true;
             const isVolatile = Boolean(asset.isHighVolatility || (asset.minVolatility && asset.minVolatility >= 1.4));
             
-            // Respect user choice: allow volatile momentum coins and all proven halal leaders
-            const passesVolatilityFilter = allowVolatile ? (isVolatile || PROVEN_HALAL_LEADERS.includes(cleanBase)) : !isVolatile;
+            // Respect user choice: allow volatile momentum coins, proven leaders, and all institutional dip scalper universe
+            const isAlphaStrategy = this.spotRiskManager.strategy === 'INSTITUTIONAL_ALPHA_DIP_SCALPER';
+            const passesVolatilityFilter = allowVolatile ? (isVolatile || PROVEN_HALAL_LEADERS.includes(cleanBase) || isAlphaStrategy) : !isVolatile;
             if (passesVolatilityFilter) {
               spotSignal = evaluateSpotConfluence(asset, technicals, this.spotRiskManager, spotContext);
               if (spotSignal.action === 'STRONG_BUY' && !isSpotCooldown) {
@@ -857,9 +858,8 @@ export class AutonomousAgentLoop {
               if (sectorCount >= 2) continue;
             }
 
-            const allowVolatile = uSpotRisk.allowHighVolatility ?? true;
-            const isVolatile = Boolean(asset.isHighVolatility || (asset.minVolatility && asset.minVolatility >= 1.4));
-            const passesVolatilityFilter = allowVolatile ? (isVolatile || PROVEN_HALAL_LEADERS.includes(cleanBase)) : !isVolatile;
+            const isUserAlphaStrategy = uSpotRisk.strategy === 'INSTITUTIONAL_ALPHA_DIP_SCALPER';
+            const passesVolatilityFilter = allowVolatile ? (isVolatile || PROVEN_HALAL_LEADERS.includes(cleanBase) || isUserAlphaStrategy) : !isVolatile;
             if (!passesVolatilityFilter) continue;
 
             const technicals = technicalsMap[asset.symbol];

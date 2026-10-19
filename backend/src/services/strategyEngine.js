@@ -90,7 +90,7 @@ export function evaluateBtcHealth(btcCandles) {
   const btcEma20 = ema20Series[ema20Series.length - 1];
   const btcPrice = currentBtc15m.close;
 
-  // Rule 0: Intraday Flash Dump Halt (HDMS Circuit Breaker: Drops >= -1.50% on current bar)
+  // Rule 0: Intraday Flash Dump Halt (Drops >= -1.50% on current bar)
   const candleDropPct = currentBtc15m.open > 0 ? (((currentBtc15m.close - currentBtc15m.open) / currentBtc15m.open) * 100) : 0;
   if (candleDropPct <= -1.50) {
     return {
@@ -105,25 +105,14 @@ export function evaluateBtcHealth(btcCandles) {
     return { isHealthy: true, btcPrice, ema20: 0, reason: 'BTC EMA 20 calculating' };
   }
 
-  // Rule 1: BTC Price must hold above 15m 20 EMA
-  if (btcPrice < btcEma20) {
-    const diffPct = (((btcPrice - btcEma20) / btcEma20) * 100).toFixed(2);
-    return {
-      isHealthy: false,
-      btcPrice,
-      ema20: Number(btcEma20.toFixed(2)),
-      reason: `BTC Bearish: BTC ($${btcPrice.toFixed(0)}) is below 15m 20 EMA ($${btcEma20.toFixed(0)}, ${diffPct}%). All altcoin longs halted.`
-    };
-  }
-
-  // Rule 2: Heavy sell volume check on 15m
+  // Rule 1: Heavy sell volume dump check on 15m
   const isRed = currentBtc15m.close < currentBtc15m.open;
   const recent15mVols = candles15m.slice(-21, -1).map(c => c.volume || 0);
   const avg15mVol = recent15mVols.length > 0
     ? (recent15mVols.reduce((a, b) => a + b, 0) / recent15mVols.length)
     : 1;
 
-  if (isRed && currentBtc15m.volume >= avg15mVol * 1.5) {
+  if (isRed && candleDropPct <= -0.75 && currentBtc15m.volume >= avg15mVol * 1.8) {
     return {
       isHealthy: false,
       btcPrice,
@@ -132,11 +121,24 @@ export function evaluateBtcHealth(btcCandles) {
     };
   }
 
+  // Rule 2: Severe Macro Breakdown (BTC price > 2.0% below 15m 20 EMA)
+  // Allows normal consolidation pullbacks (0.1% to 1.5% below short-term EMA) so altcoin scalping continues,
+  // but halts firmly if BTC breaks down > 2.0% into macro weakness.
+  if (btcPrice < btcEma20 * 0.98) {
+    const diffPct = (((btcPrice - btcEma20) / btcEma20) * 100).toFixed(2);
+    return {
+      isHealthy: false,
+      btcPrice,
+      ema20: Number(btcEma20.toFixed(2)),
+      reason: `BTC Severe Breakdown: BTC ($${btcPrice.toFixed(0)}) is ${diffPct}% below 15m 20 EMA ($${btcEma20.toFixed(0)}). All altcoin longs halted.`
+    };
+  }
+
   return {
     isHealthy: true,
     btcPrice,
     ema20: Number(btcEma20.toFixed(2)),
-    reason: `BTC Bullish: BTC ($${btcPrice.toFixed(0)}) holding above 15m 20 EMA ($${btcEma20.toFixed(0)}) with healthy volume.`
+    reason: `BTC Bullish/Consolidating: BTC ($${btcPrice.toFixed(0)}) within healthy tolerance of 15m 20 EMA ($${btcEma20.toFixed(0)}).`
   };
 }
 
@@ -599,28 +601,36 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
     };
   }
 
-  // 3. Real-Time Pump Leader Screening (Sweet spot: +4% to +20%, avoiding > 35% violent dump risk)
-  const validPumping = Array.isArray(context.pumpingLeaders) && context.pumpingLeaders.length > 0 ? context.pumpingLeaders : null;
-  const validLeaders = Array.isArray(context.topLeaders) && context.topLeaders.length > 0 ? context.topLeaders : null;
-  const leadersList = validPumping || validLeaders;
+  // 3. Screener Filtering:
+  // For momentum strategies, require pump leader status (+4% to +20%).
+  // For Dip Scalping strategies (Institutional Alpha Dip Scalper & RSI Re-entry), allow direct evaluation of quality oversold pullbacks!
+  const isDipStrategy = spotRiskSettings.strategy === 'INSTITUTIONAL_ALPHA_DIP_SCALPER' ||
+                        spotRiskSettings.strategy === 'RSI_30M_PURPLE_ZONE_REENTRY' ||
+                        !spotRiskSettings.strategy;
 
-  if (!leadersList || leadersList.length === 0) {
-    return {
-      action: 'NEUTRAL',
-      side: null,
-      confidence: 0,
-      reason: 'Screener: No Halal coins currently meeting +4% to +20% momentum with volume spike'
-    };
-  }
+  if (!isDipStrategy) {
+    const validPumping = Array.isArray(context.pumpingLeaders) && context.pumpingLeaders.length > 0 ? context.pumpingLeaders : null;
+    const validLeaders = Array.isArray(context.topLeaders) && context.topLeaders.length > 0 ? context.topLeaders : null;
+    const leadersList = validPumping || validLeaders;
 
-  const leaderMatch = leadersList.find(l => l.symbol === asset.symbol || l.asset?.symbol === asset.symbol);
-  if (!leaderMatch) {
-    return {
-      action: 'NEUTRAL',
-      side: null,
-      confidence: 15,
-      reason: 'Screener Filter: Asset is not currently among top volume/gainer leaders'
-    };
+    if (!leadersList || leadersList.length === 0) {
+      return {
+        action: 'NEUTRAL',
+        side: null,
+        confidence: 0,
+        reason: 'Screener: No Halal coins currently meeting +4% to +20% momentum with volume spike'
+      };
+    }
+
+    const leaderMatch = leadersList.find(l => l.symbol === asset.symbol || l.asset?.symbol === asset.symbol);
+    if (!leaderMatch) {
+      return {
+        action: 'NEUTRAL',
+        side: null,
+        confidence: 15,
+        reason: 'Screener Filter: Asset is not currently among top volume/gainer leaders'
+      };
+    }
   }
 
   // 4. Candle & Volume Quality Checks
