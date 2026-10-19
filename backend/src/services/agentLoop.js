@@ -853,7 +853,7 @@ export class AutonomousAgentLoop {
 
             // Sector Diversification Guardrail: Max 2 positions per sector
             if (asset.halalSector) {
-              const sectorCount = uSpotPositions.filter(p => p.halalSector === asset.halalSector).length;
+              const sectorCount = (uSpotOpen || []).filter(p => p.halalSector === asset.halalSector).length;
               if (sectorCount >= 2) continue;
             }
 
