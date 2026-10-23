@@ -616,7 +616,7 @@ app.get('/api/dashboard', async (req, res) => {
     const user = await authService.validateToken(token);
     
     const userEmail = user ? user.email : 'default';
-    const userMode = (user && user.mode) ? user.mode : (userEmail === 'waiztahseen@gmail.com' ? 'LIVE' : 'SIMULATED');
+    const userMode = (user && (user.active_mode || user.mode)) ? (user.active_mode || user.mode) : (agentLoop.getConfig(userEmail).mode || 'SIMULATED');
     const reqAccount = (req.query.account || '').toUpperCase();
     const isAdmin = user?.role === 'ADMIN';
     const userAccount = isAdmin && reqAccount 
@@ -827,7 +827,7 @@ app.post('/api/portfolio/balance', async (req, res) => {
     const token = authHeader.replace(/^Bearer\s+/i, '');
     const user = await authService.validateToken(token);
     const userEmail = user ? user.email : 'default';
-    const userMode = (user && user.mode) ? user.mode : (userEmail === 'waiztahseen@gmail.com' ? 'LIVE' : 'SIMULATED');
+    const userMode = (user && (user.active_mode || user.mode)) ? (user.active_mode || user.mode) : (agentLoop.getConfig(userEmail).mode || 'SIMULATED');
 
     const { balance, closeOpenPositions, account } = req.body;
     const num = parseFloat(balance);
@@ -849,7 +849,7 @@ app.post('/api/portfolio/adjust', async (req, res) => {
     const token = authHeader.replace(/^Bearer\s+/i, '');
     const user = await authService.validateToken(token);
     const userEmail = user ? user.email : 'default';
-    const userMode = (user && user.mode) ? user.mode : (userEmail === 'waiztahseen@gmail.com' ? 'LIVE' : 'SIMULATED');
+    const userMode = (user && (user.active_mode || user.mode)) ? (user.active_mode || user.mode) : (agentLoop.getConfig(userEmail).mode || 'SIMULATED');
 
     const { delta, account } = req.body;
     const num = parseFloat(delta);
@@ -1427,9 +1427,13 @@ if (!process.env.PRIMARY_BACKEND_URL) {
   const startupUser = 'waiztahseen@gmail.com';
   agentLoop.getConfig(startupUser).activeAccount = 'SPOT';
   agentLoop.activeAccount = 'SPOT';
-  agentLoop.setUserMode(startupUser, 'LIVE').then(async () => {
+  
+  (async () => {
     try {
       const u = await authService.getUserByEmail(startupUser);
+      const targetMode = u?.active_mode || u?.mode || 'SIMULATED';
+      await agentLoop.setUserMode(startupUser, targetMode);
+
       if (u && (u.account_type || u.accountType)) {
         const accType = (u.account_type || u.accountType).toUpperCase();
         agentLoop.getConfig(startupUser).activeAccount = accType;
@@ -1450,15 +1454,16 @@ if (!process.env.PRIMARY_BACKEND_URL) {
           });
         }
       }
-    } catch (_) {}
-    agentLoop.isAutoTradingEnabled = true;
-    agentLoop.getConfig(startupUser).isAutoTradingEnabled = true;
-    agentLoop.start();
-    console.log(`🚀 Scalping bot started automatically for ${startupUser} in LIVE broker mode.`);
-  }).catch(err => {
-    console.error('Failed to initialize startup user mode:', err.message);
-    agentLoop.start();
-  });
+      const isAuto = u?.is_auto_trading !== undefined ? Boolean(u.is_auto_trading) : true;
+      agentLoop.isAutoTradingEnabled = isAuto;
+      agentLoop.getConfig(startupUser).isAutoTradingEnabled = isAuto;
+      agentLoop.start();
+      console.log(`🚀 Scalping bot started automatically for ${startupUser} in ${targetMode} broker mode.`);
+    } catch (err) {
+      console.error('Failed to initialize startup user mode:', err.message);
+      agentLoop.start();
+    }
+  })();
 } else {
   console.log('⏸️ Autonomous trading loop paused on Proxy/Replica server (Master Hostinger executes all live trades).');
 }

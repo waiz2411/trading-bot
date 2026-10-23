@@ -2,37 +2,40 @@ const { Client } = require('ssh2');
 
 const conn = new Client();
 conn.on('ready', () => {
-  conn.exec(`node -e '
-    const http = require("http");
-    const options = {
-      socketPath: "/home/u932536786/trading-bot/trading-bot.sock",
-      path: "/api/dashboard",
-      method: "GET"
-    };
-    const req = http.request(options, res => {
-      let data = "";
-      res.on("data", chunk => data += chunk);
-      res.on("end", () => {
+  conn.exec(`
+    curl -s --unix-socket /home/u932536786/trading-bot/trading-bot.sock http://localhost/api/dashboard | node -e "
+      let body = '';
+      process.stdin.on('data', c => body += c);
+      process.stdin.on('end', () => {
         try {
-          const j = JSON.parse(data);
-          console.log("MarketScan length on Hostinger:", (j.marketScan || []).length);
-        } catch(e) {
-          console.error(e.message);
-        }
+          const d = JSON.parse(body);
+          console.log('Total marketScan items:', d.marketScan?.length);
+          const buys = (d.marketScan || []).filter(m => m.action === 'STRONG_BUY' || m.signal?.action === 'STRONG_BUY');
+          console.log('Strong buys count:', buys.length);
+          for (const b of buys) {
+            console.log(' -> BUY:', b.symbol, b.price, b.reason || b.signal?.reason);
+          }
+          if (buys.length === 0) {
+            console.log('Sample rejections:');
+            for (const m of (d.marketScan || []).slice(0, 10)) {
+              console.log(' ->', m.symbol, 'Action:', m.action, 'Reason:', m.reason);
+            }
+          }
+        } catch(e) { console.error('Parse error', e); }
       });
-    });
-    req.on("error", err => console.error("Req err:", err.message));
-    req.end();
-  '`, (err, stream) => {
+    "
+  `, (err, stream) => {
     if (err) throw err;
-    stream.on('close', () => conn.end())
-      .on('data', data => console.log(data.toString()))
-      .stderr.on('data', data => console.error(data.toString()));
+    stream.on('data', d => process.stdout.write(d.toString()));
+    stream.stderr.on('data', d => process.stderr.write(d.toString()));
+    stream.on('close', () => {
+      conn.end();
+      process.exit(0);
+    });
   });
 }).connect({
-  host: '217.196.54.11',
+  host: '82.198.229.98',
   port: 65002,
   username: 'u932536786',
-  password: 'NexusQuant@6767',
-  readyTimeout: 20000
+  password: 'NexusQuant@6767'
 });

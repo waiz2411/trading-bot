@@ -308,7 +308,7 @@ export class AutonomousAgentLoop {
   setBalance(newBalance, closeOpenPositions = false, account = null, userEmail = null) {
     const targetUser = userEmail || this.currentUser || 'default';
     const uConfig = this.getConfig(targetUser);
-    const userMode = uConfig.mode || (targetUser === 'waiztahseen@gmail.com' ? this.currentMode : 'SIMULATED');
+    const userMode = uConfig.mode || this.currentMode || 'SIMULATED';
     if (userMode === 'LIVE') {
       throw new Error('Manual balance editing is disabled in Live Broker Mode. Balances are fetched directly from your broker.');
     }
@@ -322,7 +322,7 @@ export class AutonomousAgentLoop {
   adjustBalance(delta, account = null, userEmail = null) {
     const targetUser = userEmail || this.currentUser || 'default';
     const uConfig = this.getConfig(targetUser);
-    const userMode = uConfig.mode || (targetUser === 'waiztahseen@gmail.com' ? this.currentMode : 'SIMULATED');
+    const userMode = uConfig.mode || this.currentMode || 'SIMULATED';
     if (userMode === 'LIVE') {
       throw new Error('Manual balance adjustments are disabled in Live Broker Mode.');
     }
@@ -1762,7 +1762,7 @@ export class AutonomousAgentLoop {
     const userMarginEngine = this.getEngine('MARGIN', targetUser);
     const userSpotEngine = this.getEngine('SPOT', targetUser);
 
-    const currentMode = forcedMode || userConfig.mode || (targetUser === 'waiztahseen@gmail.com' ? 'LIVE' : this.currentMode);
+    const currentMode = forcedMode || userConfig.mode || this.currentMode || 'SIMULATED';
     const activeAccount = (forcedAccount || userConfig.activeAccount || this.activeAccount || 'MARGIN').toUpperCase();
     const isLive = currentMode === 'LIVE';
     const isSpot = activeAccount === 'SPOT';
