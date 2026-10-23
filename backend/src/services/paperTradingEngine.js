@@ -574,7 +574,7 @@ export class PaperTradingEngine {
       const openTimeMs = pos.openTime ? new Date(pos.openTime).getTime() : 0;
       const ageMs = openTimeMs > 0 ? (Date.now() - openTimeMs) : ((pos.cycleCount || 0) * 1500);
       const cyclesElapsed = pos.cycleCount || 0;
-      const maxHoldMinutes = pos.maxHoldMinutes || 15;
+      const maxHoldMinutes = Math.min(pos.maxHoldMinutes || 15, (pos.exitRule === 'INSTITUTIONAL_ALPHA_TRAILING_LOCK' ? 480 : 20));
       const maxHoldMs = maxHoldMinutes * 60 * 1000;
       const maxHoldCycles = maxHoldMinutes * 40; // 40 cycles per minute (1.5s scan interval)
 

@@ -803,14 +803,13 @@ export class AutonomousAgentLoop {
         const dynamicSlots = uSpotRisk.maxSlots || 1;
         const uSpotSlots = dynamicSlots;
         const uSpotOpen = isUserLive ? (this.liveSpotPositions || []) : (uSpotEngine.activePositions || []);
-        const globalTimeSinceLastSpot = Date.now() - (this.lastSpotTradeOpenedAt || 0);
-        const uTimeSinceLastSpot = Date.now() - (uConfig.lastSpotTradeOpenedAt || 0);
-        const timeSinceLastSpot = Math.min(globalTimeSinceLastSpot, uTimeSinceLastSpot);
+        const uTimeSinceLastSpot = uConfig.lastSpotTradeOpenedAt ? (Date.now() - uConfig.lastSpotTradeOpenedAt) : 999999;
+        const timeSinceLastSpot = uTimeSinceLastSpot;
 
-        // Anti-churn frequency filter: 30s inter-trade pacing delay, plus 5m market cool-off after any stop-loss
-        const hasNoPriorTrade = !this.lastSpotTradeOpenedAt && !uConfig.lastSpotTradeOpenedAt;
+        // Anti-churn frequency filter: 15s inter-trade pacing delay, plus 1m market cool-off after any stop-loss
+        const hasNoPriorTrade = !uConfig.lastSpotTradeOpenedAt;
         const isLossPaused = uConfig.spotLossPauseUntil && Date.now() < uConfig.spotLossPauseUntil;
-        if (!isLossPaused && uSpotOpen.length < uSpotSlots && (timeSinceLastSpot >= 30 * 1000 || hasNoPriorTrade)) {
+        if (!isLossPaused && uSpotOpen.length < uSpotSlots && (timeSinceLastSpot >= 15 * 1000 || hasNoPriorTrade)) {
           // Find candidates matching uSpotRisk and uConfig
           const uValidSpotBuys = [];
           for (const asset of markets) {
