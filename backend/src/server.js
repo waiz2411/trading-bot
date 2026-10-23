@@ -982,7 +982,7 @@ app.post('/api/trades/close/:id', async (req, res) => {
       }
 
       const isLoss = tradeFinalPnL < -0.0001;
-      const lockMs = isLoss ? 15 * 60 * 1000 : 5 * 60 * 1000;
+      const lockMs = isLoss ? 3 * 60 * 1000 : 2 * 60 * 1000;
       const lockExp = Date.now() + lockMs;
       if (!agentLoop.spotCooldownUntil) agentLoop.spotCooldownUntil = new Map();
       agentLoop.spotCooldownUntil.set(`${assetName}-USD`, lockExp);
