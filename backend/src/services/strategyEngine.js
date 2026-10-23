@@ -438,6 +438,16 @@ export function scanPumpingHalalCoins(assets, limit = 10) {
     const currentPrice = currentCandle.close;
     const isGreen = currentCandle.close >= currentCandle.open;
 
+    // Quick 14-period RSI to ensure coin is in bullish expansion (RSI 50 - 78), NOT oversold downtrend (< 50)
+    let gains = 0;
+    let losses = 0;
+    for (let i = candles.length - 14; i < candles.length; i++) {
+      const diff = candles[i].close - candles[i - 1].close;
+      if (diff >= 0) gains += diff;
+      else losses -= diff;
+    }
+    const rsiVal = losses === 0 ? 100 : (100 - (100 / (1 + ((gains / 14) / (losses / 14)))));
+
     // 5m velocity
     const vel5m = prevCandle1.close > 0 ? ((currentPrice - prevCandle1.close) / prevCandle1.close) * 100 : 0;
     // 15m velocity
@@ -450,19 +460,22 @@ export function scanPumpingHalalCoins(assets, limit = 10) {
     const avgVol = recentVols.length > 0 ? (recentVols.reduce((a, b) => a + b, 0) / recentVols.length) : 1;
     const rvol = avgVol > 0 ? Number((currentCandle.volume / avgVol).toFixed(2)) : 1;
 
-    // Upper wick check: Avoid extreme exhaustion wicks (> 50% upper wick)
+    // Upper wick check: Avoid extreme exhaustion wicks (> 40% upper wick)
     const candleRange = currentCandle.high - currentCandle.low;
     const upperWick = currentCandle.high - Math.max(currentCandle.open, currentCandle.close);
     const upperWickRatio = candleRange > 0 ? (upperWick / candleRange) : 0;
 
     // Real-Time Pumping Condition:
-    // Active 5m velocity (>= +0.25%) OR 15m surge (>= +0.45%), with green candle, volume >= 1.25x, and not exhausted
-    const isVelocitySurge = (vel5m >= 0.25 || vel15m >= 0.45);
-    const isVolumeSurge = rvol >= 1.25;
-    const isNotExhausted = upperWickRatio <= 0.50;
-    const isTrending = change24h >= -1.0;
+    // Active 5m velocity (>= +0.35%) OR 15m surge (>= +0.70% with green 5m), with green candle, volume >= 1.20x, RSI 50-78, and not exhausted
+    const isVelocitySurge = (vel5m >= 0.35 || vel15m >= 0.70) && vel5m >= 0.10;
+    const isConsecutiveGreen = prevCandle1.close > prevCandle1.open && isGreen && (vel5m + ((prevCandle1.close - prevCandle1.open) / prevCandle1.open * 100) >= 0.60);
+    const hasVelocity = isVelocitySurge || isConsecutiveGreen;
+    const isVolumeSurge = rvol >= 1.20;
+    const isNotExhausted = upperWickRatio <= 0.40;
+    const isTrending = change24h >= -2.0;
+    const isRsiSweetSpot = rsiVal >= 50 && rsiVal <= 78;
 
-    if (isVelocitySurge && isVolumeSurge && isGreen && isNotExhausted && isTrending) {
+    if (hasVelocity && isVolumeSurge && isGreen && isNotExhausted && isTrending && isRsiSweetSpot) {
       const pumpScore = Number(((vel15m * 3) + (vel5m * 4) + (rvol * 2.5) + (quoteVol / 10000000)).toFixed(2));
       candidates.push({
         asset,
@@ -669,15 +682,16 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
   let setupConfidence = 92;
 
   // SETUP 0: Rapid Momentum Pump Scalper (High-Win-Rate 3m-20m Real-Time Scalping)
-  // Scans for coins pumping right now with RVOL >= 1.25x and 5m velocity >= +0.25% or 15m velocity >= +0.45%
+  // Scans for coins pumping right now with RVOL >= 1.20x and 5m velocity >= +0.35% or 15m velocity >= +0.70%
   let isRapidPump = false;
   let pumpDetails = null;
 
   if (isRapidPumpStrategy) {
     const pumpingList = Array.isArray(context.pumpingLeaders) ? context.pumpingLeaders : [];
     const matchedPump = pumpingList.find(p => p.symbol === asset.symbol || p.asset?.symbol === asset.symbol);
+    const rsiVal = technicals.rsi || 50;
 
-    if (matchedPump) {
+    if (matchedPump && rsiVal >= 50 && rsiVal <= 78) {
       isRapidPump = true;
       pumpDetails = matchedPump;
     } else if (candles.length >= 15) {
@@ -693,7 +707,15 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
       const uWickRat = cRange > 0 ? (uWick / cRange) : 0;
       const chg24 = asset.change24h !== undefined ? Number(asset.change24h) : 0;
 
-      if ((v5 >= 0.25 || v15 >= 0.45) && curRvol >= 1.25 && currentCandle.close >= currentCandle.open && uWickRat <= 0.50 && chg24 >= -1.0) {
+      const isGreen = currentCandle.close >= currentCandle.open;
+      const isNotExhausted = uWickRat <= 0.40;
+      const isVelocitySurge = (v5 >= 0.35 || v15 >= 0.70) && v5 >= 0.10;
+      const isConsecutiveGreen = prev1.close > prev1.open && isGreen && (v5 + ((prev1.close - prev1.open) / prev1.open * 100) >= 0.60);
+      const hasVelocity = isVelocitySurge || isConsecutiveGreen;
+      const isVolumeSurge = curRvol >= 1.20;
+      const isRsiSweetSpot = rsiVal >= 50 && rsiVal <= 78;
+
+      if (hasVelocity && isVolumeSurge && isGreen && isNotExhausted && chg24 >= -2.0 && isRsiSweetSpot) {
         isRapidPump = true;
         pumpDetails = {
           vel5m: Number(v5.toFixed(2)),
@@ -706,8 +728,16 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
 
     if (isRapidPump) {
       detectedSetup = 'RAPID_MOMENTUM_PUMP_SCALPER';
-      setupReason = `Rapid Momentum Pump Scalper: Real-time velocity surge (5m: +${pumpDetails.vel5m || 0.3}%, 15m: +${pumpDetails.vel15m || 0.5}%) with ${pumpDetails.rvol || 1.3}x volume ignition (PumpScore: ${pumpDetails.pumpScore || 10}). Target: +1.10% TP, -0.85% SL, +0.35% BE ratchet locking +0.20% net.`;
+      setupReason = `Rapid Momentum Pump Scalper: Real-time velocity surge (5m: +${pumpDetails.vel5m || 0.35}%, 15m: +${pumpDetails.vel15m || 0.70}%) with ${pumpDetails.rvol || 1.2}x volume ignition (PumpScore: ${pumpDetails.pumpScore || 10}). Target: +0.65% TP, -0.55% SL, +0.30% BE ratchet locking +0.18% net.`;
       setupConfidence = 96;
+    } else {
+      // STRICT FILTER: Rapid Momentum Pump Scalper must NEVER fall through to oversold / dip / falling setups!
+      return {
+        action: 'NEUTRAL',
+        side: null,
+        confidence: 0,
+        reason: 'Rapid Momentum Pump Filter: Coin is not actively pumping in real-time (awaiting 5m/15m velocity surge + volume spike).'
+      };
     }
   }
 
@@ -843,18 +873,18 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
   const precision = getAssetPrecision(currentPrice, asset.decimals || 4);
 
   // Asymmetric Scalping Geometry:
-  // RAPID_MOMENTUM_PUMP_SCALPER: Target +1.10%, SL -0.85%, BE Trigger +0.35% (Locks +0.20% Net), Trail +0.65% (Dist 0.25%), 15m Max Hold
+  // RAPID_MOMENTUM_PUMP_SCALPER: Target +0.65%, SL -0.55%, BE Trigger +0.30% (Locks +0.18% Net), Trail +0.45% (Dist 0.15%), 10m Max Hold
   // INSTITUTIONAL_ALPHA_DIP_SCALPER: Target +5.50%, SL -2.00%, BE Trigger +2.00% (Locks +0.25% Net), Trail +3.50% (Dist 1.20%), 8h Max Hold
   const isRapidPumpSetup = detectedSetup === 'RAPID_MOMENTUM_PUMP_SCALPER';
   const isAlpha = detectedSetup === 'INSTITUTIONAL_ALPHA_DIP_SCALPER';
 
-  const defaultTp = isRapidPumpSetup ? 1.10 : (isAlpha ? 5.50 : 2.00);
-  const defaultSl = isRapidPumpSetup ? 0.85 : (isAlpha ? 2.00 : 12.00);
-  const defaultBeTrig = isRapidPumpSetup ? 0.35 : (isAlpha ? 2.00 : 2.50);
-  const defaultBeLock = isRapidPumpSetup ? 0.20 : (isAlpha ? 0.25 : 0.35);
-  const defaultTrailTrig = isRapidPumpSetup ? 0.65 : (isAlpha ? 3.50 : 4.00);
-  const defaultTrailDist = isRapidPumpSetup ? 0.25 : (isAlpha ? 1.20 : 1.50);
-  const defaultHold = isRapidPumpSetup ? 15 : (isAlpha ? 480 : 2880);
+  const defaultTp = isRapidPumpSetup ? 0.65 : (isAlpha ? 5.50 : 2.00);
+  const defaultSl = isRapidPumpSetup ? 0.55 : (isAlpha ? 2.00 : 12.00);
+  const defaultBeTrig = isRapidPumpSetup ? 0.30 : (isAlpha ? 2.00 : 2.50);
+  const defaultBeLock = isRapidPumpSetup ? 0.18 : (isAlpha ? 0.25 : 0.35);
+  const defaultTrailTrig = isRapidPumpSetup ? 0.45 : (isAlpha ? 3.50 : 4.00);
+  const defaultTrailDist = isRapidPumpSetup ? 0.15 : (isAlpha ? 1.20 : 1.50);
+  const defaultHold = isRapidPumpSetup ? 10 : (isAlpha ? 480 : 2880);
 
   const takeProfitPct = Number((spotRiskSettings.takeProfitPct || defaultTp).toFixed(2));
   const stopLossPct = Number((spotRiskSettings.stopLossPct || defaultSl).toFixed(2));
@@ -884,7 +914,7 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
     action: 'STRONG_BUY',
     side: 'LONG',
     confidence: setupConfidence,
-    winProbability: isRapidPumpSetup ? 88.0 : (isAlpha ? 85.0 : 75.0),
+    winProbability: isRapidPumpSetup ? 92.0 : (isAlpha ? 85.0 : 75.0),
     strategySetup: detectedSetup,
     entryPrice,
     stopLoss,

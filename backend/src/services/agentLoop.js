@@ -75,16 +75,16 @@ export class AutonomousAgentLoop {
           baseAllocationPct: 33.3,
           soAllocationPct: 0.0,
           maxTradesPerPair: 1,
-          stopLossPct: 0.85,
-          takeProfitPct: 1.10,
+          stopLossPct: 0.55,
+          takeProfitPct: 0.65,
           middleLimitRsi: 55,
           minProfitBufferPct: 0.20,
-          breakEvenTriggerPct: 0.35,
-          breakEvenLockPct: 0.20,
-          trailingTriggerPct: 0.65,
-          trailingDistancePct: 0.25,
+          breakEvenTriggerPct: 0.30,
+          breakEvenLockPct: 0.18,
+          trailingTriggerPct: 0.45,
+          trailingDistancePct: 0.15,
           pullbackDiscountPct: 0,
-          maxHoldMinutes: 15,
+          maxHoldMinutes: 10,
           minConfidenceThreshold: 80,
           allowHighVolatility: true,
           volatilityMode: 'RAPID_PUMP_SCALPER',
@@ -380,16 +380,16 @@ export class AutonomousAgentLoop {
       spotRiskManager.soAllocationPct = Math.max(0, Math.min(90, Number(newSettings.soAllocationPct)));
     }
     if (newSettings.breakEvenTriggerPct !== undefined) {
-      spotRiskManager.breakEvenTriggerPct = Math.max(0.5, Math.min(10.0, Number(newSettings.breakEvenTriggerPct)));
+      spotRiskManager.breakEvenTriggerPct = Math.max(0.20, Math.min(10.0, Number(newSettings.breakEvenTriggerPct)));
     }
     if (newSettings.breakEvenLockPct !== undefined) {
       spotRiskManager.breakEvenLockPct = Math.max(0.05, Math.min(5.0, Number(newSettings.breakEvenLockPct)));
     }
     if (newSettings.trailingTriggerPct !== undefined) {
-      spotRiskManager.trailingTriggerPct = Math.max(0.5, Math.min(15.0, Number(newSettings.trailingTriggerPct)));
+      spotRiskManager.trailingTriggerPct = Math.max(0.30, Math.min(15.0, Number(newSettings.trailingTriggerPct)));
     }
     if (newSettings.trailingDistancePct !== undefined) {
-      spotRiskManager.trailingDistancePct = Math.max(0.2, Math.min(5.0, Number(newSettings.trailingDistancePct)));
+      spotRiskManager.trailingDistancePct = Math.max(0.10, Math.min(5.0, Number(newSettings.trailingDistancePct)));
     }
     if (newSettings.surgeVelocityPct !== undefined) {
       spotRiskManager.surgeVelocityPct = Math.max(0.5, Math.min(10.0, Number(newSettings.surgeVelocityPct)));
@@ -433,16 +433,16 @@ export class AutonomousAgentLoop {
         baseAllocationPct: 33.3,
         soAllocationPct: 0.0,
         maxTradesPerPair: 1,
-        stopLossPct: 0.85,
-        takeProfitPct: 1.10,
+        stopLossPct: 0.55,
+        takeProfitPct: 0.65,
         middleLimitRsi: 55,
         minProfitBufferPct: 0.20,
-        breakEvenTriggerPct: 0.35,
-        breakEvenLockPct: 0.20,
-        trailingTriggerPct: 0.65,
-        trailingDistancePct: 0.25,
+        breakEvenTriggerPct: 0.30,
+        breakEvenLockPct: 0.18,
+        trailingTriggerPct: 0.45,
+        trailingDistancePct: 0.15,
         pullbackDiscountPct: 0,
-        maxHoldMinutes: 15,
+        maxHoldMinutes: 10,
         minConfidenceThreshold: 80,
         allowHighVolatility: true,
         volatilityMode: 'RAPID_PUMP_SCALPER',
@@ -450,7 +450,7 @@ export class AutonomousAgentLoop {
         feeRate: 0.00075,
         isHalalStrict: true
       };
-      this.log(`🔄 [${userKey}] Reset SPOT settings to best defaults (Rapid Momentum Pump Scalper: Real-Time Binance Pump Detector, 3 slots, TP +1.10%, SL -0.85%, BE Lock +0.20% Net @ +0.35%, Trail 0.25% @ +0.65%, 15m Hold Cap)`, 'INFO');
+      this.log(`🔄 [${userKey}] Reset SPOT settings to best defaults (Rapid Momentum Pump Scalper: Real-Time Binance Pump Detector, 3 slots, TP +0.65%, SL -0.55%, BE Lock +0.18% Gross @ +0.30%, Trail 0.15% @ +0.45%, 10m Hold Cap)`, 'INFO');
       return config.spotRiskManager;
     } else {
       config.marginRiskManager = new RiskManager({
@@ -996,11 +996,11 @@ export class AutonomousAgentLoop {
                     confidence: candidate.signal.confidence,
                     reason: `[DEMO MIRROR] Spot Scalp (${candidate.signal.reason})`,
                     riskRewardRatio: Number((uSpotRisk.takeProfitPct / uSpotRisk.stopLossPct).toFixed(1)),
-                    maxHoldMinutes: candidate.signal.maxHoldMinutes || uSpotRisk.maxHoldMinutes || 15,
-                    breakEvenTriggerPct: candidate.signal.breakEvenTriggerPct || uSpotRisk.breakEvenTriggerPct || 0.35,
-                    breakEvenLockPct: candidate.signal.breakEvenLockPct || uSpotRisk.breakEvenLockPct || 0.20,
-                    trailingTriggerPct: candidate.signal.trailingTriggerPct || uSpotRisk.trailingTriggerPct || 0.65,
-                    trailingDistancePct: candidate.signal.trailingDistancePct || uSpotRisk.trailingDistancePct || 0.25,
+                    maxHoldMinutes: candidate.signal.maxHoldMinutes || uSpotRisk.maxHoldMinutes || 10,
+                    breakEvenTriggerPct: candidate.signal.breakEvenTriggerPct || uSpotRisk.breakEvenTriggerPct || 0.30,
+                    breakEvenLockPct: candidate.signal.breakEvenLockPct || uSpotRisk.breakEvenLockPct || 0.18,
+                    trailingTriggerPct: candidate.signal.trailingTriggerPct || uSpotRisk.trailingTriggerPct || 0.45,
+                    trailingDistancePct: candidate.signal.trailingDistancePct || uSpotRisk.trailingDistancePct || 0.15,
                     tradingStyle: 'SPOT_BUY',
                     exitRule: candidate.signal.exitRule || 'RAPID_MOMENTUM_TRAILING_LOCK',
                     feeRate: 0.00075,
@@ -1029,11 +1029,11 @@ export class AutonomousAgentLoop {
                   confidence: candidate.signal.confidence,
                   reason: `Spot Scalp Slot ${uSpotEngine.activePositions.length + 1}/${uSpotSlots}${scaleLabel} (${candidate.signal.reason})`,
                   riskRewardRatio: Number((uSpotRisk.takeProfitPct / uSpotRisk.stopLossPct).toFixed(1)),
-                  maxHoldMinutes: candidate.signal.maxHoldMinutes || uSpotRisk.maxHoldMinutes || 15,
-                  breakEvenTriggerPct: candidate.signal.breakEvenTriggerPct || uSpotRisk.breakEvenTriggerPct || 0.35,
-                  breakEvenLockPct: candidate.signal.breakEvenLockPct || uSpotRisk.breakEvenLockPct || 0.20,
-                  trailingTriggerPct: candidate.signal.trailingTriggerPct || uSpotRisk.trailingTriggerPct || 0.65,
-                  trailingDistancePct: candidate.signal.trailingDistancePct || uSpotRisk.trailingDistancePct || 0.25,
+                  maxHoldMinutes: candidate.signal.maxHoldMinutes || uSpotRisk.maxHoldMinutes || 10,
+                  breakEvenTriggerPct: candidate.signal.breakEvenTriggerPct || uSpotRisk.breakEvenTriggerPct || 0.30,
+                  breakEvenLockPct: candidate.signal.breakEvenLockPct || uSpotRisk.breakEvenLockPct || 0.18,
+                  trailingTriggerPct: candidate.signal.trailingTriggerPct || uSpotRisk.trailingTriggerPct || 0.45,
+                  trailingDistancePct: candidate.signal.trailingDistancePct || uSpotRisk.trailingDistancePct || 0.15,
                   tradingStyle: 'SPOT_BUY',
                   exitRule: candidate.signal.exitRule || 'RAPID_MOMENTUM_TRAILING_LOCK',
                   feeRate: uSpotRisk.feeRate || (uSpotRisk.useBnbFeeDiscount ? 0.00075 : 0.0010),
@@ -1338,11 +1338,11 @@ export class AutonomousAgentLoop {
           const holdMinutes = (Date.now() - openMs) / 60000;
           const maxHoldMinutes = pos.maxHoldMinutes || this.spotRiskManager.maxHoldMinutes || 15;
 
-          // A. Break-Even Profit Lock (+0.35% move -> Lock in +0.20% Net Profit to clear Binance fees)
+          // A. Break-Even Profit Lock (+0.30% move -> Lock in +0.18% Gross / +0.03% Net Profit to clear Binance fees)
           const peakGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;
           const precision = pos.decimals || 4;
-          const beTrigger = pos.breakEvenTriggerPct || this.spotRiskManager?.breakEvenTriggerPct || 0.35;
-          const beLock = pos.breakEvenLockPct || this.spotRiskManager?.breakEvenLockPct || 0.20;
+          const beTrigger = pos.breakEvenTriggerPct || this.spotRiskManager?.breakEvenTriggerPct || 0.30;
+          const beLock = pos.breakEvenLockPct || this.spotRiskManager?.breakEvenLockPct || 0.18;
           if (peakGainPct >= beTrigger) {
             const beStop = Number((pos.entryPrice * (1 + beLock / 100)).toFixed(precision));
             if (beStop > (pos.stopLoss || 0)) {
@@ -1351,9 +1351,9 @@ export class AutonomousAgentLoop {
             }
           }
 
-          // B. Real-Time Pump Trailing Profit Lock (>= +0.65% gain -> Trail 0.25% behind peak)
-          const trailTrigger = pos.trailingTriggerPct || this.spotRiskManager?.trailingTriggerPct || 0.65;
-          const trailDist = (pos.trailingDistancePct || this.spotRiskManager?.trailingDistancePct || 0.25) / 100;
+          // B. Real-Time Pump Trailing Profit Lock (>= +0.45% gain -> Trail 0.15% behind peak)
+          const trailTrigger = pos.trailingTriggerPct || this.spotRiskManager?.trailingTriggerPct || 0.45;
+          const trailDist = (pos.trailingDistancePct || this.spotRiskManager?.trailingDistancePct || 0.15) / 100;
           if (peakGainPct >= trailTrigger) {
             const trailStop = Number((pos.highestPrice * (1 - trailDist)).toFixed(precision));
             if (trailStop > (pos.stopLoss || 0)) {
@@ -1365,12 +1365,17 @@ export class AutonomousAgentLoop {
           let exitReason = null;
           let exitMsg = '';
 
-          // 1. Take Profit Target Hit (+1.10%)
+          // 1. Take Profit Target Hit (+0.65%)
           if (pos.takeProfit && livePrice >= pos.takeProfit) {
             exitReason = 'TAKE_PROFIT_TRIGGER';
             exitMsg = `🎯 [BINANCE LIVE] TP Hit: ${pos.symbol} reached target ($${livePrice} >= $${pos.takeProfit})!`;
           }
-          // 1B. User RSI 55 Middle Limit Exit (30m Strategy Alpha)
+          // 1B. Fast Momentum Exhaustion Profit Lock (Secures >= +0.20% net profit immediately on momentum stall)
+          else if (peakGainPct >= 0.35 && livePrice <= pos.highestPrice * 0.9988 && pos.pnlPercent >= 0.20) {
+            exitReason = 'MOMENTUM_EXHAUSTION_EXIT';
+            exitMsg = `⚡ [BINANCE LIVE] Fast Scalp Lock: Secured +${pos.pnlPercent}% net profit on ${pos.symbol} on momentum stall!`;
+          }
+          // 1C. User RSI 55 Middle Limit Exit (30m Strategy Alpha)
           else if (pos.strategySetup === 'RSI_30M_PURPLE_ZONE_REENTRY' && pos.pnlPercent >= 1.0) {
             const currentRsi = technicalsMap?.[pos.symbol]?.rsi;
             if (currentRsi && currentRsi >= 55) {
@@ -1387,9 +1392,9 @@ export class AutonomousAgentLoop {
               exitReason = 'TRAILING_PROFIT_LOCK';
               exitMsg = `🛡️ [BINANCE LIVE] Trailing Profit Lock: ${pos.symbol} secured +${peakGainPct.toFixed(2)}% peak gain at $${livePrice}!`;
             } else {
-              // Initial Noise Guard: Do NOT panic-dump the coin on normal wicks during first 60 seconds
+              // Initial Noise Guard: Do NOT panic-dump the coin on micro-wicks during first 30 seconds unless hard SL hit
               const lossPct = ((livePrice - pos.entryPrice) / pos.entryPrice) * 100;
-              if (holdMinutes < 1.0 && lossPct > -1.5) {
+              if (holdMinutes < 0.5 && lossPct > -0.80) {
                 continue;
               }
               exitReason = 'STOP_LOSS_TRIGGER';
@@ -1691,16 +1696,16 @@ export class AutonomousAgentLoop {
           confidence: 95,
           reason: 'Live Binance Spot Holding',
           riskRewardRatio: Number((this.spotRiskManager.takeProfitPct / this.spotRiskManager.stopLossPct).toFixed(1)),
-          maxHoldMinutes: this.spotRiskManager.maxHoldMinutes || 15,
+          maxHoldMinutes: this.spotRiskManager.maxHoldMinutes || 10,
           openTime: new Date().toISOString(),
           tradingStyle: 'SPOT_BUY',
           exitRule: 'RAPID_MOMENTUM_TRAILING_LOCK',
           trailingStopActive: false,
           breakEvenLocked: false,
-          breakEvenTriggerPct: this.spotRiskManager.breakEvenTriggerPct || 0.35,
-          breakEvenLockPct: this.spotRiskManager.breakEvenLockPct || 0.20,
-          trailingTriggerPct: this.spotRiskManager.trailingTriggerPct || 0.65,
-          trailingDistancePct: this.spotRiskManager.trailingDistancePct || 0.25,
+          breakEvenTriggerPct: this.spotRiskManager.breakEvenTriggerPct || 0.30,
+          breakEvenLockPct: this.spotRiskManager.breakEvenLockPct || 0.18,
+          trailingTriggerPct: this.spotRiskManager.trailingTriggerPct || 0.45,
+          trailingDistancePct: this.spotRiskManager.trailingDistancePct || 0.15,
           cycleCount: 0,
           feeRate,
           entryFee,

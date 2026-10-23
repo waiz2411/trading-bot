@@ -543,12 +543,12 @@ export class PaperTradingEngine {
           const runUp = pos.highestPrice - pos.entryPrice;
           const rawGainPct = ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100;
 
-          const beTrigger = pos.breakEvenTriggerPct !== undefined ? pos.breakEvenTriggerPct : 0.35;
-          const beLock = pos.breakEvenLockPct !== undefined ? pos.breakEvenLockPct : 0.20;
-          const trailTrigger = pos.trailingTriggerPct !== undefined ? pos.trailingTriggerPct : 0.65;
-          const trailDist = pos.trailingDistancePct !== undefined ? pos.trailingDistancePct : 0.25;
+          const beTrigger = pos.breakEvenTriggerPct !== undefined ? pos.breakEvenTriggerPct : 0.30;
+          const beLock = pos.breakEvenLockPct !== undefined ? pos.breakEvenLockPct : 0.18;
+          const trailTrigger = pos.trailingTriggerPct !== undefined ? pos.trailingTriggerPct : 0.45;
+          const trailDist = pos.trailingDistancePct !== undefined ? pos.trailingDistancePct : 0.15;
 
-          // Break-Even Profit Lock (engages at +0.35% gain -> locks +0.20% net profit to clear fees)
+          // Break-Even Profit Lock (engages at +0.30% gain -> locks +0.18% gross = +0.03% net profit to clear fees)
           if (!pos.breakEvenLocked && rawGainPct >= beTrigger) {
             const proposedStop = Number((pos.entryPrice * (1 + beLock / 100)).toFixed(dec));
             if (proposedStop < livePrice && (!pos.takeProfit || proposedStop < pos.takeProfit) && proposedStop > pos.stopLoss) {
@@ -557,7 +557,7 @@ export class PaperTradingEngine {
             }
           }
 
-          // Real-Time Pump Trailing Stop: Once price gains >= trailTrigger (+0.65%), trail stop 0.25% behind peak
+          // Real-Time Pump Trailing Stop: Once price gains >= trailTrigger (+0.45%), trail stop 0.15% behind peak
           if (rawGainPct >= trailTrigger) {
             const hotTrailStop = Number((pos.highestPrice * (1 - trailDist / 100)).toFixed(dec));
             if (hotTrailStop < livePrice && hotTrailStop > pos.stopLoss) {
@@ -569,12 +569,12 @@ export class PaperTradingEngine {
       }
 
       // ====================================================
-      // 2. STRICT TIME-LIMIT AUTO-CLOSE & MOMENTUM LOCK (15-Minute Scalp Cap)
+      // 2. STRICT TIME-LIMIT AUTO-CLOSE & MOMENTUM LOCK (10-Minute Scalp Cap)
       // ====================================================
       const openTimeMs = pos.openTime ? new Date(pos.openTime).getTime() : 0;
       const ageMs = openTimeMs > 0 ? (Date.now() - openTimeMs) : ((pos.cycleCount || 0) * 1500);
       const cyclesElapsed = pos.cycleCount || 0;
-      const maxHoldMinutes = Math.min(pos.maxHoldMinutes || 15, (pos.exitRule === 'INSTITUTIONAL_ALPHA_TRAILING_LOCK' ? 480 : 20));
+      const maxHoldMinutes = Math.min(pos.maxHoldMinutes || 10, (pos.exitRule === 'INSTITUTIONAL_ALPHA_TRAILING_LOCK' ? 480 : 15));
       const maxHoldMs = maxHoldMinutes * 60 * 1000;
       const maxHoldCycles = maxHoldMinutes * 40; // 40 cycles per minute (1.5s scan interval)
 
@@ -584,7 +584,7 @@ export class PaperTradingEngine {
       const effectiveMaxHoldCycles = isStructuralExit ? Math.max(maxHoldCycles, 2 * 60 * 40) : maxHoldCycles;
 
       if (!isStructuralExit && (ageMs >= maxHoldMs || cyclesElapsed >= maxHoldCycles)) {
-        const isProfitable = pos.pnlPercent >= 0.20 || pos.unrealizedPnL > 0;
+        const isProfitable = pos.pnlPercent >= 0.15 || pos.unrealizedPnL > 0;
         const exitNote = isProfitable
           ? `${maxHoldMinutes}m Expiry: Banked profit at time cap (+${pos.pnlPercent}%)`
           : `${maxHoldMinutes}m Expiry: Auto-closed holding at ${maxHoldMinutes}m cap to rotate capital (${pos.pnlPercent}%)`;
@@ -601,17 +601,18 @@ export class PaperTradingEngine {
         }
       }
 
-      // B. Noticeable Momentum Lock (After 50% of hold time) - locks net profit > 0.20% on pullbacks
+      // B. Fast Momentum Stall / Exhaustion Profit Lock - locks net profit >= +0.20% immediately without waiting!
       const minNetProfitThreshold = (pos.notional || 100) * 0.0020; // At least +0.20% net
-      if (!isStructuralExit && (ageMs >= maxHoldMs * 0.50 || cyclesElapsed >= maxHoldCycles * 0.50) && (pos.pnlPercent >= 0.20 || pos.unrealizedPnL >= minNetProfitThreshold)) {
-        if (pos.side === 'LONG' && livePrice < pos.highestPrice * 0.998) {
-          const closed = this.closePosition(pos.id, livePrice, 'MOMENTUM_EXHAUSTION_EXIT', `Fast Scalp Lock: Secured +$${pos.unrealizedPnL} net profit (+${pos.pnlPercent}%) before ${maxHoldMinutes}m cap`);
+      const peakGain = pos.highestPrice > pos.entryPrice ? ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100 : 0;
+      if (!isStructuralExit && (peakGain >= 0.35 || pos.pnlPercent >= 0.20 || pos.unrealizedPnL >= minNetProfitThreshold)) {
+        if (pos.side === 'LONG' && livePrice <= pos.highestPrice * 0.9988) {
+          const closed = this.closePosition(pos.id, livePrice, 'MOMENTUM_EXHAUSTION_EXIT', `Fast Scalp Lock: Secured +$${pos.unrealizedPnL} net profit (+${pos.pnlPercent}%) on momentum stall`);
           if (closed) {
             closedTriggers.push(closed);
             continue;
           }
-        } else if (pos.side === 'SHORT' && livePrice > pos.lowestPrice * 1.002) {
-          const closed = this.closePosition(pos.id, livePrice, 'MOMENTUM_EXHAUSTION_EXIT', `Fast Scalp Lock: Secured +$${pos.unrealizedPnL} net profit (+${pos.pnlPercent}%) before ${maxHoldMinutes}m cap`);
+        } else if (pos.side === 'SHORT' && livePrice >= pos.lowestPrice * 1.0012) {
+          const closed = this.closePosition(pos.id, livePrice, 'MOMENTUM_EXHAUSTION_EXIT', `Fast Scalp Lock: Secured +$${pos.unrealizedPnL} net profit (+${pos.pnlPercent}%) on momentum stall`);
           if (closed) {
             closedTriggers.push(closed);
             continue;
