@@ -433,12 +433,13 @@ export function scanPumpingHalalCoins(assets, limit = 10) {
 
     const currentCandle = candles[candles.length - 1];
     const prevCandle1 = candles[candles.length - 2];
-    const prevCandle3 = candles[candles.length - 4] || prevCandle1;
+    const prevCandle2 = candles[candles.length - 3] || prevCandle1;
+    const prevCandle3 = candles[candles.length - 4] || prevCandle2;
 
     const currentPrice = currentCandle.close;
     const isGreen = currentCandle.close >= currentCandle.open;
 
-    // Quick 14-period RSI to ensure coin is in bullish expansion (RSI 50 - 78), NOT oversold downtrend (< 50)
+    // Quick 14-period RSI to ensure coin is in active momentum expansion (RSI 46 - 80), NOT oversold dump (< 46)
     let gains = 0;
     let losses = 0;
     for (let i = candles.length - 14; i < candles.length; i++) {
@@ -452,30 +453,34 @@ export function scanPumpingHalalCoins(assets, limit = 10) {
     const vel5m = prevCandle1.close > 0 ? ((currentPrice - prevCandle1.close) / prevCandle1.close) * 100 : 0;
     // 15m velocity
     const vel15m = prevCandle3.close > 0 ? ((currentPrice - prevCandle3.close) / prevCandle3.close) * 100 : 0;
+    const prevVel5m = prevCandle2.close > 0 ? ((prevCandle1.close - prevCandle2.close) / prevCandle2.close) * 100 : 0;
+
     // 24h change
     const change24h = asset.change24h !== undefined ? Number(asset.change24h) : 0;
 
-    // Volume surge relative to last 20 candles
+    // Volume surge: evaluates max of current forming candle or previous closed candle
     const recentVols = candles.slice(-21, -1).map(c => c.volume || 0);
     const avgVol = recentVols.length > 0 ? (recentVols.reduce((a, b) => a + b, 0) / recentVols.length) : 1;
-    const rvol = avgVol > 0 ? Number((currentCandle.volume / avgVol).toFixed(2)) : 1;
+    const curRvol = avgVol > 0 ? Number((currentCandle.volume / avgVol).toFixed(2)) : 1;
+    const prevRvol = avgVol > 0 ? Number((prevCandle1.volume / avgVol).toFixed(2)) : 1;
+    const rvol = Math.max(curRvol, prevRvol);
 
-    // Upper wick check: Avoid extreme exhaustion wicks (> 40% upper wick)
+    // Upper wick check: Avoid extreme exhaustion wicks (> 50% upper wick)
     const candleRange = currentCandle.high - currentCandle.low;
     const upperWick = currentCandle.high - Math.max(currentCandle.open, currentCandle.close);
     const upperWickRatio = candleRange > 0 ? (upperWick / candleRange) : 0;
 
-    // Real-Time Pumping Condition:
-    // Active 5m velocity (>= +0.35%) OR 15m surge (>= +0.70% with green 5m), with green candle, volume >= 1.20x, RSI 50-78, and not exhausted
-    const isVelocitySurge = (vel5m >= 0.35 || vel15m >= 0.70) && vel5m >= 0.10;
-    const isConsecutiveGreen = prevCandle1.close > prevCandle1.open && isGreen && (vel5m + ((prevCandle1.close - prevCandle1.open) / prevCandle1.open * 100) >= 0.60);
+    // Responsive Real-Time Pumping Condition:
+    // 5m velocity >= +0.20% OR 15m surge >= +0.35% OR (vel5m >= 0.15% with green candle) OR 2 green candles sum >= +0.30%
+    const isVelocitySurge = (vel5m >= 0.20 || vel15m >= 0.35 || (vel5m >= 0.15 && isGreen));
+    const isConsecutiveGreen = prevCandle1.close >= prevCandle1.open && isGreen && ((vel5m + prevVel5m) >= 0.30);
     const hasVelocity = isVelocitySurge || isConsecutiveGreen;
-    const isVolumeSurge = rvol >= 1.20;
-    const isNotExhausted = upperWickRatio <= 0.40;
-    const isTrending = change24h >= -2.0;
-    const isRsiSweetSpot = rsiVal >= 50 && rsiVal <= 78;
+    const isVolumeSurge = rvol >= 1.05;
+    const isNotExhausted = upperWickRatio <= 0.50;
+    const isTrending = change24h >= -12.0;
+    const isRsiSweetSpot = rsiVal >= 46 && rsiVal <= 80;
 
-    if (hasVelocity && isVolumeSurge && isGreen && isNotExhausted && isTrending && isRsiSweetSpot) {
+    if (hasVelocity && isVolumeSurge && (isGreen || vel15m >= 0.30) && isNotExhausted && isTrending && isRsiSweetSpot) {
       const pumpScore = Number(((vel15m * 3) + (vel5m * 4) + (rvol * 2.5) + (quoteVol / 10000000)).toFixed(2));
       candidates.push({
         asset,
@@ -682,7 +687,7 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
   let setupConfidence = 92;
 
   // SETUP 0: Rapid Momentum Pump Scalper (High-Win-Rate 3m-20m Real-Time Scalping)
-  // Scans for coins pumping right now with RVOL >= 1.20x and 5m velocity >= +0.35% or 15m velocity >= +0.70%
+  // Scans for coins pumping right now with responsive volume ignition and velocity surge
   let isRapidPump = false;
   let pumpDetails = null;
 
@@ -691,37 +696,54 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
     const matchedPump = pumpingList.find(p => p.symbol === asset.symbol || p.asset?.symbol === asset.symbol);
     const rsiVal = technicals.rsi || 50;
 
-    if (matchedPump && rsiVal >= 50 && rsiVal <= 78) {
+    if (matchedPump && rsiVal >= 46 && rsiVal <= 80) {
       isRapidPump = true;
       pumpDetails = matchedPump;
     } else if (candles.length >= 15) {
       const prev1 = candles[candles.length - 2];
-      const prev3 = candles[candles.length - 4] || prev1;
+      const prev2 = candles[candles.length - 3] || prev1;
+      const prev3 = candles[candles.length - 4] || prev2;
+
       const v5 = prev1.close > 0 ? ((currentPrice - prev1.close) / prev1.close) * 100 : 0;
       const v15 = prev3.close > 0 ? ((currentPrice - prev3.close) / prev3.close) * 100 : 0;
+      const prevVel5m = prev2.close > 0 ? ((prev1.close - prev2.close) / prev2.close) * 100 : 0;
+
       const recentV = candles.slice(-21, -1).map(c => c.volume || 0);
       const avgV = recentV.length > 0 ? (recentV.reduce((a, b) => a + b, 0) / recentV.length) : 1;
       const curRvol = avgV > 0 ? Number((currentCandle.volume / avgV).toFixed(2)) : 1;
+      const prevRvol = avgV > 0 ? Number((prev1.volume / avgV).toFixed(2)) : 1;
+      const rvol = Math.max(curRvol, prevRvol);
+
       const cRange = currentCandle.high - currentCandle.low;
       const uWick = currentCandle.high - Math.max(currentCandle.open, currentCandle.close);
       const uWickRat = cRange > 0 ? (uWick / cRange) : 0;
       const chg24 = asset.change24h !== undefined ? Number(asset.change24h) : 0;
 
       const isGreen = currentCandle.close >= currentCandle.open;
-      const isNotExhausted = uWickRat <= 0.40;
-      const isVelocitySurge = (v5 >= 0.35 || v15 >= 0.70) && v5 >= 0.10;
-      const isConsecutiveGreen = prev1.close > prev1.open && isGreen && (v5 + ((prev1.close - prev1.open) / prev1.open * 100) >= 0.60);
-      const hasVelocity = isVelocitySurge || isConsecutiveGreen;
-      const isVolumeSurge = curRvol >= 1.20;
-      const isRsiSweetSpot = rsiVal >= 50 && rsiVal <= 78;
+      const isNotExhausted = uWickRat <= 0.50;
 
-      if (hasVelocity && isVolumeSurge && isGreen && isNotExhausted && chg24 >= -2.0 && isRsiSweetSpot) {
+      // Responsive Velocity Surge:
+      // 5m velocity >= +0.20% OR 15m velocity >= +0.35% OR (vel5m >= 0.15% with green candle) OR 2 green candles sum >= +0.30%
+      const isVelocitySurge = (v5 >= 0.20 || v15 >= 0.35 || (v5 >= 0.15 && isGreen));
+      const isConsecutiveGreen = prev1.close >= prev1.open && isGreen && ((v5 + prevVel5m) >= 0.30);
+      const hasVelocity = isVelocitySurge || isConsecutiveGreen;
+
+      // Volume Surge: at least 1.05x average volume on either current forming bar or previous completed bar
+      const isVolumeSurge = rvol >= 1.05;
+
+      // Active Momentum RSI: 46 - 80 (actively trending, not an oversold dump < 46)
+      const isRsiSweetSpot = rsiVal >= 46 && rsiVal <= 80;
+
+      // Avoid catastrophic delistings (< -12%)
+      const isTrending = chg24 >= -12.0;
+
+      if (hasVelocity && isVolumeSurge && (isGreen || v15 >= 0.30) && isNotExhausted && isTrending && isRsiSweetSpot) {
         isRapidPump = true;
         pumpDetails = {
           vel5m: Number(v5.toFixed(2)),
           vel15m: Number(v15.toFixed(2)),
-          rvol: curRvol,
-          pumpScore: Number(((v15 * 3) + (v5 * 4) + (curRvol * 2.5)).toFixed(2))
+          rvol,
+          pumpScore: Number(((v15 * 3) + (v5 * 4) + (rvol * 2.5)).toFixed(2))
         };
       }
     }

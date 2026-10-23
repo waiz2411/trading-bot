@@ -842,15 +842,18 @@ export class AutonomousAgentLoop {
             );
             if (spotLockExpiry > Date.now()) continue;
 
-            // Strict anti-churn safeguard: 3 minutes lockout per coin after exit
+            // Anti-churn safeguard: 90s lockout per coin after exit to prevent instant double-fill
             const recentClosed = isUserLive ? (this.liveSpotClosedTrades || []) : (uSpotEngine.closedTrades || []);
-            const lastTradeForCoin = recentClosed.find(t => {
+            const lastTradeForCoin = recentClosed.slice().reverse().find(t => {
               const tAsset = (t.name || t.symbol || '').replace(/[-_/]/g, '').replace(/USDT$/, '').replace(/USD$/, '').toUpperCase();
               return tAsset === cleanBase || tAsset === cleanName;
             });
-            if (lastTradeForCoin && lastTradeForCoin.exitTime) {
-              const msSinceExit = Date.now() - new Date(lastTradeForCoin.exitTime).getTime();
-              if (msSinceExit < 3 * 60 * 1000) continue; // 3 mins anti-churn lockout
+            if (lastTradeForCoin) {
+              const exitTimeVal = lastTradeForCoin.closeTime || lastTradeForCoin.exitTime;
+              if (exitTimeVal) {
+                const msSinceExit = Date.now() - new Date(exitTimeVal).getTime();
+                if (msSinceExit < 90 * 1000) continue; // 90s lockout
+              }
             }
 
             // Sector Diversification Guardrail: Max 2 positions per sector
