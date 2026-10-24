@@ -70,22 +70,22 @@ export class AutonomousAgentLoop {
         }),
         spotRiskManager: {
           strategy: 'RAPID_MOMENTUM_PUMP_SCALPER',
-          maxSlots: 3,
-          allocationPct: 33.3,
-          baseAllocationPct: 33.3,
+          maxSlots: 1,
+          allocationPct: 100.0,
+          baseAllocationPct: 100.0,
           soAllocationPct: 0.0,
           maxTradesPerPair: 1,
-          stopLossPct: 0.55,
-          takeProfitPct: 0.65,
+          stopLossPct: 1.10,
+          takeProfitPct: 1.40,
           middleLimitRsi: 55,
           minProfitBufferPct: 0.20,
-          breakEvenTriggerPct: 0.30,
-          breakEvenLockPct: 0.18,
-          trailingTriggerPct: 0.45,
-          trailingDistancePct: 0.15,
+          breakEvenTriggerPct: 0.65,
+          breakEvenLockPct: 0.25,
+          trailingTriggerPct: 0.95,
+          trailingDistancePct: 0.30,
           pullbackDiscountPct: 0,
-          maxHoldMinutes: 10,
-          minConfidenceThreshold: 80,
+          maxHoldMinutes: 35,
+          minConfidenceThreshold: 85,
           allowHighVolatility: true,
           volatilityMode: 'RAPID_PUMP_SCALPER',
           useBnbFeeDiscount: true,
@@ -428,29 +428,29 @@ export class AutonomousAgentLoop {
     if (targetAccount === 'SPOT') {
       config.spotRiskManager = {
         strategy: 'RAPID_MOMENTUM_PUMP_SCALPER',
-        maxSlots: 3,
-        allocationPct: 33.3,
-        baseAllocationPct: 33.3,
+        maxSlots: 1,
+        allocationPct: 100.0,
+        baseAllocationPct: 100.0,
         soAllocationPct: 0.0,
         maxTradesPerPair: 1,
-        stopLossPct: 0.55,
-        takeProfitPct: 0.65,
+        stopLossPct: 1.10,
+        takeProfitPct: 1.40,
         middleLimitRsi: 55,
         minProfitBufferPct: 0.20,
-        breakEvenTriggerPct: 0.30,
-        breakEvenLockPct: 0.18,
-        trailingTriggerPct: 0.45,
-        trailingDistancePct: 0.15,
+        breakEvenTriggerPct: 0.65,
+        breakEvenLockPct: 0.25,
+        trailingTriggerPct: 0.95,
+        trailingDistancePct: 0.30,
         pullbackDiscountPct: 0,
-        maxHoldMinutes: 10,
-        minConfidenceThreshold: 80,
+        maxHoldMinutes: 35,
+        minConfidenceThreshold: 85,
         allowHighVolatility: true,
         volatilityMode: 'RAPID_PUMP_SCALPER',
         useBnbFeeDiscount: true,
         feeRate: 0.00075,
         isHalalStrict: true
       };
-      this.log(`🔄 [${userKey}] Reset SPOT settings to best defaults (Rapid Momentum Pump Scalper: Real-Time Binance Pump Detector, 3 slots, TP +0.65%, SL -0.55%, BE Lock +0.18% Gross @ +0.30%, Trail 0.15% @ +0.45%, 10m Hold Cap)`, 'INFO');
+      this.log(`🔄 [${userKey}] Reset SPOT settings to best defaults (Rapid Momentum Pump Scalper: Real-Time Binance Pump Detector, 1 sniper slot, TP +1.40%, SL -1.10%, BE Lock +0.25% Gross @ +0.65%, Trail 0.30% @ +0.95%, 35m Hold Cap)`, 'INFO');
       return config.spotRiskManager;
     } else {
       config.marginRiskManager = new RiskManager({
@@ -806,17 +806,17 @@ export class AutonomousAgentLoop {
         const uTimeSinceLastSpot = uConfig.lastSpotTradeOpenedAt ? (Date.now() - uConfig.lastSpotTradeOpenedAt) : 999999;
         const timeSinceLastSpot = uTimeSinceLastSpot;
 
-        // Anti-churn frequency filter: 15s inter-trade pacing delay, plus 1m market cool-off after any stop-loss
+        // Anti-churn frequency filter: 2m inter-trade pacing delay, plus 3m market cool-off after any stop-loss
         const hasNoPriorTrade = !uConfig.lastSpotTradeOpenedAt;
         const isLossPaused = uConfig.spotLossPauseUntil && Date.now() < uConfig.spotLossPauseUntil;
-        if (!isLossPaused && uSpotOpen.length < uSpotSlots && (timeSinceLastSpot >= 15 * 1000 || hasNoPriorTrade)) {
+        if (!isLossPaused && uSpotOpen.length < uSpotSlots && (timeSinceLastSpot >= 120 * 1000 || hasNoPriorTrade)) {
           // Find candidates matching uSpotRisk and uConfig
           const uValidSpotBuys = [];
           for (const asset of markets) {
             if (asset.category !== 'Crypto') continue;
             if (!isHalalCompliant(asset.symbol)) continue;
             if (!asset.isRealCandles) continue;
-            if (Number(asset.quoteVolume || 0) < 500000) continue;
+            if (Number(asset.quoteVolume || 0) < 1000000) continue;
 
             if (isUserLive && binanceConnector.getStatus().isRateLimited) {
               // Proactively pause live spot orders while proxy IP is in cooldown
@@ -842,7 +842,7 @@ export class AutonomousAgentLoop {
             );
             if (spotLockExpiry > Date.now()) continue;
 
-            // Anti-churn safeguard: 90s lockout per coin after exit to prevent instant double-fill
+            // Anti-churn safeguard: 5m lockout per coin after exit to prevent instant double-fill
             const recentClosed = isUserLive ? (this.liveSpotClosedTrades || []) : (uSpotEngine.closedTrades || []);
             const lastTradeForCoin = recentClosed.slice().reverse().find(t => {
               const tAsset = (t.name || t.symbol || '').replace(/[-_/]/g, '').replace(/USDT$/, '').replace(/USD$/, '').toUpperCase();
@@ -852,7 +852,7 @@ export class AutonomousAgentLoop {
               const exitTimeVal = lastTradeForCoin.closeTime || lastTradeForCoin.exitTime;
               if (exitTimeVal) {
                 const msSinceExit = Date.now() - new Date(exitTimeVal).getTime();
-                if (msSinceExit < 90 * 1000) continue; // 90s lockout
+                if (msSinceExit < 300 * 1000) continue; // 5m lockout
               }
             }
 
@@ -1310,8 +1310,8 @@ export class AutonomousAgentLoop {
             } else if (closed.exitReason === 'TIME_LIMIT_EXIT') {
               this.log(`⏱️ [SPOT DEMO] ${holdCapStr} HOLD EXPIRY: ${closed.symbol} auto-closed at ${holdCapStr} cap. Realized Net: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL} (${closed.finalPnLPercent}%)${feeStr}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'INFO');
             } else if (closed.exitReason === 'STOP_LOSS_TRIGGER') {
-              userConfig.spotLossPauseUntil = Date.now() + 60 * 1000;
-              this.log(`🪙 [SPOT DEMO] STOP TRIGGERED (-${userSpotRisk.stopLossPct}%): ${closed.symbol} sold at stop. Loss capped: -$${Math.abs(closed.finalPnL)} (${closed.finalPnLPercent}%)${feeStr}. 1-minute pause engaged.`, 'WARN');
+              userConfig.spotLossPauseUntil = Date.now() + 180 * 1000;
+              this.log(`🪙 [SPOT DEMO] STOP TRIGGERED (-${userSpotRisk.stopLossPct}%): ${closed.symbol} sold at stop. Loss capped: -$${Math.abs(closed.finalPnL)} (${closed.finalPnLPercent}%)${feeStr}. 3-minute cool-off engaged.`, 'WARN');
             } else {
               this.log(`🪙 [SPOT DEMO] EXIT: ${closed.symbol} closed (${closed.exitReason}). Realized Net: ${closed.finalPnL >= 0 ? '+' : ''}$${closed.finalPnL}${feeStr}`, closed.finalPnL >= 0 ? 'SUCCESS' : 'WARN');
             }

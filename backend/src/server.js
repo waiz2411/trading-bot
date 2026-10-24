@@ -1381,7 +1381,7 @@ app.post('/api/portfolio/reset', async (req, res) => {
     const resetState = engine.reset(initBal);
     agentLoop.resetSettingsToDefault(userEmail, targetAccount);
     agentLoop.log(`🔄 [${targetAccount}] Portfolio reset to $${initBal.toLocaleString('en-US')} virtual balance and optimal strategy defaults restored.`, 'WARN');
-    const userMode = (user && user.mode) ? user.mode : (userEmail === 'waiztahseen@gmail.com' ? 'LIVE' : 'SIMULATED');
+    const userMode = (user && (user.active_mode || user.mode)) ? (user.active_mode || user.mode) : (agentLoop.getConfig(userEmail).mode || 'SIMULATED');
     res.json({ success: true, portfolio: resetState, dashboard: agentLoop.getDashboardData(userMode, targetAccount, userEmail) });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1397,7 +1397,7 @@ app.post('/api/ledger/clear', async (req, res) => {
     const userEmail = user ? user.email : 'default';
     const { account } = req.body;
     const targetAccount = (account || agentLoop.activeAccount).toUpperCase();
-    const userMode = (user && user.mode) ? user.mode : (userEmail === 'waiztahseen@gmail.com' ? 'LIVE' : 'SIMULATED');
+    const userMode = (user && (user.active_mode || user.mode)) ? (user.active_mode || user.mode) : (agentLoop.getConfig(userEmail).mode || 'SIMULATED');
     agentLoop.clearLedger(userEmail, targetAccount, userMode);
     agentLoop.log(`[${userMode}][${targetAccount}] Trade ledger successfully cleared. Win rate reset to 0%.`, 'INFO');
     res.json({ success: true, dashboard: agentLoop.getDashboardData(userMode, targetAccount, userEmail) });

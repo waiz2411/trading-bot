@@ -411,7 +411,7 @@ export function evaluateVolumeIgnition(asset, technicals) {
  * @param {number} limit - Number of top pumping leaders to return (default: 10)
  * @returns {Array} Array of pumping leaders ranked by pumpScore
  */
-export function scanPumpingHalalCoins(assets, limit = 10) {
+export function scanPumpingHalalCoins(assets, limit = 5) {
   if (!Array.isArray(assets)) return [];
 
   const candidates = [];
@@ -424,9 +424,14 @@ export function scanPumpingHalalCoins(assets, limit = 10) {
     // 1. Genuine Binance Kline Verification: Reject mock/synthetic candles
     if (!asset.isRealCandles) continue;
 
-    // 2. Liquid Halal Pairs: >= $500k 24h volume for tight order book spreads
+    // 2. Liquid Halal Pairs: >= $1M 24h volume for tight order book spreads and true market interest
     const quoteVol = Number(asset.quoteVolume || asset.volume24h || 0);
-    if (quoteVol < 500000) continue;
+    if (quoteVol < 1000000) continue;
+
+    // 3. 24H PUMP GATE: Must be strictly green and gaining (+1.5% to +50% on 24h!)
+    // STRICTLY REJECT DOWNTRENDING / NEGATIVE COINS (e.g. -5%, -10%, etc.)
+    const change24h = asset.change24h !== undefined ? Number(asset.change24h) : 0;
+    if (change24h < 1.50) continue;
 
     const candles = asset.candles;
     if (!candles || candles.length < 15) continue;
@@ -439,7 +444,7 @@ export function scanPumpingHalalCoins(assets, limit = 10) {
     const currentPrice = currentCandle.close;
     const isGreen = currentCandle.close >= currentCandle.open;
 
-    // Quick 14-period RSI to ensure coin is in active momentum expansion (RSI 46 - 80), NOT oversold dump (< 46)
+    // Quick 14-period RSI to ensure coin is in active momentum expansion (RSI 50 - 80), NOT oversold dump (< 50)
     let gains = 0;
     let losses = 0;
     for (let i = candles.length - 14; i < candles.length; i++) {
@@ -448,15 +453,11 @@ export function scanPumpingHalalCoins(assets, limit = 10) {
       else losses -= diff;
     }
     const rsiVal = losses === 0 ? 100 : (100 - (100 / (1 + ((gains / 14) / (losses / 14)))));
+    if (rsiVal < 50 || rsiVal > 80) continue;
 
-    // 5m velocity
+    // 5m and 15m velocity
     const vel5m = prevCandle1.close > 0 ? ((currentPrice - prevCandle1.close) / prevCandle1.close) * 100 : 0;
-    // 15m velocity
     const vel15m = prevCandle3.close > 0 ? ((currentPrice - prevCandle3.close) / prevCandle3.close) * 100 : 0;
-    const prevVel5m = prevCandle2.close > 0 ? ((prevCandle1.close - prevCandle2.close) / prevCandle2.close) * 100 : 0;
-
-    // 24h change
-    const change24h = asset.change24h !== undefined ? Number(asset.change24h) : 0;
 
     // Volume surge: evaluates max of current forming candle or previous closed candle
     const recentVols = candles.slice(-21, -1).map(c => c.volume || 0);
@@ -465,23 +466,19 @@ export function scanPumpingHalalCoins(assets, limit = 10) {
     const prevRvol = avgVol > 0 ? Number((prevCandle1.volume / avgVol).toFixed(2)) : 1;
     const rvol = Math.max(curRvol, prevRvol);
 
-    // Upper wick check: Avoid extreme exhaustion wicks (> 50% upper wick)
+    // Upper wick check: Avoid extreme exhaustion wicks (> 35% upper wick)
     const candleRange = currentCandle.high - currentCandle.low;
     const upperWick = currentCandle.high - Math.max(currentCandle.open, currentCandle.close);
     const upperWickRatio = candleRange > 0 ? (upperWick / candleRange) : 0;
+    if (upperWickRatio > 0.35) continue;
 
-    // Responsive Real-Time Pumping Condition:
-    // 5m velocity >= +0.20% OR 15m surge >= +0.35% OR (vel5m >= 0.15% with green candle) OR 2 green candles sum >= +0.30%
-    const isVelocitySurge = (vel5m >= 0.20 || vel15m >= 0.35 || (vel5m >= 0.15 && isGreen));
-    const isConsecutiveGreen = prevCandle1.close >= prevCandle1.open && isGreen && ((vel5m + prevVel5m) >= 0.30);
-    const hasVelocity = isVelocitySurge || isConsecutiveGreen;
-    const isVolumeSurge = rvol >= 1.05;
-    const isNotExhausted = upperWickRatio <= 0.50;
-    const isTrending = change24h >= -12.0;
-    const isRsiSweetSpot = rsiVal >= 46 && rsiVal <= 80;
+    // Real-Time Pumping Condition:
+    // Either 5m velocity >= +0.40% (green candle) OR 15m surge >= +0.80% (green)
+    const isVelocitySurge = (vel5m >= 0.40 && isGreen) || (vel15m >= 0.80 && isGreen);
+    const isVolumeSurge = rvol >= 1.35;
 
-    if (hasVelocity && isVolumeSurge && (isGreen || vel15m >= 0.30) && isNotExhausted && isTrending && isRsiSweetSpot) {
-      const pumpScore = Number(((vel15m * 3) + (vel5m * 4) + (rvol * 2.5) + (quoteVol / 10000000)).toFixed(2));
+    if (isVelocitySurge && isVolumeSurge) {
+      const pumpScore = Number(((change24h * 1.5) + (vel5m * 4) + (vel15m * 2.5) + (rvol * 3) + (quoteVol / 5000000)).toFixed(2));
       candidates.push({
         asset,
         symbol: asset.symbol,
@@ -686,8 +683,8 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
   let setupReason = '';
   let setupConfidence = 92;
 
-  // SETUP 0: Rapid Momentum Pump Scalper (High-Win-Rate 3m-20m Real-Time Scalping)
-  // Scans for coins pumping right now with responsive volume ignition and velocity surge
+  // SETUP 0: Rapid Momentum Pump Scalper (High-Win-Rate Real-Time Binance Pump Scalping)
+  // Strictly trades Halal coins that are ALREADY PUMPING with confirmed volume & velocity
   let isRapidPump = false;
   let pumpDetails = null;
 
@@ -696,69 +693,19 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
     const matchedPump = pumpingList.find(p => p.symbol === asset.symbol || p.asset?.symbol === asset.symbol);
     const rsiVal = technicals.rsi || 50;
 
-    if (matchedPump && rsiVal >= 46 && rsiVal <= 80) {
+    if (matchedPump && rsiVal >= 50 && rsiVal <= 80) {
       isRapidPump = true;
       pumpDetails = matchedPump;
-    } else if (candles.length >= 15) {
-      const prev1 = candles[candles.length - 2];
-      const prev2 = candles[candles.length - 3] || prev1;
-      const prev3 = candles[candles.length - 4] || prev2;
-
-      const v5 = prev1.close > 0 ? ((currentPrice - prev1.close) / prev1.close) * 100 : 0;
-      const v15 = prev3.close > 0 ? ((currentPrice - prev3.close) / prev3.close) * 100 : 0;
-      const prevVel5m = prev2.close > 0 ? ((prev1.close - prev2.close) / prev2.close) * 100 : 0;
-
-      const recentV = candles.slice(-21, -1).map(c => c.volume || 0);
-      const avgV = recentV.length > 0 ? (recentV.reduce((a, b) => a + b, 0) / recentV.length) : 1;
-      const curRvol = avgV > 0 ? Number((currentCandle.volume / avgV).toFixed(2)) : 1;
-      const prevRvol = avgV > 0 ? Number((prev1.volume / avgV).toFixed(2)) : 1;
-      const rvol = Math.max(curRvol, prevRvol);
-
-      const cRange = currentCandle.high - currentCandle.low;
-      const uWick = currentCandle.high - Math.max(currentCandle.open, currentCandle.close);
-      const uWickRat = cRange > 0 ? (uWick / cRange) : 0;
-      const chg24 = asset.change24h !== undefined ? Number(asset.change24h) : 0;
-
-      const isGreen = currentCandle.close >= currentCandle.open;
-      const isNotExhausted = uWickRat <= 0.50;
-
-      // Responsive Velocity Surge:
-      // 5m velocity >= +0.20% OR 15m velocity >= +0.35% OR (vel5m >= 0.15% with green candle) OR 2 green candles sum >= +0.30%
-      const isVelocitySurge = (v5 >= 0.20 || v15 >= 0.35 || (v5 >= 0.15 && isGreen));
-      const isConsecutiveGreen = prev1.close >= prev1.open && isGreen && ((v5 + prevVel5m) >= 0.30);
-      const hasVelocity = isVelocitySurge || isConsecutiveGreen;
-
-      // Volume Surge: at least 1.05x average volume on either current forming bar or previous completed bar
-      const isVolumeSurge = rvol >= 1.05;
-
-      // Active Momentum RSI: 46 - 80 (actively trending, not an oversold dump < 46)
-      const isRsiSweetSpot = rsiVal >= 46 && rsiVal <= 80;
-
-      // Avoid catastrophic delistings (< -12%)
-      const isTrending = chg24 >= -12.0;
-
-      if (hasVelocity && isVolumeSurge && (isGreen || v15 >= 0.30) && isNotExhausted && isTrending && isRsiSweetSpot) {
-        isRapidPump = true;
-        pumpDetails = {
-          vel5m: Number(v5.toFixed(2)),
-          vel15m: Number(v15.toFixed(2)),
-          rvol,
-          pumpScore: Number(((v15 * 3) + (v5 * 4) + (rvol * 2.5)).toFixed(2))
-        };
-      }
-    }
-
-    if (isRapidPump) {
       detectedSetup = 'RAPID_MOMENTUM_PUMP_SCALPER';
-      setupReason = `Rapid Momentum Pump Scalper: Real-time velocity surge (5m: +${pumpDetails.vel5m || 0.35}%, 15m: +${pumpDetails.vel15m || 0.70}%) with ${pumpDetails.rvol || 1.2}x volume ignition (PumpScore: ${pumpDetails.pumpScore || 10}). Target: +0.65% TP, -0.55% SL, +0.30% BE ratchet locking +0.18% net.`;
+      setupReason = `Rapid Momentum Pump Scalper: ${asset.name} is ALREADY PUMPING (+${matchedPump.change24h}% 24h, 5m: +${matchedPump.vel5m}%, 15m: +${matchedPump.vel15m}%) with ${matchedPump.rvol}x volume ignition (PumpScore: ${matchedPump.pumpScore}). Target: +1.40% TP, -1.10% SL, +0.65% BE ratchet locking +0.25% net profit.`;
       setupConfidence = 96;
     } else {
-      // STRICT FILTER: Rapid Momentum Pump Scalper must NEVER fall through to oversold / dip / falling setups!
+      // STRICT FILTER: Rapid Momentum Pump Scalper must NEVER trade non-pumping coins!
       return {
         action: 'NEUTRAL',
         side: null,
         confidence: 0,
-        reason: 'Rapid Momentum Pump Filter: Coin is not actively pumping in real-time (awaiting 5m/15m velocity surge + volume spike).'
+        reason: 'Rapid Momentum Pump Filter: Coin is not among confirmed pumping Halal leaders on Binance.'
       };
     }
   }
@@ -895,18 +842,18 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
   const precision = getAssetPrecision(currentPrice, asset.decimals || 4);
 
   // Asymmetric Scalping Geometry:
-  // RAPID_MOMENTUM_PUMP_SCALPER: Target +0.65%, SL -0.55%, BE Trigger +0.30% (Locks +0.18% Net), Trail +0.45% (Dist 0.15%), 10m Max Hold
+  // RAPID_MOMENTUM_PUMP_SCALPER: Target +1.40%, SL -1.10%, BE Trigger +0.65% (Locks +0.25% Gross / +0.10% Net), Trail +0.95% (Dist 0.30%), 35m Max Hold
   // INSTITUTIONAL_ALPHA_DIP_SCALPER: Target +5.50%, SL -2.00%, BE Trigger +2.00% (Locks +0.25% Net), Trail +3.50% (Dist 1.20%), 8h Max Hold
   const isRapidPumpSetup = detectedSetup === 'RAPID_MOMENTUM_PUMP_SCALPER';
   const isAlpha = detectedSetup === 'INSTITUTIONAL_ALPHA_DIP_SCALPER';
 
-  const defaultTp = isRapidPumpSetup ? 0.65 : (isAlpha ? 5.50 : 2.00);
-  const defaultSl = isRapidPumpSetup ? 0.55 : (isAlpha ? 2.00 : 12.00);
-  const defaultBeTrig = isRapidPumpSetup ? 0.30 : (isAlpha ? 2.00 : 2.50);
-  const defaultBeLock = isRapidPumpSetup ? 0.18 : (isAlpha ? 0.25 : 0.35);
-  const defaultTrailTrig = isRapidPumpSetup ? 0.45 : (isAlpha ? 3.50 : 4.00);
-  const defaultTrailDist = isRapidPumpSetup ? 0.15 : (isAlpha ? 1.20 : 1.50);
-  const defaultHold = isRapidPumpSetup ? 10 : (isAlpha ? 480 : 2880);
+  const defaultTp = isRapidPumpSetup ? 1.40 : (isAlpha ? 5.50 : 2.00);
+  const defaultSl = isRapidPumpSetup ? 1.10 : (isAlpha ? 2.00 : 12.00);
+  const defaultBeTrig = isRapidPumpSetup ? 0.65 : (isAlpha ? 2.00 : 2.50);
+  const defaultBeLock = isRapidPumpSetup ? 0.25 : (isAlpha ? 0.25 : 0.35);
+  const defaultTrailTrig = isRapidPumpSetup ? 0.95 : (isAlpha ? 3.50 : 4.00);
+  const defaultTrailDist = isRapidPumpSetup ? 0.30 : (isAlpha ? 1.20 : 1.50);
+  const defaultHold = isRapidPumpSetup ? 35 : (isAlpha ? 480 : 2880);
 
   const takeProfitPct = Number((spotRiskSettings.takeProfitPct || defaultTp).toFixed(2));
   const stopLossPct = Number((spotRiskSettings.stopLossPct || defaultSl).toFixed(2));
