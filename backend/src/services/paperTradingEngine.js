@@ -569,61 +569,41 @@ export class PaperTradingEngine {
       }
 
       // ====================================================
-      // 2. STRICT TIME-LIMIT AUTO-CLOSE & MOMENTUM LOCK (10-Minute Scalp Cap)
+      // 2. STRICT TIME-LIMIT AUTO-CLOSE & MOMENTUM LOCK
       // ====================================================
       const openTimeMs = pos.openTime ? new Date(pos.openTime).getTime() : 0;
       const ageMs = openTimeMs > 0 ? (Date.now() - openTimeMs) : ((pos.cycleCount || 0) * 1500);
       const cyclesElapsed = pos.cycleCount || 0;
-      const maxHoldMinutes = Math.min(pos.maxHoldMinutes || 10, (pos.exitRule === 'INSTITUTIONAL_ALPHA_TRAILING_LOCK' ? 480 : 15));
+      const maxHoldMinutes = pos.maxHoldMinutes || 60;
       const maxHoldMs = maxHoldMinutes * 60 * 1000;
       const maxHoldCycles = maxHoldMinutes * 40; // 40 cycles per minute (1.5s scan interval)
 
-      // A. Maximum Holding Cap (Hard Time Limit Exit)
+      // A. Maximum Holding Cap (Hard Time Limit Exit) - ONLY exit on time limit if in positive net profit!
+      // NEVER dump a position at a loss on a timer while Stop Loss is still intact!
       const isStructuralExit = pos.exitRule === 'TP_SL_OR_STRUCTURAL_BREAK' || pos.exitRule === 'HOT_RETEST_TRAILING_LOCK';
       const effectiveMaxHoldMs = isStructuralExit ? Math.max(maxHoldMs, 2 * 60 * 60 * 1000) : maxHoldMs;
       const effectiveMaxHoldCycles = isStructuralExit ? Math.max(maxHoldCycles, 2 * 60 * 40) : maxHoldCycles;
 
       if (!isStructuralExit && (ageMs >= maxHoldMs || cyclesElapsed >= maxHoldCycles)) {
-        const isProfitable = pos.pnlPercent >= 0.15 || pos.unrealizedPnL > 0;
-        const exitNote = isProfitable
-          ? `${maxHoldMinutes}m Expiry: Banked profit at time cap (+${pos.pnlPercent}%)`
-          : `${maxHoldMinutes}m Expiry: Auto-closed holding at ${maxHoldMinutes}m cap to rotate capital (${pos.pnlPercent}%)`;
-        const closed = this.closePosition(pos.id, livePrice, 'TIME_LIMIT_EXIT', exitNote);
-        if (closed) {
-          closedTriggers.push(closed);
-          continue;
+        if (pos.pnlPercent >= 0.20 || pos.unrealizedPnL > 0) {
+          const closed = this.closePosition(pos.id, livePrice, 'TIME_LIMIT_EXIT', `${maxHoldMinutes}m Expiry: Banked profit at time cap (+${pos.pnlPercent}%)`);
+          if (closed) {
+            closedTriggers.push(closed);
+            continue;
+          }
         }
       } else if (isStructuralExit && (ageMs >= effectiveMaxHoldMs || cyclesElapsed >= effectiveMaxHoldCycles)) {
-        const closed = this.closePosition(pos.id, livePrice, 'SAFETY_TIMEOUT_EXIT', `Safety Cap: Position reached 4h maximum safety limit (${pos.pnlPercent}%)`);
+        const closed = this.closePosition(pos.id, livePrice, 'SAFETY_TIMEOUT_EXIT', `Safety Cap: Position reached maximum safety limit (${pos.pnlPercent}%)`);
         if (closed) {
           closedTriggers.push(closed);
           continue;
-        }
-      }
-
-      // B. Fast Momentum Stall / Exhaustion Profit Lock - locks net profit >= +0.20% immediately without waiting!
-      const minNetProfitThreshold = (pos.notional || 100) * 0.0020; // At least +0.20% net
-      const peakGain = pos.highestPrice > pos.entryPrice ? ((pos.highestPrice - pos.entryPrice) / pos.entryPrice) * 100 : 0;
-      if (!isStructuralExit && (peakGain >= 0.35 || pos.pnlPercent >= 0.20 || pos.unrealizedPnL >= minNetProfitThreshold)) {
-        if (pos.side === 'LONG' && livePrice <= pos.highestPrice * 0.9988) {
-          const closed = this.closePosition(pos.id, livePrice, 'MOMENTUM_EXHAUSTION_EXIT', `Fast Scalp Lock: Secured +$${pos.unrealizedPnL} net profit (+${pos.pnlPercent}%) on momentum stall`);
-          if (closed) {
-            closedTriggers.push(closed);
-            continue;
-          }
-        } else if (pos.side === 'SHORT' && livePrice >= pos.lowestPrice * 1.0012) {
-          const closed = this.closePosition(pos.id, livePrice, 'MOMENTUM_EXHAUSTION_EXIT', `Fast Scalp Lock: Secured +$${pos.unrealizedPnL} net profit (+${pos.pnlPercent}%) on momentum stall`);
-          if (closed) {
-            closedTriggers.push(closed);
-            continue;
-          }
         }
       }
 
       // ====================================================
       // 3. INTELLIGENT AUTO-CLOSE: SIGNAL REVERSAL
       // ====================================================
-      if (this.reversalExitsEnabled && technicalsMap[pos.symbol]) {
+      if (this.reversalExitsEnabled && technicalsMap[pos.symbol] && pos.strategySetup !== 'RAPID_MOMENTUM_PUMP_SCALPER') {
         const exitEval = evaluatePositionExit(pos, technicalsMap[pos.symbol], livePrice);
         if (exitEval.shouldExit) {
           const closed = this.closePosition(pos.id, livePrice, exitEval.reason, exitEval.message);

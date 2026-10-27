@@ -75,16 +75,16 @@ export class AutonomousAgentLoop {
           baseAllocationPct: 100.0,
           soAllocationPct: 0.0,
           maxTradesPerPair: 1,
-          stopLossPct: 1.10,
-          takeProfitPct: 1.40,
+          stopLossPct: 0.85,
+          takeProfitPct: 1.20,
           middleLimitRsi: 55,
           minProfitBufferPct: 0.20,
-          breakEvenTriggerPct: 0.65,
-          breakEvenLockPct: 0.25,
-          trailingTriggerPct: 0.95,
-          trailingDistancePct: 0.30,
+          breakEvenTriggerPct: 0.45,
+          breakEvenLockPct: 0.20,
+          trailingTriggerPct: 0.75,
+          trailingDistancePct: 0.25,
           pullbackDiscountPct: 0,
-          maxHoldMinutes: 35,
+          maxHoldMinutes: 60,
           minConfidenceThreshold: 85,
           allowHighVolatility: true,
           volatilityMode: 'RAPID_PUMP_SCALPER',
@@ -433,16 +433,16 @@ export class AutonomousAgentLoop {
         baseAllocationPct: 100.0,
         soAllocationPct: 0.0,
         maxTradesPerPair: 1,
-        stopLossPct: 1.10,
-        takeProfitPct: 1.40,
+        stopLossPct: 0.85,
+        takeProfitPct: 1.20,
         middleLimitRsi: 55,
         minProfitBufferPct: 0.20,
-        breakEvenTriggerPct: 0.65,
-        breakEvenLockPct: 0.25,
-        trailingTriggerPct: 0.95,
-        trailingDistancePct: 0.30,
+        breakEvenTriggerPct: 0.45,
+        breakEvenLockPct: 0.20,
+        trailingTriggerPct: 0.75,
+        trailingDistancePct: 0.25,
         pullbackDiscountPct: 0,
-        maxHoldMinutes: 35,
+        maxHoldMinutes: 60,
         minConfidenceThreshold: 85,
         allowHighVolatility: true,
         volatilityMode: 'RAPID_PUMP_SCALPER',
@@ -450,7 +450,7 @@ export class AutonomousAgentLoop {
         feeRate: 0.00075,
         isHalalStrict: true
       };
-      this.log(`🔄 [${userKey}] Reset SPOT settings to best defaults (Rapid Momentum Pump Scalper: Real-Time Binance Pump Detector, 1 sniper slot, TP +1.40%, SL -1.10%, BE Lock +0.25% Gross @ +0.65%, Trail 0.30% @ +0.95%, 35m Hold Cap)`, 'INFO');
+      this.log(`🔄 [${userKey}] Reset SPOT settings to best defaults (Rapid Momentum Pump Scalper: Real-Time Binance Pump Detector, 1 sniper slot, TP +1.20%, SL -0.85%, BE Lock +0.20% Gross @ +0.45%, Trail 0.25% @ +0.75%, 60m Hold Cap)`, 'INFO');
       return config.spotRiskManager;
     } else {
       config.marginRiskManager = new RiskManager({
@@ -1368,17 +1368,12 @@ export class AutonomousAgentLoop {
           let exitReason = null;
           let exitMsg = '';
 
-          // 1. Take Profit Target Hit (+0.65%)
+          // 1. Take Profit Target Hit
           if (pos.takeProfit && livePrice >= pos.takeProfit) {
             exitReason = 'TAKE_PROFIT_TRIGGER';
             exitMsg = `🎯 [BINANCE LIVE] TP Hit: ${pos.symbol} reached target ($${livePrice} >= $${pos.takeProfit})!`;
           }
-          // 1B. Fast Momentum Exhaustion Profit Lock (Secures >= +0.20% net profit immediately on momentum stall)
-          else if (peakGainPct >= 0.35 && livePrice <= pos.highestPrice * 0.9988 && pos.pnlPercent >= 0.20) {
-            exitReason = 'MOMENTUM_EXHAUSTION_EXIT';
-            exitMsg = `⚡ [BINANCE LIVE] Fast Scalp Lock: Secured +${pos.pnlPercent}% net profit on ${pos.symbol} on momentum stall!`;
-          }
-          // 1C. User RSI 55 Middle Limit Exit (30m Strategy Alpha)
+          // 1B. User RSI 55 Middle Limit Exit (30m Strategy Alpha Only)
           else if (pos.strategySetup === 'RSI_30M_PURPLE_ZONE_REENTRY' && pos.pnlPercent >= 1.0) {
             const currentRsi = technicalsMap?.[pos.symbol]?.rsi;
             if (currentRsi && currentRsi >= 55) {
@@ -1404,15 +1399,14 @@ export class AutonomousAgentLoop {
               exitMsg = `🛑 [BINANCE LIVE] Stop Loss Hit: ${pos.symbol} ($${livePrice} <= $${pos.stopLoss})!`;
             }
           }
-          // 3. Max Hold Duration Expiry
-          else if (holdMinutes >= maxHoldMinutes) {
+          // 3. Max Hold Duration Expiry - ONLY exit if position is in NET PROFIT!
+          // NEVER dump a position at a loss on a timer while Stop Loss is still intact!
+          else if (holdMinutes >= maxHoldMinutes && pos.pnlPercent >= 0.20) {
             exitReason = 'TIME_LIMIT_EXIT';
-            exitMsg = pos.pnlPercent >= 0.20
-              ? `🎯 [BINANCE LIVE] ${maxHoldMinutes}m Hold Cap: Banked +${pos.pnlPercent}% net profit on ${pos.symbol}!`
-              : `⏱️ [BINANCE LIVE] ${maxHoldMinutes}m Hold Expiry: Rotated ${pos.symbol} to free slot for fresh pumping coins (${pos.pnlPercent}%).`;
+            exitMsg = `🎯 [BINANCE LIVE] ${maxHoldMinutes}m Hold Cap: Banked +${pos.pnlPercent}% net profit on ${pos.symbol}!`;
           }
-          // 4. Intelligent Signal Reversal / Momentum Exhaustion Exit (Enforcing minimum 5m hold time)
-          else if (technicalsMap[pos.symbol] && holdMinutes >= 5) {
+          // 4. Intelligent Signal Reversal (Enforcing minimum 5m hold time, excluding rapid pump scalper)
+          else if (technicalsMap[pos.symbol] && holdMinutes >= 5 && pos.strategySetup !== 'RAPID_MOMENTUM_PUMP_SCALPER') {
             const exitEval = evaluatePositionExit(pos, technicalsMap[pos.symbol], livePrice);
             if (exitEval && exitEval.shouldExit) {
               exitReason = exitEval.reason || 'INTELLIGENT_REVERSAL_EXIT';

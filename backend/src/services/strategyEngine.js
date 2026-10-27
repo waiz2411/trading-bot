@@ -428,10 +428,10 @@ export function scanPumpingHalalCoins(assets, limit = 5) {
     const quoteVol = Number(asset.quoteVolume || asset.volume24h || 0);
     if (quoteVol < 1000000) continue;
 
-    // 3. 24H PUMP GATE: Must be strictly green and gaining (+1.5% to +50% on 24h!)
+    // 3. 24H PUMP GATE: Must be strictly green and gaining (+2.0% to +50% on 24h!)
     // STRICTLY REJECT DOWNTRENDING / NEGATIVE COINS (e.g. -5%, -10%, etc.)
     const change24h = asset.change24h !== undefined ? Number(asset.change24h) : 0;
-    if (change24h < 1.50) continue;
+    if (change24h < 2.00) continue;
 
     const candles = asset.candles;
     if (!candles || candles.length < 15) continue;
@@ -444,7 +444,7 @@ export function scanPumpingHalalCoins(assets, limit = 5) {
     const currentPrice = currentCandle.close;
     const isGreen = currentCandle.close >= currentCandle.open;
 
-    // Quick 14-period RSI to ensure coin is in active momentum expansion (RSI 50 - 80), NOT oversold dump (< 50)
+    // Quick 14-period RSI to ensure coin is in active momentum expansion (RSI 50 - 75), NOT oversold dump (< 50)
     let gains = 0;
     let losses = 0;
     for (let i = candles.length - 14; i < candles.length; i++) {
@@ -453,7 +453,7 @@ export function scanPumpingHalalCoins(assets, limit = 5) {
       else losses -= diff;
     }
     const rsiVal = losses === 0 ? 100 : (100 - (100 / (1 + ((gains / 14) / (losses / 14)))));
-    if (rsiVal < 50 || rsiVal > 80) continue;
+    if (rsiVal < 50 || rsiVal > 75) continue;
 
     // 5m and 15m velocity
     const vel5m = prevCandle1.close > 0 ? ((currentPrice - prevCandle1.close) / prevCandle1.close) * 100 : 0;
@@ -466,16 +466,16 @@ export function scanPumpingHalalCoins(assets, limit = 5) {
     const prevRvol = avgVol > 0 ? Number((prevCandle1.volume / avgVol).toFixed(2)) : 1;
     const rvol = Math.max(curRvol, prevRvol);
 
-    // Upper wick check: Avoid extreme exhaustion wicks (> 35% upper wick)
+    // Upper wick check: Avoid extreme exhaustion wicks (> 40% upper wick)
     const candleRange = currentCandle.high - currentCandle.low;
     const upperWick = currentCandle.high - Math.max(currentCandle.open, currentCandle.close);
     const upperWickRatio = candleRange > 0 ? (upperWick / candleRange) : 0;
-    if (upperWickRatio > 0.35) continue;
+    if (upperWickRatio > 0.40) continue;
 
     // Real-Time Pumping Condition:
-    // Either 5m velocity >= +0.40% (green candle) OR 15m surge >= +0.80% (green)
-    const isVelocitySurge = (vel5m >= 0.40 && isGreen) || (vel15m >= 0.80 && isGreen);
-    const isVolumeSurge = rvol >= 1.35;
+    // Green candle (isGreen) AND (vel5m >= +0.25% OR vel15m >= +0.50%) with volume surge (rvol >= 1.20)
+    const isVelocitySurge = isGreen && (vel5m >= 0.25 || vel15m >= 0.50);
+    const isVolumeSurge = rvol >= 1.20;
 
     if (isVelocitySurge && isVolumeSurge) {
       const pumpScore = Number(((change24h * 1.5) + (vel5m * 4) + (vel15m * 2.5) + (rvol * 3) + (quoteVol / 5000000)).toFixed(2));
@@ -842,18 +842,18 @@ export function evaluateSpotConfluence(asset, technicals, spotRiskSettings = {},
   const precision = getAssetPrecision(currentPrice, asset.decimals || 4);
 
   // Asymmetric Scalping Geometry:
-  // RAPID_MOMENTUM_PUMP_SCALPER: Target +1.40%, SL -1.10%, BE Trigger +0.65% (Locks +0.25% Gross / +0.10% Net), Trail +0.95% (Dist 0.30%), 35m Max Hold
+  // RAPID_MOMENTUM_PUMP_SCALPER: Target +1.20%, SL -0.85%, BE Trigger +0.45% (Locks +0.20% Gross / +0.05% Net), Trail +0.75% (Dist 0.25%), 60m Max Hold
   // INSTITUTIONAL_ALPHA_DIP_SCALPER: Target +5.50%, SL -2.00%, BE Trigger +2.00% (Locks +0.25% Net), Trail +3.50% (Dist 1.20%), 8h Max Hold
   const isRapidPumpSetup = detectedSetup === 'RAPID_MOMENTUM_PUMP_SCALPER';
   const isAlpha = detectedSetup === 'INSTITUTIONAL_ALPHA_DIP_SCALPER';
 
-  const defaultTp = isRapidPumpSetup ? 1.40 : (isAlpha ? 5.50 : 2.00);
-  const defaultSl = isRapidPumpSetup ? 1.10 : (isAlpha ? 2.00 : 12.00);
-  const defaultBeTrig = isRapidPumpSetup ? 0.65 : (isAlpha ? 2.00 : 2.50);
-  const defaultBeLock = isRapidPumpSetup ? 0.25 : (isAlpha ? 0.25 : 0.35);
-  const defaultTrailTrig = isRapidPumpSetup ? 0.95 : (isAlpha ? 3.50 : 4.00);
-  const defaultTrailDist = isRapidPumpSetup ? 0.30 : (isAlpha ? 1.20 : 1.50);
-  const defaultHold = isRapidPumpSetup ? 35 : (isAlpha ? 480 : 2880);
+  const defaultTp = isRapidPumpSetup ? 1.20 : (isAlpha ? 5.50 : 2.00);
+  const defaultSl = isRapidPumpSetup ? 0.85 : (isAlpha ? 2.00 : 12.00);
+  const defaultBeTrig = isRapidPumpSetup ? 0.45 : (isAlpha ? 2.00 : 2.50);
+  const defaultBeLock = isRapidPumpSetup ? 0.20 : (isAlpha ? 0.25 : 0.35);
+  const defaultTrailTrig = isRapidPumpSetup ? 0.75 : (isAlpha ? 3.50 : 4.00);
+  const defaultTrailDist = isRapidPumpSetup ? 0.25 : (isAlpha ? 1.20 : 1.50);
+  const defaultHold = isRapidPumpSetup ? 60 : (isAlpha ? 480 : 2880);
 
   const takeProfitPct = Number((spotRiskSettings.takeProfitPct || defaultTp).toFixed(2));
   const stopLossPct = Number((spotRiskSettings.stopLossPct || defaultSl).toFixed(2));
